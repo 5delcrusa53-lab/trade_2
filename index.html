@@ -3085,6 +3085,7 @@ function TradeBot(h, radar, jup, tr) {
   const NET_FEE = 0.0001;   // frais réseau estimés par transaction (SOL)
   const RENT = 0.00203928;  // dépôt d'un compte jeton, récupéré à la fermeture
   const RESERVE = 0.006;    // SOL gardés pour pouvoir toujours vendre
+  const DONE_MS = 24 * 3600e3; // un coin déjà tradé n'est pas repris avant 24 h
   const { fSol, fUsd, fQty, fPct, short, ago, n } = tr.fmt;
   const fin = Number.isFinite, esc = h.esc, $ = h.$;
   const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -3093,6 +3094,7 @@ function TradeBot(h, radar, jup, tr) {
   const live = () => (h.live ? h.live() : null);
   let S = Object.assign({ enc: null, pub: null, cfg: {}, pos: {}, log: [], hist: [], day: null, ignored: {} }, h.store.get('bot', {}));
   S.cfg = Object.assign({}, DEF, S.cfg);
+  if (!S.done) { S.done = {}; for (const x of S.hist || []) if (x.mint && x.t1) S.done[x.mint] = Math.max(S.done[x.mint] || 0, x.t1); }
   const save = () => h.store.set('bot', S);
   let kp = null;
   const B = { sol: null, hold: new Map(), holdAt: 0, props: [], ui: {}, wl: null, started: false, charts: {}, chartBusy: {}, lifeAt: {} };
@@ -3482,6 +3484,9 @@ function TradeBot(h, radar, jup, tr) {
     S.hist = S.hist.slice(0, 60);
     delete S.pos[p.mint];
     S.ignored[p.mint] = Date.now(); // pas de nouvelle proposition sur ce jeton pendant 2 h
+    // pas de nouvelle entrée (auto ou laboratoire) sur un coin déjà tradé dans les 24 dernières heures
+    S.done = S.done || {}; S.done[p.mint] = Date.now();
+    for (const [m, t] of Object.entries(S.done)) if (Date.now() - t > 2 * DONE_MS) delete S.done[m];
     log(`${p.sym} clôturé : ${net >= 0 ? 'gain' : 'perte'} de ${fSol(Math.abs(net))} (${fPct(net / p.cost)}) tous frais compris`, net >= 0 ? 'sell' : 'bad');
     if (day().pnl <= -S.cfg.dayLoss) { log(`Perte du jour atteinte (${fSol(day().pnl)}) : plus de nouveau trade aujourd'hui`, 'bad'); h.notify('Bot : perte du jour atteinte, nouveaux trades arrêtés', 'short'); }
     save();
@@ -3519,7 +3524,7 @@ function TradeBot(h, radar, jup, tr) {
     const now = Date.now();
     B.props = B.props.filter(x => { const t = radar.get(x.mint); return t && t.verdict === 'buy' && now - x.t < 4 * 60000 && !S.pos[x.mint]; });
     for (const t of radar.R.tokens.values()) {
-      if (t.verdict !== 'buy' || S.pos[t.mint] || (S.ignored[t.mint] && now - S.ignored[t.mint] < 2 * 3600e3) || B.props.some(x => x.mint === t.mint) || (t.sources && t.sources.has('démo'))) continue;
+      if (t.verdict !== 'buy' || S.pos[t.mint] || (S.ignored[t.mint] && now - S.ignored[t.mint] < 2 * 3600e3) || (S.done && S.done[t.mint] && now - S.done[t.mint] < DONE_MS) || B.props.some(x => x.mint === t.mint) || (t.sources && t.sources.has('démo'))) continue;
       if (t.flaggedAt && now - t.flaggedAt > 4 * 60000) continue;
       B.props.unshift({ mint: t.mint, sym: t.symbol || short(t.mint), score: t.score, t: now });
       radar.life(t.mint).catch(() => {});
@@ -3807,7 +3812,7 @@ function TradeBot(h, radar, jup, tr) {
   }
   return { start, render, detailHtml, unlocked: () => !!kp, openCount: () => openPos().length, S,
     autoJoin, dayLossHit: () => day().pnl <= -S.cfg.dayLoss, lastClosed: () => S.hist[0] || null, cfg: () => S.cfg, hasWallet: () => !!S.pub,
-    traded: mint => !!(S.pos[mint] && S.pos[mint].state !== 'closed') || !!(S.ignored[mint] && Date.now() - S.ignored[mint] < 2 * 3600e3), logMsg: (m, l) => log(m, l), decideCore, NET_FEE, onLive, _test: { decide, curV, pushHist, b58enc, b58dec } };
+    traded: mint => !!(S.pos[mint] && S.pos[mint].state !== 'closed') || !!(S.ignored[mint] && Date.now() - S.ignored[mint] < 2 * 3600e3) || !!(S.done && S.done[mint] && Date.now() - S.done[mint] < DONE_MS), logMsg: (m, l) => log(m, l), decideCore, NET_FEE, onLive, _test: { decide, curV, pushHist, b58enc, b58dec } };
 }
 if (typeof module !== 'undefined') module.exports = TradeBot;
 
@@ -4341,7 +4346,7 @@ function StrategyLab(h, radar, live, bot) {
   const NETF = 0.0002;    // frais réseau + priorité par transaction (SOL), prudent
   const FEE_AMM = 0.004;  // PumpSwap 0,25 % + créateur + Jupiter, par passage
   const MIN_N = 12, MIN_AVG = 0.03, MIN_PF = 1.3, DAY = 24 * 3600e3;
-  const MAX_OPEN = 3, MAX_PER_HOUR = 8;
+  const MAX_OPEN = 3, MAX_PER_HOUR = 8, DONE_MS = 24 * 3600e3;
 
   /* ---------- stratégies ---------- */
   // age : fenêtre d'âge du coin à l'entrée (secondes). exits : règles en plus de ta perte/gain fixés.
@@ -4515,9 +4520,10 @@ function StrategyLab(h, radar, live, bot) {
       if (L.open.filter(p => p.strat === s.id).length >= MAX_OPEN) continue;
       if (L.closed.filter(x => x.strat === s.id && tn - x.t0 < 3600e3).length + L.open.filter(p => p.strat === s.id).length >= MAX_PER_HOUR) continue;
       let best = null, bs = -1;
-      const done = new Set([...L.open.filter(p => p.strat === s.id).map(p => p.mint), ...L.closed.filter(x => x.strat === s.id && tn - x.t0 < 2 * 3600e3).map(x => x.mint)]);
+      const done = new Set([...L.open.filter(p => p.strat === s.id).map(p => p.mint), ...L.closed.filter(x => x.strat === s.id && tn - x.t0 < DONE_MS).map(x => x.mint)]);
       for (const t of radar.R.tokens.values()) {
-        if (done.has(t.mint)) continue;
+        // mêmes règles que l'argent réel : pas de reprise d'un coin déjà tradé (par cette stratégie ou par le bot) dans les 24 h
+        if (done.has(t.mint) || bot.traded(t.mint)) continue;
         const f = F(t);
         if (!passes(s, t, f)) continue;
         const sc = (t.nc && t.nc.score) || t.score || 0;
