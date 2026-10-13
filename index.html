@@ -224,8 +224,8 @@ main{padding:12px 16px calc(84px + env(safe-area-inset-bottom,0px));max-width:76
 .confirm{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px;font-size:.86rem}
 
 /* barre d'onglets */
-.tabbar{position:fixed;left:0;right:0;bottom:0;z-index:30;background:var(--panel);border-top:1px solid var(--line);display:grid;grid-template-columns:repeat(7,1fr);padding:6px 4px calc(6px + env(safe-area-inset-bottom,0px))}
-.tabbar button{border:0;background:none;display:grid;justify-items:center;gap:2px;padding:4px 0;font-size:.6rem;min-width:0;overflow:hidden;color:var(--muted);letter-spacing:.02em;position:relative}
+.tabbar{position:fixed;left:0;right:0;bottom:0;z-index:30;background:var(--panel);border-top:1px solid var(--line);display:grid;grid-template-columns:repeat(8,1fr);padding:6px 2px calc(6px + env(safe-area-inset-bottom,0px))}
+.tabbar button{border:0;background:none;display:grid;justify-items:center;gap:2px;padding:4px 0;font-size:.56rem;min-width:0;overflow:hidden;color:var(--muted);letter-spacing:.02em;position:relative}
 .tabbar svg{width:22px;height:22px}
 .tabbar button[aria-selected="true"]{color:var(--accent)}
 .tabbar .dot{position:absolute;top:2px;left:calc(50% + 8px);width:8px;height:8px;border-radius:50%;background:var(--short)}
@@ -395,13 +395,27 @@ a.btn{text-decoration:none;color:inherit;display:inline-block}
 .l-diag li[data-l="warn"]{color:var(--warn)}
 .l-diag li[data-l="ok"]{color:var(--long)}
 
+/* futures auto */
+.pp-list{display:grid;gap:8px;margin:6px 0 4px}
+.pp-row{border:1px solid var(--line);border-radius:10px;padding:8px 10px;background:var(--panel)}
+.pp-h{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px}
+.pp-h b{font-family:var(--f-display);font-size:1rem}
+.pp-h .muted{flex-basis:100%}
+.pp-tf{margin:6px 0 0;font-size:.78rem;line-height:1.4;color:var(--muted)}
+.pp-now{color:var(--fg)}
+.pp-row[data-l="ok"]{border-color:var(--long)}
+.pp-h .chip{font-size:.66rem}
+#perpsBody .add{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0}
+#perpsBody .add input{flex:1 1 140px;min-width:0}
+#perpsBody .add input{text-transform:none}
+
 </style>
 </head>
 <body>
 <header class="top">
   <div class="top-row meme-only">
     <span class="pair" id="memeTitle" style="cursor:default;white-space:nowrap">Radar mèmes</span>
-    <div class="px"><div class="px-now" style="font-size:1rem">Solana</div><div class="px-sub">temps réel</div></div>
+    <div class="px"><div class="px-now" id="memeNet" style="font-size:1rem">Solana</div><div class="px-sub" id="memeSub">temps réel</div></div>
   </div>
   <div class="top-row futures-only">
     <button class="pair" id="pairBtn" aria-label="Changer de paire"><span id="pairName">BTCUSDT</span><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6l5 5 5-5"/></svg></button>
@@ -616,6 +630,32 @@ a.btn{text-decoration:none;color:inherit;display:inline-block}
     </div>
   </section>
 
+  <!-- ===== FUTURES AUTO ===== -->
+  <section class="tab" id="tab-perps" hidden>
+    <div class="card" id="perpsCard">
+      <h2>Bot futures <span class="sp" id="perpsState"></span></h2>
+      <div id="perpsBody"><p class="note" style="margin:0">Démarrage…</p></div>
+    </div>
+    <div class="card">
+      <h2>Comment le bot décide</h2>
+      <ol class="i-steps">
+        <li><b>Une règle de suivi de tendance, fixe</b> : sur les bougies 4 h, le bot achète quand une bougie clôture au-dessus du plus haut des 55 précédentes (environ 9 jours), et vend à découvert quand elle clôture sous leur plus bas.</li>
+        <li><b>Stop posé tout de suite chez Hyperliquid</b> à 2 fois la volatilité moyenne (ATR), puis remonté à chaque clôture 4 h à 3 ATR sous la meilleure clôture. Pas d'objectif fixe : les gagnants courent, les perdants sont coupés vite.</li>
+        <li><b>Levier choisi par le bot</b> : le plus bas qui donne la taille voulue (souvent 1x à 3x). La liquidation reste au moins deux fois plus loin que le stop.</li>
+        <li><b>Argent réel sur BTC, ETH et BNB</b> si la règle rejouée sur leurs ~2 dernières années chez Hyperliquid est positive. SOL et SKR restent en simulation (tu peux les passer en réel si leur test est bon).</li>
+      </ol>
+      <details class="w-oth"><summary>Pourquoi cette règle et pas du scalping</summary>
+        <p class="note">Testé sur de vraies bougies (Binance futures, janvier 2022 à avril 2023, 12 cryptos), frais et funding compris :</p>
+        <ul class="i-steps">
+          <li>Les setups de scalping en 5 min, 15 min et 1 h, même recalibrés chaque jour, perdaient sur BTC, ETH et BNB.</li>
+          <li>Cette règle 4 h était positive sur BTC et ETH dans les deux moitiés de la période, et sur BNB au total. Sur BTC + ETH + BNB avec 1 % de risque : 129 trades, 36 % de gagnants, environ +70 % de capital en 15 mois, pire baisse 19 %.</li>
+          <li>Sur les autres cryptos (XRP, LINK, LTC, ADA…), elle ne gagnait pas. Choisir une crypto parce qu'elle a bien marché avant ne prédisait rien : d'où la liste courte.</li>
+        </ul>
+        <p class="note">Le passé ne garantit rien : une période sans grande tendance donne une série de petites pertes.</p>
+      </details>
+    </div>
+  </section>
+
   <!-- ===== STATS ===== -->
   <section class="tab" id="tab-stats" hidden>
     <div class="card">
@@ -678,6 +718,7 @@ a.btn{text-decoration:none;color:inherit;display:inline-block}
   <button role="tab" data-tab="scan" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16M4 12h16M4 17h10"/></svg>Scanner</button>
   <button role="tab" data-tab="meme" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3c1 3.5 5 5.5 5 10a5 5 0 0 1-10 0c0-2.2 1-3.6 2.2-4.8.3 1.6 1.1 2.6 2.3 3 .2-3 .5-5.2.5-8.2z"/></svg>Mèmes<span class="cnt" id="memeDot" hidden></span></button>
   <button role="tab" data-tab="new" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 2.5l1.9 5.6 5.6 1.9-5.6 1.9L12 17.5l-1.9-5.6L4.5 10l5.6-1.9z"/><path d="M18.5 15.5l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8z"/></svg>Nouveaux<span class="cnt" id="newDot" hidden></span></button>
+  <button role="tab" data-tab="perps" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 17l5-5 4 3 8-8"/><path d="M3 21h18"/><path d="M16 7h4v4"/></svg>Futures<span class="dot" id="perpsDot" hidden></span></button>
   <button role="tab" data-tab="stats" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 20V10M12 20V4M19 20v-7"/></svg>Stats</button>
   <button role="tab" data-tab="set" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg>Réglages</button>
 </nav>
@@ -5148,6 +5189,849 @@ function StrategyLab(h, radar, live, bot) {
 }
 if (typeof module !== 'undefined') module.exports = StrategyLab;
 
+/* ================= HYPERLIQUID : protocole (lecture, signature, ordres) =================
+   Futures perpétuels de Phantom (Perps). Le compte, c'est ton adresse EVM de Phantom.
+   Le bot signe avec sa propre clé « agent », autorisée une fois par Phantom : elle peut trader,
+   pas retirer. Encodage et signature identiques au SDK officiel (vérifiés sur ses vecteurs). */
+const HL = (() => {
+  const API = 'https://api.hyperliquid.xyz';
+  const ETH = { v: '6.13.4', sri: 'sha384-6Zl0Pc8zjSz8KvmNeXRvUQgY4ryFb+BwDvKCmLYcBME0joAaru491tQgi9B7zsMM' };
+  const ETH_URLS = [`https://cdn.jsdelivr.net/npm/ethers@${ETH.v}/dist/ethers.umd.min.js`, `https://unpkg.com/ethers@${ETH.v}/dist/ethers.umd.min.js`];
+  const ZERO = '0x0000000000000000000000000000000000000000';
+  let ep = null;
+  function loadEthers() {
+    if (typeof window !== 'undefined' && window.ethers && window.ethers.Wallet) return Promise.resolve(window.ethers);
+    if (typeof require === 'function' && typeof window === 'undefined') { try { return Promise.resolve(require(process.env.ETHERS_PATH || 'ethers')); } catch {} }
+    if (ep) return ep;
+    ep = new Promise((res, rej) => {
+      const go = i => {
+        if (i >= ETH_URLS.length) { ep = null; rej(new Error('module de signature introuvable (réseau bloqué ?)')); return; }
+        const s = document.createElement('script');
+        s.src = ETH_URLS[i]; s.integrity = ETH.sri; s.crossOrigin = 'anonymous';
+        s.onload = () => (window.ethers && window.ethers.Wallet ? res(window.ethers) : go(i + 1));
+        s.onerror = () => { s.remove(); go(i + 1); };
+        document.head.appendChild(s);
+      };
+      go(0);
+    });
+    return ep;
+  }
+
+  /* ---------- msgpack (sous-ensemble utilisé par les actions, comme msgpack-python) ---------- */
+  const te = new TextEncoder();
+  function pack(v) {
+    const out = [];
+    const u8 = x => out.push(x & 0xff);
+    const uN = (x, n) => { for (let i = n - 1; i >= 0; i--) u8(Math.floor(x / 2 ** (8 * i)) % 256); };
+    const enc = x => {
+      if (x === null || x === undefined) return u8(0xc0);
+      if (x === false) return u8(0xc2);
+      if (x === true) return u8(0xc3);
+      if (typeof x === 'number') {
+        if (Number.isInteger(x)) {
+          if (x >= 0) {
+            if (x < 128) return u8(x);
+            if (x < 256) { u8(0xcc); return u8(x); }
+            if (x < 65536) { u8(0xcd); return uN(x, 2); }
+            if (x < 4294967296) { u8(0xce); return uN(x, 4); }
+            u8(0xcf); const b = BigInt(x); for (let i = 7; i >= 0; i--) u8(Number((b >> BigInt(8 * i)) & 255n)); return;
+          }
+          if (x >= -32) return u8(0xe0 | (x + 32));
+          const b = BigInt.asUintN(64, BigInt(x));
+          if (x >= -128) { u8(0xd0); return u8(Number(b & 255n)); }
+          if (x >= -32768) { u8(0xd1); return uN(Number(b & 65535n), 2); }
+          if (x >= -2147483648) { u8(0xd2); return uN(Number(b & 0xffffffffn), 4); }
+          u8(0xd3); for (let i = 7; i >= 0; i--) u8(Number((b >> BigInt(8 * i)) & 255n)); return;
+        }
+        u8(0xcb); const dv = new DataView(new ArrayBuffer(8)); dv.setFloat64(0, x); for (let i = 0; i < 8; i++) u8(dv.getUint8(i)); return;
+      }
+      if (typeof x === 'string') {
+        const b = te.encode(x), L = b.length;
+        if (L < 32) u8(0xa0 | L); else if (L < 256) { u8(0xd9); u8(L); } else if (L < 65536) { u8(0xda); uN(L, 2); } else { u8(0xdb); uN(L, 4); }
+        for (const c of b) u8(c); return;
+      }
+      if (Array.isArray(x)) {
+        const L = x.length;
+        if (L < 16) u8(0x90 | L); else if (L < 65536) { u8(0xdc); uN(L, 2); } else { u8(0xdd); uN(L, 4); }
+        for (const e of x) enc(e); return;
+      }
+      if (typeof x === 'object') {
+        const ks = Object.keys(x).filter(k => x[k] !== undefined), L = ks.length;
+        if (L < 16) u8(0x80 | L); else if (L < 65536) { u8(0xde); uN(L, 2); } else { u8(0xdf); uN(L, 4); }
+        for (const k of ks) { enc(k); enc(x[k]); } return;
+      }
+      throw new Error('type non encodable : ' + typeof x);
+    };
+    enc(v);
+    return Uint8Array.from(out);
+  }
+
+  /* ---------- formats de prix et de taille ---------- */
+  // Comme float_to_wire du SDK : 8 décimales maximum, zéros inutiles retirés
+  function wire(x) {
+    let s = (+x).toFixed(8);
+    if (Math.abs(+s - x) >= 1e-12) throw new Error('arrondi impossible : ' + x);
+    if (s.includes('.')) s = s.replace(/0+$/, '').replace(/\.$/, '');
+    if (s === '-0') s = '0';
+    return s;
+  }
+  // Prix des perpétuels : 5 chiffres significatifs et au plus (6 − szDecimals) décimales
+  function roundPx(px, szDec) {
+    const d = Math.max(0, 6 - szDec);
+    const r = +(+(+px).toPrecision(5)).toFixed(d);
+    return r;
+  }
+  const roundSz = (sz, szDec) => { const f = 10 ** szDec; return Math.floor(sz * f + 1e-9) / f; };
+
+  /* ---------- signature ---------- */
+  async function actionHash(action, nonce, vault = null, expiresAfter = null) {
+    const E = await loadEthers();
+    const body = pack(action);
+    const extra = [];
+    const n = BigInt(nonce);
+    for (let i = 7; i >= 0; i--) extra.push(Number((n >> BigInt(8 * i)) & 255n));
+    if (vault) { extra.push(1); for (const b of E.getBytes(vault)) extra.push(b); } else extra.push(0);
+    if (expiresAfter != null) { extra.push(0); const e = BigInt(expiresAfter); for (let i = 7; i >= 0; i--) extra.push(Number((e >> BigInt(8 * i)) & 255n)); }
+    const all = new Uint8Array(body.length + extra.length);
+    all.set(body, 0); all.set(extra, body.length);
+    return E.keccak256(all);
+  }
+  async function splitSig(sig) {
+    const E = await loadEthers();
+    const s = E.Signature.from(sig);
+    return { r: s.r, s: s.s, v: s.v };
+  }
+  // Actions de trading signées par la clé du bot (« agent »)
+  async function signL1(wallet, action, nonce, mainnet = true) {
+    const E = await loadEthers();
+    const connectionId = await actionHash(action, nonce);
+    const sig = await wallet.signTypedData({ name: 'Exchange', version: '1', chainId: 1337, verifyingContract: ZERO },
+      { Agent: [{ name: 'source', type: 'string' }, { name: 'connectionId', type: 'bytes32' }] },
+      { source: mainnet ? 'a' : 'b', connectionId });
+    return splitSig(sig);
+  }
+  // Autorisation de la clé du bot : message à faire signer par Phantom (compte principal)
+  function approveAgentTyped(agentAddress, agentName, nonce, chainIdHex = '0xa4b1', mainnet = true) {
+    const action = { type: 'approveAgent', signatureChainId: chainIdHex, hyperliquidChain: mainnet ? 'Mainnet' : 'Testnet', agentAddress, agentName, nonce };
+    const typed = {
+      domain: { name: 'HyperliquidSignTransaction', version: '1', chainId: parseInt(chainIdHex, 16), verifyingContract: ZERO },
+      types: {
+        EIP712Domain: [{ name: 'name', type: 'string' }, { name: 'version', type: 'string' }, { name: 'chainId', type: 'uint256' }, { name: 'verifyingContract', type: 'address' }],
+        'HyperliquidTransaction:ApproveAgent': [{ name: 'hyperliquidChain', type: 'string' }, { name: 'agentAddress', type: 'address' }, { name: 'agentName', type: 'string' }, { name: 'nonce', type: 'uint64' }]
+      },
+      primaryType: 'HyperliquidTransaction:ApproveAgent',
+      message: { hyperliquidChain: action.hyperliquidChain, agentAddress, agentName, nonce }
+    };
+    return { action, typed };
+  }
+
+  /* ---------- appels ---------- */
+  async function post(path, body, ms = 12000) {
+    const ctl = new AbortController(), to = setTimeout(() => ctl.abort(), ms);
+    try {
+      const r = await fetch(API + path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body), signal: ctl.signal, cache: 'no-store' });
+      let j = null; try { j = await r.json(); } catch {}
+      if (!r.ok) throw new Error('Hyperliquid : ' + ((j && (j.error || j.message)) || 'HTTP ' + r.status));
+      return j;
+    } catch (e) {
+      if (e && e.name === 'AbortError') throw new Error('Hyperliquid ne répond pas (délai dépassé)');
+      if (e instanceof TypeError) throw new Error('Hyperliquid injoignable depuis ce navigateur');
+      throw e;
+    } finally { clearTimeout(to); }
+  }
+  const info = body => api.post('/info', body);
+  let lastNonce = 0;
+  const nonceNow = () => { lastNonce = Math.max(Date.now(), lastNonce + 1); return lastNonce; };
+  // Envoie une action de trading signée par l'agent. Renvoie la réponse ou lève une erreur lisible.
+  async function exchange(wallet, action) {
+    const nonce = nonceNow();
+    const signature = await signL1(wallet, action, nonce, true);
+    const r = await api.post('/exchange', { action, nonce, signature, vaultAddress: null, expiresAfter: null });
+    if (!r || r.status !== 'ok') throw new Error('Hyperliquid : ' + (typeof (r && r.response) === 'string' ? r.response : JSON.stringify(r && r.response)));
+    return r.response;
+  }
+  // Statuts d'un ordre groupé : premier ordre = entrée
+  function statuses(resp) { return (resp && resp.data && resp.data.statuses) || []; }
+
+  /* ---------- fabrication des ordres ---------- */
+  const limitWire = (asset, isBuy, px, sz, reduce, tif) => ({ a: asset, b: isBuy, p: wire(px), s: wire(sz), r: !!reduce, t: { limit: { tif } } });
+  const triggerWire = (asset, isBuy, px, sz, tpsl) => ({ a: asset, b: isBuy, p: wire(px), s: wire(sz), r: true, t: { trigger: { isMarket: true, triggerPx: wire(px), tpsl } } });
+
+  const api = { API, loadEthers, pack, wire, roundPx, roundSz, actionHash, signL1, splitSig, approveAgentTyped, info, post, exchange, statuses, limitWire, triggerWire, nonceNow, ZERO };
+  return api;
+})();
+if (typeof module !== 'undefined') module.exports = HL;
+
+/* ================= FUTURES AUTO (Hyperliquid via Phantom) =================
+   Suivi de tendance sur bougies 4 h, règles fixes (aucun réglage ajusté sur le passé) :
+   - Entrée : clôture 4 h au-dessus du plus haut des 55 bougies précédentes (LONG) ou sous leur plus bas (SHORT).
+   - Stop initial à 2 ATR, puis stop suiveur à 3 ATR sous la meilleure clôture depuis l'entrée. Pas d'objectif :
+     on laisse courir les gagnants, on coupe vite les perdants (≈ 35 % de trades gagnants, mais gagnants bien plus gros).
+   - Testé sur de vraies bougies (Binance futures, janv. 2022 – avr. 2023, 12 cryptos) : positif sur BTC et ETH sur les
+     deux moitiés de la période, BNB positif sur l'ensemble ; les autres cryptos ne gagnaient pas. Les petites stratégies
+     de scalping 5 min / 15 min / 1 h perdaient après frais. D'où : argent réel sur BTC, ETH, BNB ; le reste en simulation.
+   - Avant de trader une crypto, le bot rejoue la règle sur ses ~2,3 dernières années chez Hyperliquid (frais, glissement,
+     funding compris) : si ce n'est pas positif, pas d'argent réel.
+   - Taille calculée sur le risque (1 % du compte par défaut), levier le plus bas possible, liquidation au moins deux fois
+     plus loin que le stop. Le stop est posé chez Hyperliquid tout de suite (protégé même téléphone éteint). */
+function PerpsBot(h) {
+  const fin = Number.isFinite, esc = h.esc, $ = h.$;
+  const now = () => Date.now();
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
+  const TF = '4h', TFMS = 14400e3;
+  const RULE = { N: 55, k: 2, m: 3, atr: 14 };
+  const FEE_T = 0.00045, FEE_M = 0.00015; // frais Hyperliquid de base (taker / maker)
+  const FUND = 0.0000125;                 // funding de base par heure, compté comme un coût (prudent)
+  const MIN_NTL = 11;                     // Hyperliquid refuse les ordres sous 10 $
+  const N_BARS = 5000, RETEST = 24 * 3600e3, Q_GAP = 6000, LATE_ATR = 0.5;
+  const DEF = { on: false, coins: ['BTC', 'ETH', 'BNB', 'SOL', 'SKR'], real: ['BTC', 'ETH', 'BNB'], risk: 1, maxPos: 3, levCap: 5, dayLoss: 5, ddStop: 25, marginCap: 30 };
+  const BLANK = { cfg: {}, acct: '', agent: null, paper: { open: {}, closed: [] }, real: { pos: {}, hist: [] }, bt: {}, lastSig: {}, seen: {}, day: null, peak: 0, log: [], v: 2 };
+  let S = Object.assign({}, BLANK, h.store.get('perps', {}));
+  if (S.v !== 2) S = Object.assign({}, BLANK, { acct: S.acct || '', agent: S.agent || null, log: S.log || [], peak: S.peak || 0 }); // ancienne version : on repart propre (compte et clé gardés)
+  S.cfg = Object.assign({}, DEF, S.cfg);
+  const save = () => h.store.set('perps', S);
+  const P = { meta: null, metaAt: 0, candles: {}, ws: null, wsOk: false, q: [], qBusy: false, wallet: null, acctState: null, acctAt: 0, orders: [], agents: null, spotUsdc: null, guardQ: null, refill: {}, ui: {}, started: false };
+
+  /* ---------- formats ---------- */
+  const n2 = (x, d = 2) => (fin(x) ? x.toLocaleString('fr-FR', { minimumFractionDigits: d, maximumFractionDigits: d }) : '—');
+  const usd = x => (fin(x) ? (Math.abs(x) >= 1000 ? n2(x, 0) : n2(x, 2)) + ' $' : '—');
+  const pxf = x => (!fin(x) ? '—' : x >= 1000 ? n2(x, 1) : x >= 1 ? n2(x, 3) : x.toPrecision(4).replace('.', ','));
+  const pct = (x, d = 1) => (fin(x) ? (x > 0 ? '+' : x < 0 ? '−' : '') + Math.abs(x * 100).toFixed(d).replace('.', ',') + ' %' : '—');
+  const Rf = x => (fin(x) ? (x > 0 ? '+' : x < 0 ? '−' : '') + Math.abs(x).toFixed(2).replace('.', ',') + ' R' : '—');
+  const ago = ms => { const m = Math.max(0, Math.round(ms / 60000)); return m < 60 ? m + ' min' : m < 1440 ? Math.floor(m / 60) + ' h ' + String(m % 60).padStart(2, '0') : Math.floor(m / 1440) + ' j'; };
+  function log(msg, lvl = 'info') { S.log.unshift({ t: now(), msg, lvl }); S.log = S.log.slice(0, 80); save(); if (h.log) h.log('Futures : ' + msg); }
+  function day() {
+    const d = new Date().toLocaleDateString('fr-CA');
+    if (!S.day || S.day.d !== d) S.day = { d, pnl: 0, start: P.acctState ? +P.acctState.marginSummary.accountValue : null, n: 0 };
+    return S.day;
+  }
+
+  /* ---------- clé du bot (agent Hyperliquid) chiffrée par code ---------- */
+  const te = new TextEncoder();
+  const b64 = u => btoa(String.fromCharCode(...u)), unb64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
+  async function keyFrom(pin, salt) {
+    const base = await crypto.subtle.importKey('raw', te.encode(pin), 'PBKDF2', false, ['deriveKey']);
+    return crypto.subtle.deriveKey({ name: 'PBKDF2', salt, iterations: 250000, hash: 'SHA-256' }, base, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+  }
+  async function seal(secretHex, pin) {
+    const salt = crypto.getRandomValues(new Uint8Array(16)), iv = crypto.getRandomValues(new Uint8Array(12));
+    const k = await keyFrom(pin, salt);
+    const ct = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, k, te.encode(secretHex)));
+    return { v: 1, salt: b64(salt), iv: b64(iv), ct: b64(ct) };
+  }
+  async function unseal(e, pin) {
+    const k = await keyFrom(pin, unb64(e.salt));
+    try { return new TextDecoder().decode(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: unb64(e.iv) }, k, unb64(e.ct))); }
+    catch { throw new Error('Code incorrect'); }
+  }
+  async function createAgent(pin) {
+    if (!pin || pin.length < 6) throw new Error('Code de 6 caractères minimum');
+    const E = await HL.loadEthers();
+    const w = E.Wallet.createRandom();
+    S.agent = { enc: await seal(w.privateKey, pin), addr: w.address, name: 'vigie', at: now(), approved: false };
+    P.wallet = new E.Wallet(w.privateKey);
+    save(); log('Clé de trading du bot créée : ' + short(w.address) + '. Il reste à l\'autoriser dans Phantom.');
+  }
+  async function unlock(pin) {
+    const E = await HL.loadEthers();
+    const k = await unseal(S.agent.enc, pin);
+    const w = new E.Wallet(k);
+    if (w.address !== S.agent.addr) throw new Error('Clé incohérente');
+    P.wallet = w; log('Bot futures déverrouillé');
+  }
+  const short = a => (a ? a.slice(0, 6) + '…' + a.slice(-4) : '—');
+
+  /* ---------- Phantom : compte principal et autorisation de la clé ---------- */
+  const phEth = () => (typeof window !== 'undefined' && window.phantom && window.phantom.ethereum) || null;
+  async function connectPhantom() {
+    const p = phEth();
+    if (!p) throw new Error('Phantom n\'est pas disponible dans ce navigateur : ouvre l\'appli dans le navigateur de Phantom, ou colle ton adresse');
+    const acc = await p.request({ method: 'eth_requestAccounts' });
+    if (!acc || !acc[0]) throw new Error('Phantom n\'a pas donné d\'adresse');
+    S.acct = acc[0]; save(); log('Compte Phantom relié : ' + short(S.acct));
+    return S.acct;
+  }
+  async function approveWithPhantom(agentAddr, agentName = 'vigie') {
+    const p = phEth();
+    if (!p) throw new Error('Ouvre cette page dans le navigateur de Phantom pour signer l\'autorisation');
+    const acct = S.acct || await connectPhantom();
+    let chain = '0xa4b1';
+    try { await p.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: chain }] }); }
+    catch { try { chain = await p.request({ method: 'eth_chainId' }); } catch { chain = '0x1'; } }
+    const nonce = HL.nonceNow();
+    const { action, typed } = HL.approveAgentTyped(agentAddr, agentName, nonce, chain);
+    const sig = await p.request({ method: 'eth_signTypedData_v4', params: [acct, JSON.stringify(typed)] });
+    const signature = await HL.splitSig(sig);
+    const r = await HL.post('/exchange', { action, nonce, signature, vaultAddress: null, expiresAfter: null });
+    if (!r || r.status !== 'ok') throw new Error('Hyperliquid refuse l\'autorisation : ' + (r && typeof r.response === 'string' ? r.response : JSON.stringify(r && r.response)));
+    if (S.agent && S.agent.addr.toLowerCase() === agentAddr.toLowerCase()) S.agent.approved = true;
+    save(); log('Clé du bot autorisée par Phantom : elle peut trader sur ton compte, pas retirer', 'ok');
+    return true;
+  }
+  async function checkAgent() {
+    if (!S.acct || !S.agent) return null;
+    try {
+      const L = await HL.info({ type: 'extraAgents', user: S.acct });
+      P.agents = Array.isArray(L) ? L : [];
+      const me = P.agents.find(a => (a.address || '').toLowerCase() === S.agent.addr.toLowerCase());
+      S.agent.approved = !!me && (!me.validUntil || me.validUntil > now());
+      S.agent.validUntil = me ? me.validUntil : null;
+      save();
+      return S.agent.approved;
+    } catch { return null; }
+  }
+  // Lien pour ouvrir l'autorisation dans le navigateur de Phantom (la clé privée ne quitte jamais ce téléphone-ci)
+  function approveLink() {
+    if (!S.agent) return null;
+    const url = location.origin + location.pathname + '#perps-approve=' + S.agent.addr;
+    return 'https://phantom.app/ul/browse/' + encodeURIComponent(url) + '?ref=' + encodeURIComponent(location.origin);
+  }
+
+
+  /* ---------- marchés ---------- */
+  async function loadMeta() {
+    const r = await HL.info({ type: 'metaAndAssetCtxs' });
+    const uni = (r && r[0] && r[0].universe) || [], ctxs = (r && r[1]) || [];
+    const m = {};
+    uni.forEach((u, i) => {
+      if (u.isDelisted) return;
+      const c = ctxs[i] || {}, mid = +c.midPx || +c.markPx, imp = c.impactPxs || [];
+      const spread = imp.length === 2 && mid > 0 ? (+imp[1] - +imp[0]) / mid : null;
+      m[u.name] = { name: u.name, idx: i, szDec: u.szDecimals, maxLev: u.maxLeverage, onlyIso: !!u.onlyIsolated, mark: +c.markPx, mid, funding: +c.funding, oi: +c.openInterest * (+c.markPx || 0), vol: +c.dayNtlVlm, prev: +c.prevDayPx, spread };
+    });
+    P.meta = m; P.metaAt = now();
+    return m;
+  }
+  const universe = () => S.cfg.coins.filter(c => !P.meta || P.meta[c]);
+  // Glissement estimé : moitié de l'écart pour un ordre d'impact, borné
+  const slip = coin => { const a = P.meta && P.meta[coin]; return clamp(a && fin(a.spread) ? a.spread / 2 : 0.0005, 0.0001, 0.004); };
+  const fees = coin => ({ taker: FEE_T + slip(coin), maker: FEE_M });
+
+  /* ---------- bougies 4 h : historique (file d'attente polie) + direct (websocket) ---------- */
+  function enqueue(job) { P.q.push(job); runQ(); }
+  async function runQ() {
+    if (P.qBusy) return;
+    P.qBusy = true;
+    while (P.q.length) {
+      const job = P.q.shift();
+      try { await job(); } catch (e) { log('Données : ' + e.message, 'warn'); }
+      if (P.q.length) await sleep(Q_GAP); // limite de requêtes Hyperliquid (poids des bougies)
+    }
+    P.qBusy = false;
+  }
+  async function history(coin) {
+    const end = now(), start = end - TFMS * N_BARS;
+    const r = await HL.info({ type: 'candleSnapshot', req: { coin, interval: TF, startTime: start, endTime: end } });
+    const list = (Array.isArray(r) ? r : []).map(k => ({ t: +k.t, o: +k.o, h: +k.h, l: +k.l, c: +k.c, v: +k.v })).filter(k => fin(k.c)).sort((a, b) => a.t - b.t);
+    P.candles[coin] = list;
+    return list;
+  }
+  // Fermée = l'heure est passée, ou une bougie plus récente existe déjà (insensible à un téléphone en retard de quelques secondes)
+  const closed = coin => { const L = P.candles[coin] || [], lt = L.length ? L[L.length - 1].t : 0; return L.filter(k => k.t < lt || k.t + TFMS <= now()); };
+  // Filet de sécurité si le websocket se tait (veille, réseau) : relit les dernières bougies et rejoue
+  async function catchUp(coin) {
+    const L = P.candles[coin];
+    if (!L || !L.length || now() - (L[L.length - 1].t + TFMS) < 20000) return;
+    const r = await HL.info({ type: 'candleSnapshot', req: { coin, interval: TF, startTime: now() - 12 * TFMS, endTime: now() } });
+    for (const k of (Array.isArray(r) ? r : []).map(k => ({ t: +k.t, o: +k.o, h: +k.h, l: +k.l, c: +k.c, v: +k.v })).filter(k => fin(k.c))) {
+      const j = L.findIndex(x => x.t === k.t);
+      if (j >= 0) L[j] = k; else if (k.t > L[L.length - 1].t) L.push(k);
+    }
+    if (L.length >= 2 && L[L.length - 1].t - L[L.length - 2].t > 1.5 * TFMS) await history(coin);
+    onBar(coin);
+  }
+  function connectWs() {
+    if (P.ws || !h.wsUrl) return;
+    let ws;
+    try { ws = new WebSocket(h.wsUrl()); } catch { return; }
+    P.ws = ws;
+    ws.onopen = () => {
+      P.wsOk = true;
+      for (const coin of universe()) ws.send(JSON.stringify({ method: 'subscribe', subscription: { type: 'candle', coin, interval: TF } }));
+      ws.send(JSON.stringify({ method: 'subscribe', subscription: { type: 'allMids' } }));
+      clearInterval(P.ping); P.ping = setInterval(() => { try { ws.send(JSON.stringify({ method: 'ping' })); } catch {} }, 45000);
+    };
+    ws.onmessage = ev => {
+      let m; try { m = JSON.parse(ev.data); } catch { return; }
+      if (m.channel === 'candle' && m.data && m.data.i === TF) {
+        const k = m.data, L = P.candles[k.s];
+        if (!L) return;
+        const c = { t: +k.t, o: +k.o, h: +k.h, l: +k.l, c: +k.c, v: +k.v };
+        const last = L[L.length - 1];
+        if (last && last.t === c.t) L[L.length - 1] = c;
+        else if (!last || c.t > last.t) {
+          // trou (connexion coupée, téléphone en veille) : on recharge l'historique pour garder des bougies continues
+          if (last && c.t > last.t + 1.5 * TFMS && !P.refill[k.s]) { P.refill[k.s] = 1; enqueue(async () => { try { await history(k.s); onBar(k.s); } finally { delete P.refill[k.s]; } }); }
+          L.push(c); if (L.length > N_BARS + 50) L.splice(0, L.length - N_BARS - 50);
+          onBar(k.s);
+        }
+      } else if (m.channel === 'allMids' && m.data && m.data.mids) {
+        for (const [coin, v] of Object.entries(m.data.mids)) if (P.meta && P.meta[coin]) P.meta[coin].mid = +v;
+      }
+    };
+    ws.onclose = () => { P.ws = null; P.wsOk = false; clearInterval(P.ping); setTimeout(connectWs, 5000); };
+    ws.onerror = () => {};
+  }
+
+  /* ---------- la règle : cassure de canal 55 × 4 h, stop 2 ATR, stop suiveur 3 ATR ---------- */
+  const ATR = b => Engine.atr(b, RULE.atr);
+  function channel(b, i) { let hi = -Infinity, lo = Infinity; for (let j = i - RULE.N; j < i; j++) { hi = Math.max(hi, b[j].h); lo = Math.min(lo, b[j].l); } return { hi, lo }; }
+  // Signal à la clôture de la bougie i
+  function sigAt(b, A, i) {
+    if (i < RULE.N + RULE.atr || !(A[i] > 0)) return null;
+    const { hi, lo } = channel(b, i), x = b[i];
+    const dir = x.c > hi ? 1 : x.c < lo ? -1 : 0;
+    if (!dir) return null;
+    return { dir, t: x.t, tc: x.t + TFMS, entry: x.c, stop: x.c - dir * RULE.k * A[i], atr: A[i], hi, lo };
+  }
+  // Une bougie fermée pour une position : stop touché (sortie au stop, ou à l'ouverture si le prix a sauté le stop), sinon stop suiveur
+  function step(p, x, a) {
+    if (p.dir > 0 ? x.l <= p.stop : x.h >= p.stop) return { px: p.dir > 0 ? Math.min(p.stop, x.o) : Math.max(p.stop, x.o), why: p.trailed ? 'stop suiveur' : 'stop' };
+    p.best = p.dir > 0 ? Math.max(p.best, x.c) : Math.min(p.best, x.c);
+    const tr = p.best - p.dir * RULE.m * a;
+    if (fin(tr) && (tr - p.stop) * p.dir > 0) { p.stop = tr; p.trailed = true; }
+    return null;
+  }
+  // Résultat en R : frais d'entrée et de sortie (taker + glissement) et funding de base compris
+  const Rof = (p, px, t1, fee) => ((px - p.entry) * p.dir - fee * (p.entry + px) - FUND * Math.max(0, (t1 - p.t) / 3600e3) * p.entry) / p.r;
+  function backtest(b, fee) {
+    const A = ATR(b), T = [];
+    let pos = null;
+    for (let i = RULE.N + RULE.atr; i < b.length; i++) {
+      const x = b[i];
+      if (pos) {
+        const ex = step(pos, x, A[i]);
+        if (ex) { const t1 = x.t + TFMS; T.push({ t: pos.t, t1, dir: pos.dir, R: Rof(pos, ex.px, t1, fee), why: ex.why }); pos = null; }
+        continue;
+      }
+      const sg = sigAt(b, A, i);
+      if (sg) pos = { dir: sg.dir, entry: sg.entry, stop: sg.stop, best: sg.entry, r: Math.abs(sg.entry - sg.stop), t: sg.tc };
+    }
+    return { trades: T, open: pos };
+  }
+  const sumUp = R => { const g = R.filter(x => x > 0).reduce((a, b) => a + b, 0), l = -R.filter(x => x <= 0).reduce((a, b) => a + b, 0); let eq = 0, pk = 0, dd = 0; for (const x of R) { eq += x; pk = Math.max(pk, eq); dd = Math.max(dd, pk - eq); } return { n: R.length, totalR: g - l, avgR: R.length ? (g - l) / R.length : 0, pf: l > 0 ? g / l : (g > 0 ? 99 : 0), win: R.length ? R.filter(x => x > 0).length / R.length : 0, dd }; };
+  // Test de la règle sur l'historique de la crypto chez Hyperliquid (contrôle de bon sens, rien n'est ajusté)
+  function retest(coin) {
+    const b = closed(coin);
+    if (b.length < 300) return null;
+    const { trades } = backtest(b, fees(coin).taker);
+    const mid = b[Math.floor(b.length / 2)].t;
+    const all = sumUp(trades.map(x => x.R)), h1 = sumUp(trades.filter(x => x.t < mid).map(x => x.R)), h2 = sumUp(trades.filter(x => x.t >= mid).map(x => x.R));
+    S.bt[coin] = { at: now(), bars: b.length, from: b[0].t, to: b[b.length - 1].t + TFMS, ...all, h1: { n: h1.n, totalR: h1.totalR }, h2: { n: h2.n, totalR: h2.totalR }, last: trades.slice(-5) };
+    // premier passage : si la règle est en position en ce moment, la simulation reprend cette position
+    const op = backtest(b, fees(coin).taker).open;
+    if (!S.seen[coin] && !S.paper.open[coin] && op) { S.paper.open[coin] = Object.assign({}, op, { stop0: op.stop, lastT: b[b.length - 1].t, trailed: false }); S.seen[coin] = b[b.length - 1].t; }
+    save();
+    return S.bt[coin];
+  }
+  const btOk = coin => { const t = S.bt[coin]; return !!(t && t.n >= 20 && t.totalR > 0 && t.pf >= 1.1); };
+  const eligible = coin => S.cfg.real.includes(coin) && btOk(coin);
+
+  /* ---------- simulation (toutes les cryptos) et signaux ---------- */
+  // Rejoue chaque bougie fermée pas encore vue (même après des heures appli fermée) : sorties, puis nouvelles cassures.
+  // La simulation suit donc exactement la règle testée. L'argent réel, lui, n'entre que sur une cassure fraîche.
+  function onBar(coin) {
+    const b = closed(coin);
+    if (b.length < RULE.N + RULE.atr + 2) return;
+    const A = ATR(b), last = b.length - 1;
+    const seen = S.seen[coin] || b[last - 1].t;
+    for (let i = 0; i <= last; i++) {
+      if (b[i].t <= seen) continue;
+      let closedNow = false;
+      const p = S.paper.open[coin];
+      if (p && b[i].t > p.lastT) {
+        p.lastT = b[i].t;
+        const ex = step(p, b[i], A[i]);
+        if (ex) {
+          const t1 = b[i].t + TFMS;
+          S.paper.closed.unshift({ coin, dir: p.dir, t0: p.t, t1, entry: p.entry, exitPx: ex.px, R: Rof(p, ex.px, t1, fees(coin).taker), why: ex.why });
+          S.paper.closed = S.paper.closed.slice(0, 300);
+          delete S.paper.open[coin]; closedNow = true;
+          log(`Simulation ${coin} clôturée (${ex.why}) : ${Rf(S.paper.closed[0].R)}`);
+        }
+      }
+      if (!S.paper.open[coin] && !closedNow) {
+        const sg = sigAt(b, A, i);
+        if (sg) {
+          S.paper.open[coin] = { dir: sg.dir, entry: sg.entry, stop: sg.stop, stop0: sg.stop, best: sg.entry, r: Math.abs(sg.entry - sg.stop), t: sg.tc, lastT: sg.t, trailed: false };
+          log(`Cassure ${sg.dir > 0 ? 'LONG' : 'SHORT'} ${coin} à ${pxf(sg.entry)} (canal ${pxf(sg.dir > 0 ? sg.hi : sg.lo)}), stop ${pxf(sg.stop)} : simulation ouverte`);
+        }
+      }
+    }
+    S.seen[coin] = b[last].t;
+    // argent réel : cassure sur la dernière bougie fermée, il y a moins de 4 h
+    const sg = sigAt(b, A, last);
+    if (sg && S.lastSig[coin] !== sg.t) {
+      S.lastSig[coin] = sg.t;
+      sg.coin = coin;
+      if (S.cfg.on && eligible(coin) && now() - sg.tc < TFMS && !S.real.pos[coin]) tryReal(sg).catch(e => log(`Entrée réelle ${coin} refusée : ${e.message}`, 'warn'));
+    }
+    save();
+    if (h.visible && h.visible()) render();
+  }
+  // État de la crypto pour l'affichage : en tendance (position simulée) ou niveaux qui déclencheraient une entrée
+  function stateOf(coin) {
+    const b = closed(coin);
+    if (b.length < RULE.N + RULE.atr + 2) return null;
+    const { hi, lo } = channel(b, b.length);
+    return { hi, lo, open: S.paper.open[coin] || null };
+  }
+
+  /* ---------- compte ---------- */
+  async function refreshAcct() {
+    if (!S.acct) return null;
+    const [st, oo, sp] = await Promise.all([
+      HL.info({ type: 'clearinghouseState', user: S.acct }),
+      HL.info({ type: 'frontendOpenOrders', user: S.acct }).catch(() => []),
+      HL.info({ type: 'spotClearinghouseState', user: S.acct }).catch(() => null)
+    ]);
+    P.acctState = st; P.orders = Array.isArray(oo) ? oo : []; P.acctAt = now();
+    const u = sp && (sp.balances || []).find(b => b.coin === 'USDC');
+    P.spotUsdc = u ? +u.total - +(u.hold || 0) : 0;
+    const eq = equity();
+    if (fin(eq)) { S.peak = Math.max(S.peak || 0, eq); const d = day(); if (d.start == null) d.start = eq; }
+    return st;
+  }
+  const equity = () => (P.acctState ? +P.acctState.marginSummary.accountValue : NaN);
+  const positions = () => ((P.acctState && P.acctState.assetPositions) || []).map(x => x.position).filter(p => p && +p.szi !== 0);
+
+  /* ---------- taille et levier ---------- */
+  function sizeFor(sg, eq) {
+    const a = P.meta[sg.coin];
+    const f = fees(sg.coin);
+    const riskUsd = eq * S.cfg.risk / 100;
+    const perUnit = sg.dist + sg.entry * f.taker + sg.stop * f.taker;
+    let qty = riskUsd / perUnit;
+    const stopFrac = sg.dist / sg.entry, mm = 1 / (2 * a.maxLev);
+    // levier max pour que la liquidation reste au moins 2 fois plus loin que le stop
+    const levLiq = Math.floor(1 / (2 * stopFrac + 0.003 + mm));
+    const levMax = Math.max(1, Math.min(S.cfg.levCap, a.maxLev, levLiq));
+    const capUsd = eq * S.cfg.marginCap / 100;
+    const lev = clamp(Math.ceil(qty * sg.entry / capUsd - 1e-9), 1, levMax);
+    if (qty * sg.entry / lev > capUsd) qty = capUsd * lev / sg.entry;
+    qty = HL.roundSz(qty, a.szDec);
+    const ntl = qty * sg.entry;
+    const liqFrac = 1 / lev - mm;
+    return { qty, ntl, lev, margin: ntl / lev, riskUsd: qty * perUnit, liqFrac, stopFrac, ok: ntl >= MIN_NTL && liqFrac >= 2 * stopFrac, why: ntl < MIN_NTL ? `position de ${usd(ntl)} : sous le minimum Hyperliquid de 10 $ (capital trop petit pour ce stop)` : liqFrac < 2 * stopFrac ? 'liquidation trop proche du stop' : '' };
+  }
+  function riskGate() {
+    const eq = equity(), d = day();
+    if (!P.wallet) return 'bot verrouillé (entre ton code)';
+    if (!S.agent || !S.agent.approved) return 'clé du bot pas encore autorisée dans Phantom';
+    if (!fin(eq) || eq < 15) return 'solde Perps trop faible (15 $ minimum)';
+    if (d.start && d.pnl <= -d.start * S.cfg.dayLoss / 100) return `perte du jour atteinte (${usd(d.pnl)}) : reprise demain`;
+    if (S.peak && eq < S.peak * (1 - S.cfg.ddStop / 100)) { if (S.cfg.on) { S.cfg.on = false; save(); log(`Mode auto coupé : le compte a perdu ${S.cfg.ddStop} % depuis son plus haut. Réactive-le toi-même si tu veux reprendre.`, 'bad'); h.notify && h.notify('Futures : mode auto coupé (baisse du compte)', 'short'); } return 'baisse du compte trop forte depuis son plus haut'; }
+    if (positions().length >= S.cfg.maxPos) return `déjà ${positions().length} positions (maximum ${S.cfg.maxPos})`;
+    return null;
+  }
+
+  /* ---------- exécution réelle ---------- */
+  // Une seule opération à la fois sur le compte (entrées, fermetures, surveillance)
+  let lock = Promise.resolve();
+  const serial = fn => { const r = lock.then(fn, fn); lock = r.catch(() => {}); return r; };
+  const isSl = o => /stop/i.test(o.orderType || '') || o.tpsl === 'sl';
+  const cancel = async (a, oid) => { try { await HL.exchange(P.wallet, { type: 'cancel', cancels: [{ a: a.idx, o: oid }] }); return true; } catch { return false; } };
+  const tryReal = sg => serial(() => enter(sg));
+  async function enter(sg) {
+    await refreshAcct();
+    const g = riskGate(); if (g) throw new Error(g);
+    if (positions().some(p => p.coin === sg.coin) || S.real.pos[sg.coin]) throw new Error('déjà une position sur ' + sg.coin);
+    if (!P.meta || now() - P.metaAt > 120000) await loadMeta();
+    const a = P.meta[sg.coin];
+    if (!a) throw new Error('marché inconnu');
+    const mid = a.mid || a.mark;
+    // entrée tardive (appli en veille à la clôture) : seulement si le prix est encore près du prix du signal et toujours hors du canal
+    if (Math.abs(mid - sg.entry) > LATE_ATR * sg.atr) throw new Error(`le prix a trop bougé depuis la cassure (${pxf(sg.entry)} → ${pxf(mid)})`);
+    if ((mid - (sg.dir > 0 ? sg.hi : sg.lo)) * sg.dir <= 0) throw new Error('le prix est revenu dans le canal : cassure annulée');
+    if (fin(a.funding) && a.funding * sg.dir > 0.0001) throw new Error('funding très cher dans ce sens');
+    const plan = { coin: sg.coin, dir: sg.dir, entry: mid, stop: sg.stop, dist: Math.abs(mid - sg.stop) };
+    if ((mid - sg.stop) * sg.dir <= 0) throw new Error('stop déjà dépassé');
+    const z = sizeFor(plan, equity());
+    if (!z.ok) throw new Error(z.why);
+    const isBuy = plan.dir > 0;
+    await HL.exchange(P.wallet, { type: 'updateLeverage', asset: a.idx, isCross: false, leverage: z.lev });
+    // ordre IOC avec 0,5 % de marge : exécuté au meilleur prix disponible ; stop posé dans le même envoi
+    const px = HL.roundPx(mid * (isBuy ? 1.005 : 0.995), a.szDec), sl = HL.roundPx(plan.stop, a.szDec);
+    const orders = [HL.limitWire(a.idx, isBuy, px, z.qty, false, 'Ioc'), HL.triggerWire(a.idx, !isBuy, sl, z.qty, 'sl')];
+    // noté AVANT l'envoi : si la réponse se perd, la surveillance retrouvera la position
+    const rec = { coin: sg.coin, dir: plan.dir, t0: now(), tSig: sg.t, lastT: sg.t, entry: mid, stop: sl, stop0: sl, best: sg.entry, atr: sg.atr, dist: plan.dist, qty: z.qty, lev: z.lev, riskUsd: z.riskUsd, pending: true, entryOid: null, trailed: false };
+    S.real.pos[sg.coin] = rec; save();
+    let resp;
+    try { resp = await HL.exchange(P.wallet, { type: 'order', orders, grouping: 'normalTpsl' }); }
+    catch (e) { if (!/délai|injoignable/.test(e.message)) { delete S.real.pos[sg.coin]; save(); } throw e; } // réponse perdue : on garde la trace
+    const e0 = HL.statuses(resp)[0] || {};
+    if (e0.error) { delete S.real.pos[sg.coin]; save(); throw new Error('ordre refusé : ' + e0.error); }
+    if (!e0.filled) { delete S.real.pos[sg.coin]; save(); throw new Error('ordre non exécuté (pas assez de vendeurs/acheteurs au prix)'); }
+    Object.assign(rec, { pending: false, entryOid: e0.filled.oid, entry: +e0.filled.avgPx, qty: +e0.filled.totalSz });
+    rec.dist = Math.abs(rec.entry - rec.stop);
+    day().n++;
+    save();
+    log(`Entrée ${plan.dir > 0 ? 'LONG' : 'SHORT'} ${sg.coin} : ${HL.wire(rec.qty)} à ${pxf(rec.entry)}, levier ${z.lev}x isolé, stop ${pxf(sl)} posé chez Hyperliquid, risque ${usd(z.riskUsd)}`, 'buy');
+    h.notify && h.notify(`Futures : ${plan.dir > 0 ? 'LONG' : 'SHORT'} ${sg.coin} (levier ${z.lev}x)`, 'long');
+    setTimeout(() => guard().catch(() => {}), 3000);
+  }
+  // Ferme au marché (ordre IOC « réduction seule ») et retire les ordres restants sur la crypto
+  const closeNow = (coin, why) => serial(() => closeIn(coin, why));
+  async function closeIn(coin, why) {
+    await refreshAcct();
+    const p = positions().find(x => x.coin === coin);
+    const a = P.meta && P.meta[coin];
+    if (!a) throw new Error('marché inconnu');
+    if (p) {
+      const sz = Math.abs(+p.szi), isBuy = +p.szi < 0, mid = a.mid || a.mark;
+      const resp = await HL.exchange(P.wallet, { type: 'order', orders: [HL.limitWire(a.idx, isBuy, HL.roundPx(mid * (isBuy ? 1.01 : 0.99), a.szDec), sz, true, 'Ioc')], grouping: 'na' });
+      const e0 = HL.statuses(resp)[0] || {};
+      if (e0.error) throw new Error(e0.error);
+    }
+    for (const o of P.orders.filter(o => o.coin === coin)) await cancel(a, o.oid);
+    if (S.real.pos[coin]) S.real.pos[coin].closeWhy = why;
+    log(`${coin} fermé au marché : ${why}`, 'sell');
+    setTimeout(() => guard().catch(() => {}), 2500);
+  }
+  // Surveillance : stop présent chez Hyperliquid, stop suiveur à chaque clôture 4 h, clôtures et résultats
+  const guard = () => { if (P.guardQ) return P.guardQ; P.guardQ = serial(guardIn).finally(() => { P.guardQ = null; }); return P.guardQ; };
+  async function guardIn() {
+    if (!S.acct) return;
+    await refreshAcct();
+    if (!P.wallet) { if (h.visible && h.visible()) render(); return; }
+    const pos = positions(), byCoin = Object.fromEntries(pos.map(p => [p.coin, p]));
+    for (const [coin, r] of Object.entries(S.real.pos)) {
+      const p = byCoin[coin], a = P.meta && P.meta[coin];
+      if (!a) continue;
+      if (r.pending) {
+        if (p) { r.pending = false; r.entry = +p.entryPx; r.qty = Math.abs(+p.szi); r.dist = Math.abs(r.entry - r.stop); r.t0 = now(); save(); log(`Ordre ${coin} exécuté à ${pxf(r.entry)}`, 'buy'); }
+        else if (now() - r.t0 > 90000) { for (const o of P.orders.filter(o => o.coin === coin)) await cancel(a, o.oid); delete S.real.pos[coin]; save(); log(`Ordre ${coin} non exécuté : abandonné`); continue; }
+        else continue;
+      }
+      if (!p) { await settle(coin, r); continue; }
+      const sz = Math.abs(+p.szi), isBuy = +p.szi < 0, mid = a.mid || a.mark;
+      const sls = P.orders.filter(o => o.coin === coin && o.isTrigger && o.reduceOnly && isSl(o));
+      // stop suiveur : recalculé sur chaque bougie 4 h fermée depuis la dernière fois
+      const b = closed(coin), A = ATR(b);
+      let want = r.stop;
+      for (let i = 0; i < b.length; i++) {
+        if (b[i].t <= r.lastT) continue;
+        r.lastT = b[i].t;
+        r.best = r.dir > 0 ? Math.max(r.best, b[i].c) : Math.min(r.best, b[i].c);
+        const tr = r.best - r.dir * RULE.m * A[i];
+        if (fin(tr) && (tr - want) * r.dir > 0) want = tr;
+        if (fin(A[i])) r.atr = A[i];
+      }
+      if ((want - mid) * r.dir >= 0) { log(`${coin} : le prix est déjà sous le stop suiveur, sortie`, 'warn'); await closeIn(coin, 'stop suiveur'); continue; }
+      const moved = (want - r.stop) * r.dir > 0.1 * (r.atr || 0);
+      if (moved || !sls.length) {
+        const nx = HL.roundPx(moved ? want : r.stop, a.szDec);
+        try {
+          const resp = await HL.exchange(P.wallet, { type: 'order', orders: [HL.triggerWire(a.idx, isBuy, nx, sz, 'sl')], grouping: 'positionTpsl' });
+          const err = HL.statuses(resp).find(x => x && x.error);
+          if (err) throw new Error(err.error);
+          for (const o of sls) await cancel(a, o.oid);
+          if (moved) { r.stop = nx; r.trailed = true; log(`${coin} : stop suiveur remonté à ${pxf(nx)}`, 'ok'); }
+          else log(`${coin} : stop absent chez Hyperliquid, remis à ${pxf(nx)}`, 'warn');
+        } catch (e) {
+          if (!sls.length) { log(`${coin} : stop impossible à poser (${e.message}), fermeture`, 'bad'); await closeIn(coin, 'protection impossible'); continue; }
+          log(`${coin} : stop non déplacé (${e.message}), l'ancien reste en place`, 'warn');
+        }
+      }
+      save();
+    }
+    save();
+    if (h.visible && h.visible()) render();
+  }
+  // Résultat réel d'une position fermée (frais et funding compris), lu dans l'historique Hyperliquid
+  async function settle(coin, r) {
+    let pnl = null, closing = [], fund = 0;
+    try {
+      const [fills, fu] = await Promise.all([
+        HL.info({ type: 'userFillsByTime', user: S.acct, startTime: r.t0 - 60000 }),
+        HL.info({ type: 'userFunding', user: S.acct, startTime: r.t0 - 60000 }).catch(() => [])
+      ]);
+      const F = (Array.isArray(fills) ? fills : []).filter(f => f.coin === coin);
+      closing = F.filter(f => /close|>/i.test(f.dir || '') || +f.closedPnl !== 0);
+      fund = (Array.isArray(fu) ? fu : []).filter(x => x.delta && x.delta.coin === coin).reduce((s, x) => s + (+x.delta.usdc || 0), 0);
+      pnl = F.reduce((s, f) => s + (+f.closedPnl || 0) - (+f.fee || 0), 0) + fund;
+    } catch {}
+    // l'historique peut avoir quelques secondes de retard : on réessaie avant de conclure
+    if (!closing.length && (r.tries = (r.tries || 0) + 1) < 6) { save(); return false; }
+    if (!closing.length) pnl = null;
+    const exitPx = closing.length ? closing.reduce((s, f) => s + +f.px * +f.sz, 0) / closing.reduce((s, f) => s + +f.sz, 0) : null;
+    const why = r.closeWhy || (r.trailed ? 'stop suiveur' : 'stop');
+    const R = fin(pnl) && r.riskUsd ? pnl / r.riskUsd : null;
+    S.real.hist.unshift({ coin, dir: r.dir, t0: r.t0, t1: now(), entry: r.entry, exitPx, stop0: r.stop0, qty: r.qty, pnl, fund, R, lev: r.lev, riskUsd: r.riskUsd, why });
+    S.real.hist = S.real.hist.slice(0, 200);
+    delete S.real.pos[coin];
+    if (fin(pnl)) day().pnl += pnl;
+    save();
+    log(`${coin} clôturé (${why}) : ${fin(pnl) ? (pnl >= 0 ? 'gain' : 'perte') + ' de ' + usd(Math.abs(pnl)) + (fin(R) ? ' (' + Rf(R) + ')' : '') : 'résultat illisible, vérifie dans Phantom'}`, fin(pnl) && pnl >= 0 ? 'sell' : 'bad');
+    h.notify && h.notify(`Futures : ${coin} clôturé ${fin(pnl) ? usd(pnl) : ''}`, fin(pnl) && pnl >= 0 ? 'long' : 'short');
+    return true;
+  }
+
+  /* ---------- boucles ---------- */
+  async function boot() {
+    try { await loadMeta(); } catch (e) { log('Hyperliquid injoignable : ' + e.message, 'bad'); setTimeout(boot, 30000); return; }
+    for (const coin of universe()) enqueue(async () => {
+      await history(coin);
+      retest(coin);
+      onBar(coin); // rattrape la simulation et une cassure toute fraîche
+      if (h.visible && h.visible()) render();
+    });
+    connectWs();
+  }
+  function start() {
+    if (P.started || h.inFrame) return;
+    P.started = true;
+    const hash = location.hash || '';
+    // page ouverte dans Phantom juste pour signer l'autorisation : rien d'autre ne tourne ici
+    if (hash.startsWith('#perps-approve=')) { P.ui.approveFor = hash.slice('#perps-approve='.length); render(); return; }
+    boot();
+    setInterval(() => { loadMeta().catch(() => {}); for (const coin of universe()) catchUp(coin).catch(() => {}); }, 60000);
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { for (const coin of universe()) catchUp(coin).catch(() => {}); if (S.acct) guard().catch(() => {}); } });
+    setInterval(() => { if (S.acct) guard().catch(e => log('Surveillance : ' + e.message, 'warn')); }, 10000);
+    setInterval(() => { for (const coin of universe()) { const t = S.bt[coin]; if (P.candles[coin] && (!t || now() - t.at > RETEST)) enqueue(async () => { await history(coin); retest(coin); onBar(coin); }); } }, 15 * 60000);
+    if (S.acct) checkAgent().then(() => guard()).catch(() => {});
+  }
+
+  /* ---------- export pour analyse (aucune clé dedans) ---------- */
+  function build() {
+    return { format: 'perps-2', at: new Date().toISOString(), rule: RULE, tf: TF, cfg: S.cfg, account: short(S.acct), agent: S.agent ? { addr: short(S.agent.addr), approved: S.agent.approved } : null,
+      equity: equity(), peak: S.peak, day: S.day, bt: S.bt, eligible: Object.fromEntries(S.cfg.coins.map(c => [c, eligible(c)])),
+      real: { open: Object.values(S.real.pos), hist: S.real.hist }, paper: S.paper, log: S.log };
+  }
+  async function exportFile() {
+    const txt = JSON.stringify(build(), null, 1), name = 'vigie-futures-' + new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-') + '.json';
+    try {
+      const f = new File([txt], name, { type: 'application/json' });
+      if (navigator.canShare && navigator.canShare({ files: [f] })) { await navigator.share({ files: [f], title: 'Journal futures Vigie' }); return; }
+    } catch (e) { if (e && e.name === 'AbortError') return; }
+    const u = URL.createObjectURL(new Blob([txt], { type: 'application/json' })), el = document.createElement('a');
+    el.href = u; el.download = name; document.body.appendChild(el); el.click(); el.remove(); setTimeout(() => URL.revokeObjectURL(u), 5000);
+  }
+
+  /* ---------- affichage ---------- */
+  function marketHtml(coin) {
+    const a = P.meta && P.meta[coin], t = S.bt[coin], st = stateOf(coin), real = S.cfg.real.includes(coin), ok = btOk(coin);
+    const px = a ? a.mid || a.mark : NaN, ch = a && a.prev ? px / a.prev - 1 : NaN;
+    const yrs = t ? (t.to - t.from) / (365 * 86400e3) : 0;
+    const lvl = real && ok ? 'ok' : t && !ok ? 'bad' : '';
+    const btTxt = !P.candles[coin] ? 'chargement de l\'historique…' : !t ? 'test en attente' :
+      `Règle rejouée sur ${n2(yrs, 1)} an${yrs >= 2 ? 's' : ''} : ${t.n} trades, ${Rf(t.totalR)}, ${Math.round(t.win * 100)} % gagnants, PF ${n2(t.pf, 2)} (1re moitié ${Rf(t.h1.totalR)}, 2e ${Rf(t.h2.totalR)})${ok ? '' : ' : pas assez bon pour de l\'argent réel'}`;
+    let now1 = '';
+    if (st && st.open) now1 = `Tendance ${st.open.dir > 0 ? 'haussière' : 'baissière'} en cours : simulation ${st.open.dir > 0 ? 'LONG' : 'SHORT'} depuis ${ago(now() - st.open.t)} (entrée ${pxf(st.open.entry)}, stop ${pxf(st.open.stop)})`;
+    else if (st) now1 = `En attente d'une cassure : LONG si une bougie 4 h clôture au-dessus de ${pxf(st.hi)}, SHORT si sous ${pxf(st.lo)}`;
+    const mode = real ? (ok ? '<span class="chip long">argent réel</span>' : '<span class="chip warn">réel demandé, test insuffisant</span>') : '<span class="chip">simulation</span>';
+    const btn = real ? `<button class="btn sm" data-preal="${esc(coin)}">Simulation seulement</button>` : ok ? `<button class="btn sm" data-preal="${esc(coin)}">Trader en réel</button>` : '';
+    return `<div class="pp-row" data-l="${lvl}"><div class="pp-h"><b>${esc(coin)}</b><span class="mono">${pxf(px)}</span><span class="${ch > 0 ? 'pos' : ch < 0 ? 'neg' : ''}">${pct(ch)}</span>${mode}<span class="muted small">${a ? `levier max ${a.maxLev}x · funding ${pct(a.funding, 4)}/h` : ''}</span></div>
+      <p class="pp-tf">${esc(btTxt)}</p>${now1 ? `<p class="pp-tf pp-now">${esc(now1)}</p>` : ''}${btn ? `<div class="row-btns" style="margin:6px 0 0">${btn}</div>` : ''}</div>`;
+  }
+  function render() {
+    const box = $('#perpsBody');
+    if (!box) return;
+    const ae = document.activeElement;
+    if (ae && box.contains(ae) && ae.tagName === 'INPUT') return;
+    if (h.inFrame) { box.innerHTML = '<p class="note">Le bot futures ne tourne pas dans l\'aperçu Claude. Utilise la version hébergée de l\'appli.</p>'; return; }
+    const st = P.acctState, eq = equity(), pos = positions(), d = day(), g = S.acct ? riskGate() : 'compte Phantom non relié';
+    { const sp = $('#perpsState'); if (sp) sp.innerHTML = S.cfg.on ? `<span class="chip ${g ? 'warn' : 'long'}">${g ? 'auto · en attente' : 'auto'}</span>` : '<span class="chip">simulation</span>'; }
+    const ph = !!phEth();
+    // page d'autorisation ouverte dans le navigateur de Phantom
+    if (P.ui.approveFor) {
+      box.innerHTML = `<div class="advice" data-l="warn" style="margin:0 0 10px"><h3>Autoriser le bot à trader</h3><p>Clé du bot : <span class="mono">${esc(short(P.ui.approveFor))}</span>. Elle pourra ouvrir et fermer des positions sur ton compte Perps. Elle ne pourra pas retirer ton argent.</p></div>
+        ${ph ? '<div class="row-btns"><button class="btn pri" data-pp="approve-link">Signer l\'autorisation avec Phantom</button></div>' : '<p class="note">Ouvre ce lien dans le navigateur de Phantom (onglet navigateur de Phantom) pour signer.</p>'}
+        <p class="note">Ensuite, retourne dans l'appli Vigie habituelle : elle verra l'autorisation toute seule.</p>`;
+      return;
+    }
+    const acctHtml = S.acct
+      ? `<div class="w-top">
+          <div class="kv"><div class="k">Compte Perps</div><div class="v">${usd(eq)}</div></div>
+          <div class="kv"><div class="k">Disponible</div><div class="v">${st ? usd(+st.withdrawable) : '—'}</div></div>
+          <div class="kv"><div class="k">Résultat du jour</div><div class="v ${d.pnl > 0 ? 'pos' : d.pnl < 0 ? 'neg' : ''}">${usd(d.pnl)}</div></div>
+        </div>
+        <p class="note">Compte Phantom <span class="mono">${esc(short(S.acct))}</span>${P.acctAt ? ' · relu il y a ' + Math.round((now() - P.acctAt) / 1000) + ' s' : ''}${P.spotUsdc > 1 ? ` · <b>${usd(P.spotUsdc)} en USDC « spot »</b> : dans Phantom, transfère-les vers Perps pour que le bot puisse s'en servir` : ''}${st && eq === 0 ? ' · <b>solde à 0 : si Phantom Perps affiche de l\'argent, vérifie que c\'est bien ton adresse Ethereum de Phantom</b>' : ''}</p>`
+      : `<p class="note" style="margin:0 0 8px">Relie ton compte Phantom (adresse Ethereum, qui sert aussi pour Perps).</p>
+        <div class="row-btns">${ph ? '<button class="btn pri" data-pp="connect">Relier Phantom</button>' : ''}</div>
+        <div class="add"><input id="ppAddr" placeholder="Ou colle ton adresse 0x…" autocomplete="off"><button class="btn" data-pp="addr">Valider</button></div>`;
+    const keyHtml = !S.agent
+      ? `<h3 class="w-h">Clé de trading du bot</h3><p class="note">Le bot a besoin de sa propre clé pour signer seul. Elle est protégée par un code et ne peut pas retirer ton argent.</p>
+        <div class="add"><input id="ppPin1" type="password" placeholder="Code (6 caractères min.)" autocomplete="new-password"><input id="ppPin2" type="password" placeholder="Confirme" autocomplete="new-password"><button class="btn pri" data-pp="create">Créer</button></div>`
+      : !P.wallet
+        ? `<h3 class="w-h">Clé de trading du bot</h3><div class="add"><input id="ppPin" type="password" placeholder="Code du bot futures" autocomplete="current-password"><button class="btn pri" data-pp="unlock">Déverrouiller</button></div>`
+        : `<h3 class="w-h">Clé de trading du bot</h3><p class="note">Clé <span class="mono">${esc(short(S.agent.addr))}</span> · ${S.agent.approved ? '<b class="pos">autorisée par Phantom</b>' : '<b class="neg">pas encore autorisée</b>'}</p>
+          ${S.agent.approved ? '' : `<div class="row-btns">${ph ? '<button class="btn pri" data-pp="approve">Autoriser avec Phantom</button>' : `<a class="btn pri" href="${esc(approveLink())}" rel="noopener">Ouvrir Phantom pour autoriser</a>`}<button class="btn sm" data-pp="check">Vérifier</button></div>`}`;
+    const chip = (k, v, label, cur) => `<button class="btn sm ${cur ? 'pri' : ''}" data-pq="${k}" data-v="${v}" aria-pressed="${cur}">${label}</button>`;
+    const c = S.cfg;
+    const setHtml = `<h3 class="w-h">Réglages du risque</h3>
+      <div class="q-set">
+        <div class="q-row"><span class="q-lab">Risque par trade (part du compte perdue si le stop est touché)</span><div class="row-btns" style="margin:0">${[0.5, 1, 2].map(v => chip('risk', v, String(v).replace('.', ',') + ' %', c.risk === v)).join('')}</div></div>
+        <div class="q-row"><span class="q-lab">Levier maximum (le bot prend le plus bas possible)</span><div class="row-btns" style="margin:0">${[2, 3, 5, 10].map(v => chip('levCap', v, v + 'x', c.levCap === v)).join('')}</div></div>
+        <div class="q-row"><span class="q-lab">Positions en même temps</span><div class="row-btns" style="margin:0">${[1, 2, 3].map(v => chip('maxPos', v, String(v), c.maxPos === v)).join('')}</div></div>
+        <div class="q-row"><span class="q-lab">Arrêt pour la journée après une perte de</span><div class="row-btns" style="margin:0">${[3, 5, 8].map(v => chip('dayLoss', v, v + ' %', c.dayLoss === v)).join('')}</div></div>
+      </div>
+      <p class="note">Avec ${usd(eq)} : un stop touché coûte environ ${usd(eq * c.risk / 100)}. Attends-toi à des séries de pertes (jusqu'à 8 à 10 de suite dans les tests) : c'est normal pour un suivi de tendance, les gains viennent de quelques gros mouvements. Le mode auto se coupe seul si le compte perd ${c.ddStop} % depuis son plus haut.</p>`;
+    const rows = universe().map(marketHtml).join('');
+    const live = Object.values(S.real.pos).map(r => {
+      const p = pos.find(x => x.coin === r.coin), a = P.meta && P.meta[r.coin], mid = a ? a.mid || a.mark : NaN;
+      const upnl = p ? +p.unrealizedPnl : NaN, lockR = r.dist ? ((r.stop - r.entry) * r.dir) / Math.abs(r.entry - r.stop0) : NaN;
+      return `<div class="p-card" data-l="${upnl > 0 ? 'ok' : upnl < 0 ? 'danger' : 'info'}"><div class="p-head"><b class="p-sym">${esc(r.coin)}</b><span class="muted small">${r.dir > 0 ? 'LONG' : 'SHORT'} · levier ${r.lev}x isolé${r.pending ? ' · ordre en cours' : ''}</span><span class="p-pnl ${upnl > 0 ? 'pos' : upnl < 0 ? 'neg' : ''}">${usd(upnl)}</span></div>
+        <div class="m-kpis"><span>Entrée <b>${pxf(r.entry)}</b></span><span>Stop <b>${pxf(r.stop)}</b></span><span>Liquidation <b>${p && p.liquidationPx ? pxf(+p.liquidationPx) : '—'}</b></span></div>
+        <p class="p-life">Prix ${pxf(mid)} · risque de départ ${usd(r.riskUsd)} · depuis ${ago(now() - r.t0)}${r.trailed ? ` · stop suiveur (${lockR >= 0 ? 'gain de ' + Rf(lockR) + ' assuré' : 'perte réduite à ' + Rf(lockR)})` : ''}</p>
+        <div class="row-btns" style="margin:0"><button class="btn sm danger" data-pclose="${esc(r.coin)}">Fermer maintenant</button></div></div>`;
+    }).join('');
+    const other = pos.filter(p => !S.real.pos[p.coin]).map(p => `<div class="j-row"><span class="chip">${esc(p.coin)}</span><div class="j-mid"><div>Position ouverte hors bot : ${+p.szi > 0 ? 'LONG' : 'SHORT'} ${esc(p.szi)}</div><div class="mono">entrée ${pxf(+p.entryPx)} · ${usd(+p.unrealizedPnl)}</div></div><span></span></div>`).join('');
+    const done = [...S.real.hist.slice(0, 8).map(x => ({ real: true, ...x })), ...S.paper.closed.slice(0, 8)].sort((a, b) => b.t1 - a.t1).slice(0, 10).map(x => `<div class="j-row"><span class="chip ${x.R > 0 ? 'long' : 'short'}">${Rf(x.R)}</span><div class="j-mid"><div>${esc(x.coin)} ${x.dir > 0 ? 'LONG' : 'SHORT'} · ${x.real ? '<b>réel</b>' : 'simulation'}${x.real && fin(x.pnl) ? ' · ' + usd(x.pnl) : ''}</div><div class="mono">il y a ${ago(now() - x.t1)}${x.why ? ' · ' + esc(x.why) : ''}</div></div><span></span></div>`).join('');
+    const logs = S.log.slice(0, 10).map(x => `<div class="b-log" data-l="${x.lvl}"><span class="mono">${new Date(x.t).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</span><span>${esc(x.msg)}</span></div>`).join('');
+    const nReal = universe().filter(eligible);
+    const live1 = c.on && !g && nReal.length > 0;
+    const autoTxt = !c.on ? 'Le bot suit déjà les marchés et simule. Active le mode auto pour qu\'il trade pour de vrai les cryptos en « argent réel ».'
+      : g ? esc('Pas d\'entrée réelle : ' + g)
+      : nReal.length ? `Argent réel sur ${nReal.join(', ')}. Le bot entre seul à la prochaine cassure 4 h et pose son stop chez Hyperliquid. Il peut se passer plusieurs jours sans trade : c'est normal.`
+      : 'Aucune crypto n\'a encore passé le test : le bot attend et simule.';
+    const autoHtml = `<div class="advice" data-l="${live1 ? 'ok' : 'warn'}" style="margin:10px 0"><h3>${!c.on ? 'Mode auto coupé' : live1 ? 'Mode auto : le bot trade seul' : 'Mode auto actif, en attente'}</h3><p>${autoTxt}</p>
+      <div class="row-btns">${c.on ? '<button class="btn danger" data-pp="off">Couper le mode auto</button>' : '<button class="btn pri" data-pp="arm">Activer le mode auto</button>'}${pos.length ? '<button class="btn danger" data-pp="closeall">Tout fermer</button>' : ''}</div>
+      ${P.ui.confirm ? `<div class="confirm"><span>Le bot va ouvrir et fermer des positions à levier seul, avec ${String(c.risk).replace('.', ',')} % de risque par trade. Les pertes sont réelles.</span><button class="btn sm danger" data-pp="arm-yes">Oui, activer</button><button class="btn sm" data-pp="cancel">Annuler</button></div>` : ''}</div>`;
+    box.innerHTML = `${acctHtml}${S.acct ? keyHtml : ''}${autoHtml}
+      ${live ? `<h3 class="w-h">Positions du bot</h3>${live}` : ''}${other ? `<div class="journal">${other}</div>` : ''}
+      <h3 class="w-h">Marchés suivis (bougies 4 h)</h3>
+      <div class="pp-list">${rows || '<p class="note">Chargement des marchés…</p>'}</div>
+      ${done ? `<h3 class="w-h">Derniers trades</h3><div class="journal">${done}</div>` : ''}
+      ${setHtml}
+      <h3 class="w-h">Journal</h3><div class="b-logs">${logs || '<p class="note">Rien pour l\'instant.</p>'}</div>
+      <div class="row-btns"><button class="btn sm" data-pp="export">Exporter le journal futures</button></div>
+      <details class="w-oth"><summary>Déposer de l'argent</summary><p class="note">Dans Phantom : onglet Perps, puis « Déposer ». Phantom fait le pont depuis Solana et affiche les frais avant de valider. Si l'argent arrive en USDC « spot », transfère-le vers Perps dans Phantom. Prévois au moins 100 $ : Hyperliquid refuse les ordres de moins de 10 $, et avec 1 % de risque et un stop à 3-5 %, une position fait environ le quart du compte.</p></details>`;
+  }
+  function bindUI() {
+    const box = $('#perpsBody');
+    if (!box) return;
+    box.addEventListener('click', async e => {
+      const b = e.target.closest('button'); if (!b) return;
+      const val = id => { const el = document.getElementById(id); return el ? el.value.trim() : ''; };
+      try {
+        if (b.dataset.pq) { const k = b.dataset.pq, v = +b.dataset.v; S.cfg[k] = v; save(); log(`Réglage : ${{ risk: 'risque par trade ' + String(v).replace('.', ',') + ' %', levCap: 'levier maximum ' + v + 'x', maxPos: v + ' position' + (v > 1 ? 's' : '') + ' en même temps', dayLoss: 'arrêt du jour après −' + v + ' %' }[k] || k + ' = ' + v}`); return; }
+        if (b.dataset.preal) { const coin = b.dataset.preal, on = !S.cfg.real.includes(coin); if (on && !btOk(coin)) throw new Error(coin + ' : le test de la règle n\'est pas assez bon'); S.cfg.real = on ? [...S.cfg.real, coin] : S.cfg.real.filter(x => x !== coin); save(); log(`${coin} : ${on ? 'argent réel autorisé' : 'simulation seulement'}`); return; }
+        if (b.dataset.pclose) { b.disabled = true; await closeNow(b.dataset.pclose, 'fermeture demandée par toi'); return; }
+        const a = b.dataset.pp;
+        if (a === 'connect') { await connectPhantom(); await refreshAcct().catch(() => {}); await checkAgent(); }
+        else if (a === 'addr') { const v = val('ppAddr'); if (!/^0x[0-9a-fA-F]{40}$/.test(v)) throw new Error('Adresse invalide : elle commence par 0x et fait 42 caractères'); S.acct = v; save(); log('Compte relié : ' + short(v)); await refreshAcct().catch(() => {}); await checkAgent(); }
+        else if (a === 'create') { const p1 = val('ppPin1'), p2 = val('ppPin2'); if (p1 !== p2) throw new Error('Les deux codes sont différents'); b.disabled = true; await createAgent(p1); }
+        else if (a === 'unlock') { b.disabled = true; await unlock(val('ppPin')); await checkAgent(); guard().catch(() => {}); }
+        else if (a === 'approve') { b.disabled = true; await approveWithPhantom(S.agent.addr); await checkAgent(); }
+        else if (a === 'approve-link') { b.disabled = true; await approveWithPhantom(P.ui.approveFor); h.toast && h.toast('Autorisation enregistrée chez Hyperliquid. Retourne dans l\'appli Vigie.', 'long'); }
+        else if (a === 'check') { const ok = await checkAgent(); h.toast && h.toast(ok ? 'Clé du bot autorisée' : 'Pas encore autorisée'); }
+        else if (a === 'arm') P.ui.confirm = true;
+        else if (a === 'cancel') P.ui.confirm = false;
+        else if (a === 'export') { await exportFile(); return; }
+        else if (a === 'arm-yes') { P.ui.confirm = false; S.cfg.on = true; if (fin(equity())) S.peak = equity(); save(); log(`Mode auto activé (risque ${String(S.cfg.risk).replace('.', ',')} % par trade, levier max ${S.cfg.levCap}x)`, 'warn'); }
+        else if (a === 'off') { S.cfg.on = false; save(); log('Mode auto coupé : les positions ouvertes gardent leur stop chez Hyperliquid', 'warn'); }
+        else if (a === 'closeall') { for (const p of positions()) await closeNow(p.coin, 'tout fermer'); }
+      } catch (err) { h.toast && h.toast(err.message, 'short'); log(err.message, 'warn'); }
+      finally { b.disabled = false; render(); }
+    });
+  }
+
+  return { start, render, bindUI, S, P, build, _test: { build, catchUp, sizeFor, riskGate, backtest, retest, btOk, eligible, sigAt, step, onBar, stateOf, history, loadMeta, tryReal, guard, settle, closeNow, refreshAcct, createAgent, unlock, approveWithPhantom, checkAgent, universe, fees, closed, P, RULE } };
+}
+if (typeof module !== 'undefined') module.exports = PerpsBot;
+
 /* ================= APPLICATION ================= */
 (() => {
   const $ = s => document.querySelector(s);
@@ -6086,8 +6970,10 @@ if (typeof module !== 'undefined') module.exports = StrategyLab;
   /* ---------- navigation ---------- */
   function showTab(t) {
     curTab = t;
-    document.body.classList.toggle('meme', t === 'meme' || t === 'new');
-    { const mt = $('#memeTitle'); if (mt) mt.textContent = t === 'new' ? 'Nouveaux coins' : 'Radar mèmes'; }
+    document.body.classList.toggle('meme', t === 'meme' || t === 'new' || t === 'perps');
+    { const mt = $('#memeTitle'); if (mt) mt.textContent = t === 'new' ? 'Nouveaux coins' : t === 'perps' ? 'Futures auto' : 'Radar mèmes'; }
+    { const a = $('#memeNet'), b = $('#memeSub'); if (a) a.textContent = t === 'perps' ? 'Hyperliquid' : 'Solana'; if (b) b.textContent = t === 'perps' ? 'via Phantom' : 'temps réel'; }
+    if (t === 'perps') setTimeout(() => perps && perps.render(), 0);
     if (t === 'new') setTimeout(() => newCoins && newCoins.render(), 0);
     $$('.tab').forEach(s => { s.hidden = s.id !== 'tab-' + t; });
     if (t === 'meme') setTimeout(() => { radar.render(); trader.render(); bot.render(); }, 0);
@@ -6102,7 +6988,7 @@ if (typeof module !== 'undefined') module.exports = StrategyLab;
   $$('.tabbar button').forEach(b => b.onclick = () => showTab(b.dataset.tab));
 
   // radar mèmes + trading via wallet + bot autonome
-  let trader = null, bot = null, newCoins = null, live = null, lab = null;
+  let trader = null, bot = null, newCoins = null, live = null, lab = null, perps = null;
   const inFrame = (() => { try { return window.top !== window.self; } catch { return true; } })();
   const buzz = p => { if (set.vibrate && navigator.vibrate) try { navigator.vibrate(p); } catch {} };
   const jup = JupClient(() => (trader ? trader.jupKey() : ''));
@@ -6155,11 +7041,22 @@ if (typeof module !== 'undefined') module.exports = StrategyLab;
   }, radar, live, bot);
   newCoins.start();
   if (!inFrame) lab.start();
-  let wTick = 0;
+  // futures auto : perpétuels Hyperliquid (compte Phantom Perps), clé de trading du bot sans droit de retrait
+  perps = PerpsBot({
+    $, esc, store, log, toast, inFrame,
+    wsUrl: () => 'wss://api.hyperliquid.xyz/ws',
+    visible: () => curTab === 'perps' && document.visibilityState === 'visible',
+    notify: (msg, cls) => { toast(msg, cls); beep(cls === 'short' ? -1 : 1); buzz(cls === 'short' ? [300, 80, 300] : [120, 60, 120]); }
+  });
+  perps.bindUI();
+  if (!inFrame) perps.start();
+  let wTick = 0, pTick = 0;
   setInterval(() => {
     if (curTab === 'meme' && $('#memeSheet').hidden && $('#tradeSheet').hidden) radar.render();
     if (curTab === 'meme' && ++wTick % 2 === 0) trader.render();
     if (curTab === 'new' && document.visibilityState === 'visible') { const ae = document.activeElement; if (!(ae && ae.closest && ae.closest('#labCard'))) lab.render(); }
+    if (curTab === 'perps' && document.visibilityState === 'visible' && ++pTick % 2 === 0) perps.render();
+    { const pd = $('#perpsDot'); if (pd) pd.hidden = !Object.keys(perps.S.real.pos).length; }
     const n = radar.badge(), d = $('#memeDot');
     d.hidden = !n; d.textContent = n || '';
   }, 1500);
@@ -6347,7 +7244,7 @@ if (typeof module !== 'undefined') module.exports = StrategyLab;
   applyWake();
   start();
   radar.start();
-  showTab(['signal', 'pos', 'scan', 'meme', 'new', 'stats', 'set'].includes(hash) ? hash : 'signal');
+  showTab(hash.startsWith('perps') ? 'perps' : ['signal', 'pos', 'scan', 'meme', 'new', 'stats', 'set'].includes(hash) ? hash : 'signal');
 })();
 
 </script>
