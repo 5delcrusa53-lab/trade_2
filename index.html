@@ -554,6 +554,8 @@ a.btn{text-decoration:none;color:inherit;display:inline-block}
         <div class="field"><label for="bTp2">Objectif final (% net)</label><input id="bTp2" type="number" inputmode="decimal" step="10"></div>
         <div class="field"><label for="bDrop">Vente d'urgence si chute en 1 min (%)</label><input id="bDrop" type="number" inputmode="decimal" step="1"></div>
         <div class="field"><label for="bSlip">Glissement max en urgence (%)</label><input id="bSlip" type="number" inputmode="decimal" step="1"></div>
+        <div class="field"><label for="bNpMin">Sortir si pas de hausse après (min, 0 = jamais)</label><input id="bNpMin" type="number" inputmode="decimal" step="0.5"></div>
+        <div class="field"><label for="bNpNeed">Hausse attendue (% net)</label><input id="bNpNeed" type="number" inputmode="decimal" step="1"><span class="hint">Si le trade n'a jamais atteint ce gain dans le délai, le bot vend</span></div>
         <div class="field"><label for="bHold">Durée max d'un trade (min)</label><input id="bHold" type="number" inputmode="numeric" step="5"></div>
         <div class="field"><label for="bDay">Perte max par jour (SOL)</label><input id="bDay" type="number" inputmode="decimal" step="0.05"></div>
       </div>
@@ -3095,10 +3097,16 @@ function TradeBot(h, radar, jup, tr) {
   const fin = Number.isFinite, esc = h.esc, $ = h.$;
   const sleep = ms => new Promise(r => setTimeout(r, ms));
   const stop = msg => Object.assign(new Error(msg), { block: true });
-  const DEF = { size: 0.03, maxPos: 3, sl: 20, tp1: 40, tp1Part: 50, trail: 25, tp2: 150, beAt: 25, beFloor: 3, drop: 12, slip: 30, maxHold: 45, dayLoss: 0.3, active: true, devExit: true, flowExit: false, stallMin: 0, stallNeed: 5 };
+  const DEF = { size: 0.03, maxPos: 3, sl: 20, tp1: 40, tp1Part: 50, trail: 25, tp2: 150, beAt: 25, beFloor: 3, drop: 12, slip: 30, maxHold: 45, dayLoss: 0.3, active: true, devExit: true, flowExit: false, stallMin: 0, stallNeed: 5, npMin: 4, npNeed: 10, autoExits: true };
   const live = () => (h.live ? h.live() : null);
   let S = Object.assign({ enc: null, pub: null, cfg: {}, pos: {}, log: [], hist: [], day: null, ignored: {} }, h.store.get('bot', {}));
   S.cfg = Object.assign({}, DEF, S.cfg);
+  // 13/10 : l'utilisateur confie la perte et le gain au laboratoire. Base pour les trades confiés à la main : « Équilibré ».
+  if ((S.cfgV || 0) < 3) {
+    Object.assign(S.cfg, { autoExits: true, sl: 25, tp1: 30, tp1Part: 50, trail: 25, tp2: 150, beAt: 1000, beFloor: 3, drop: 30 });
+    S.cfgV = 3;
+    S.migrated3 = true;
+  }
   if (!S.done) { S.done = {}; for (const x of S.hist || []) if (x.mint && x.t1) S.done[x.mint] = Math.max(S.done[x.mint] || 0, x.t1); }
   const save = () => h.store.set('bot', S);
   let kp = null;
@@ -3312,7 +3320,7 @@ function TradeBot(h, radar, jup, tr) {
     const res = await execOrder(o);
     const qty = +res.totalOutputAmount;
     const p = S.pos[mint] = {
-      mint, sym, dec, t0: Date.now(), state: 'open', why: why || 'Choisi par toi', strat: opt.strat || null, exits: opt.exits || null, auto: !!opt.auto,
+      mint, sym, dec, t0: Date.now(), state: 'open', why: why || 'Choisi par toi', strat: opt.strat || null, prof: opt.prof || null, profName: opt.profName || null, exits: opt.exits || null, auto: !!opt.auto,
       cost: +res.totalInputAmount / 1e9 + NET_FEE, rent: had ? 0 : RENT, costReal: false,
       qtyRaw: String(res.totalOutputAmount), realized: 0, tp1Done: false, peakTot: null, hist: [], sigs: [res.signature], rt,
       px0: px > 0 ? px : null, pxPeak: px > 0 ? px : null, events: [{ t: Date.now(), side: 'buy', px: px > 0 ? px : null }]
@@ -3410,6 +3418,8 @@ function TradeBot(h, radar, jup, tr) {
       const g = !f && radar.flow ? radar.flow(p.mint) : null;
       if (g && fin(g.b5) && fin(g.s5) && g.b5 + g.s5 >= 40 && g.s5 >= 2 * g.b5 && now - p.t0 > 120000) return { pct: 100, why: `Les vendeurs dominent : ${g.s5} ventes pour ${g.b5} achats sur 5 min (${fPct(pnl)} net)` };
     }
+    // Sans hausse : si le coin n'a jamais monté de +npNeed % (net) après npMin minutes, il ne pompera plus : on sort
+    if (c.npMin > 0 && !p.tp1Done && now - p.t0 >= c.npMin * 60000 && peakPnl < (c.npNeed || 0) / 100) return { pct: 100, why: `Pas de hausse en ${n(c.npMin, 1)} min (au mieux ${fPct(peakPnl)} net) : sortie à ${fPct(pnl)}` };
     if (c.stallMin > 0 && !p.tp1Done && now - p.t0 >= c.stallMin * 60000 && pnl < (c.stallNeed || 0) / 100) return { pct: 100, why: `Pas d'élan : ${fPct(pnl)} net après ${c.stallMin} min` };
     if (now - p.t0 > c.maxHold * 60000 && !p.tp1Done) return { pct: 100, why: `${c.maxHold} min sans atteindre l'objectif : sortie à ${fPct(pnl)} net` };
     return null;
@@ -3484,7 +3494,7 @@ function TradeBot(h, radar, jup, tr) {
     p.state = 'closed'; p.closedAt = Date.now(); p.exitWhy = why;
     const net = p.realized - p.cost;
     day().pnl += net;
-    S.hist.unshift({ mint: p.mint, sym: p.sym, t0: p.t0, t1: p.closedAt, cost: p.cost, back: p.realized, net, pnl: net / p.cost, why, sigs: p.sigs.slice(-4), strat: p.strat || null, auto: !!p.auto });
+    S.hist.unshift({ mint: p.mint, sym: p.sym, t0: p.t0, t1: p.closedAt, cost: p.cost, back: p.realized, net, pnl: net / p.cost, why, sigs: p.sigs.slice(-4), strat: p.strat || null, prof: p.prof || null, auto: !!p.auto });
     if (live()) live().unwatch(p.mint, 'bot');
     S.hist = S.hist.slice(0, 60);
     delete S.pos[p.mint];
@@ -3517,7 +3527,7 @@ function TradeBot(h, radar, jup, tr) {
           if (d) await sell(p, d);
         }
         proposals();
-        awake(openPos().length > 0);
+        awake(openPos().length > 0 || !!(h.autoOn && h.autoOn()));
       } catch (e) { h.log('Bot : ' + e.message); }
       running = false;
     }
@@ -3620,8 +3630,8 @@ function TradeBot(h, radar, jup, tr) {
       <div class="row-btns" style="margin:0"><button class="btn sm pri" data-bjoin="${esc(x.mint)}">Rejoindre avec ${fSol(c.size)}</button><button class="btn sm" data-bign="${esc(x.mint)}">Ignorer</button></div></div>`; }).join('');
     const pos = P.map(p => {
       const V = fin(p.vEst) && p.estAt > p.vAt ? p.vEst : p.v, tot = fin(V) ? V + p.realized : NaN, pnl = fin(tot) ? tot / p.cost - 1 : NaN;
-      const st = p.state === 'selling' ? 'vente en cours…' : p.frozen ? 'compte gelé' : p.tp1Done ? `gain visé pris · suiveur −${c.trail} %` : `perte max −${c.sl} % · gain visé +${c.tp1} %`;
-      return `<div class="p-card" data-l="${p.state === 'selling' ? 'warn' : pnl < -c.sl / 200 ? 'danger' : pnl > 0 ? 'ok' : 'info'}">
+      const pc = cfgFor(p), st = p.state === 'selling' ? 'vente en cours…' : p.frozen ? 'compte gelé' : p.tp1Done ? `gain visé pris · suiveur −${pc.trail} %` : `${p.profName ? p.profName + ' · ' : ''}perte max −${pc.sl} % · gain visé +${pc.tp1} %`;
+      return `<div class="p-card" data-l="${p.state === 'selling' ? 'warn' : pnl < -pc.sl / 200 ? 'danger' : pnl > 0 ? 'ok' : 'info'}">
         <div class="p-head"><button class="p-sym" data-open="${esc(p.mint)}">${esc(p.sym)}</button><span class="muted small">il y a ${ago(Date.now() - p.t0)} · ${st}</span><span class="p-pnl ${pnl > 0 ? 'pos' : pnl < 0 ? 'neg' : ''}">${fPct(pnl)}</span></div>
         <div class="m-kpis two"><span>Mise <b>${fSol(p.cost)}</b></span><span>Valeur nette <b>${fSol(tot)}</b></span><span>Résultat <b class="${tot > p.cost ? 'pos' : 'neg'}">${fin(tot) ? fSol(tot - p.cost) : '—'}</b></span><span>Aller-retour à l'achat <b>${fPct(-p.rt)}</b></span></div>
         <p class="p-life">${esc(radar.lifeText(radar.get(p.mint)))}</p>
@@ -3633,10 +3643,13 @@ function TradeBot(h, radar, jup, tr) {
     const slList = [10, 15, 20, 25, 30, 50], tpList = [20, 30, 40, 60, 100, 200];
     if (!slList.includes(c.sl)) slList.push(c.sl);
     if (!tpList.includes(c.tp1)) tpList.push(c.tp1);
-    const quick = `<h3 class="w-h">Perte et gain (tous les trades du bot)</h3>
+    const quick = `<h3 class="w-h">Perte et gain</h3>
       <div class="q-set">
+        <div class="q-row"><span class="q-lab">Pour le mode auto</span><div class="row-btns" style="margin:0">${chip('auto', 1, 'Choisis par le labo', c.autoExits !== false)}${chip('auto', 0, 'Mes réglages ci-dessous', c.autoExits === false)}</div></div>
+        ${c.autoExits !== false ? '<p class="note" style="margin:0">Le laboratoire choisit, pour chaque stratégie, entre Rapide (−15 % / +12 %), Équilibré (−25 % / +30 %) et Patient (−35 % / +50 %), d\'après les trades simulés. Les réglages ci-dessous servent aux trades que tu confies au bot à la main. Ta règle « pas de hausse » reste un maximum partout.</p>' : ''}
         <div class="q-row"><span class="q-lab">Perte acceptée</span><div class="row-btns" style="margin:0">${slList.sort((a, b) => a - b).map(v => chip('sl', v, '−' + n(v, 1) + ' %', v === c.sl)).join('')}</div></div>
         <div class="q-row"><span class="q-lab">Gain visé</span><div class="row-btns" style="margin:0">${tpList.sort((a, b) => a - b).map(v => chip('tp1', v, '+' + n(v, 1) + ' %', v === c.tp1)).join('')}</div></div>
+        <div class="q-row"><span class="q-lab">Sortir si pas de hausse de +${n(c.npNeed, 1)} % après</span><div class="row-btns" style="margin:0">${[...new Set([0, 1, 2, 4, 8, c.npMin])].sort((a, b) => a - b).map(v => chip('np', v, v ? (v < 1 ? Math.round(v * 60) + ' s' : n(v, 1) + ' min') : 'jamais', v === c.npMin)).join('')}</div></div>
         <div class="q-row"><span class="q-lab">Au gain visé</span><div class="row-btns" style="margin:0">${chip('part', 50, 'Vendre la moitié, laisser courir le reste', c.tp1Part < 100)}${chip('part', 100, 'Tout vendre', c.tp1Part >= 100)}</div></div>
         <div class="add"><input id="bQsl" type="number" inputmode="decimal" step="1" placeholder="Perte %"><input id="bQtp" type="number" inputmode="decimal" step="1" placeholder="Gain %"><button class="btn" data-b="qapply">Appliquer</button></div>
         <p class="note">Avec ta mise de ${fSol(c.size)} : perte max ≈ ${fSol(c.size * c.sl / 100)}, gain visé ≈ +${fSol(c.size * c.tp1 / 100)}${c.tp1Part < 100 ? ` sur la moitié vendue, le reste suit avec un stop à −${c.trail} % du plus haut` : ''}. Pourcentages nets de frais, appliqués tout de suite aux trades en cours. En cas de chute brutale, la vente d'urgence peut sortir un peu au-delà de la perte acceptée.</p>
@@ -3768,21 +3781,31 @@ function TradeBot(h, radar, jup, tr) {
     catch { const r = document.createRange(); const el = document.getElementById(id); if (el) { r.selectNodeContents(el); const s = getSelection(); s.removeAllRanges(); s.addRange(r); } h.toast('Texte sélectionné : copie-le'); }
   }
   function setQuick(k, v) {
-    const lim = { sl: [3, 90], tp1: [5, 1000], part: [50, 100] }[k];
+    if (k === 'auto') { S.cfg.autoExits = !!v; save(); log(v ? 'Perte et gain du mode auto : choisis par le laboratoire' : 'Perte et gain du mode auto : tes réglages', 'warn'); render(); return; }
+    const lim = { sl: [3, 90], tp1: [5, 1000], part: [50, 100], np: [0, 120] }[k];
     if (!lim || !(v >= lim[0] && v <= lim[1])) { h.toast(`Valeur hors limites (${lim ? lim[0] + ' à ' + lim[1] : '?'} %)`); return; }
     if (k === 'tp1' && v <= 2 * 3) h.toast('Gain visé très faible : les frais risquent de tout manger');
-    S.cfg[k === 'part' ? 'tp1Part' : k] = v;
+    S.cfg[k === 'part' ? 'tp1Part' : k === 'np' ? 'npMin' : k] = v;
     save();
-    const el = document.getElementById(k === 'sl' ? 'bSl' : k === 'tp1' ? 'bTp1' : '');
+    const el = document.getElementById(k === 'sl' ? 'bSl' : k === 'tp1' ? 'bTp1' : k === 'np' ? 'bNpMin' : '');
     if (el) el.value = v;
-    log(k === 'sl' ? `Perte acceptée réglée à −${v} % pour tous les trades` : k === 'tp1' ? `Gain visé réglé à +${v} % pour tous les trades` : (v >= 100 ? 'Au gain visé : tout vendre' : 'Au gain visé : vendre la moitié et laisser courir'));
+    log(k === 'np' ? (v ? `Sortie si pas de hausse de +${S.cfg.npNeed} % après ${v} min, pour tous les trades` : 'Sortie sans hausse désactivée') : k === 'sl' ? `Perte acceptée réglée à −${v} % pour tous les trades` : k === 'tp1' ? `Gain visé réglé à +${v} % pour tous les trades` : (v >= 100 ? 'Au gain visé : tout vendre' : 'Au gain visé : vendre la moitié et laisser courir'));
+    render();
+  }
+  // Réglages de sortie proposés par le laboratoire (appliqués seulement si tu touches le bouton)
+  function applyExits(vals, msg) {
+    for (const k of ['sl', 'tp1', 'tp1Part', 'trail', 'tp2', 'beAt', 'beFloor', 'drop', 'npMin', 'npNeed']) if (fin(+vals[k])) S.cfg[k] = +vals[k];
+    save();
+    const ids = { sl: 'bSl', tp1: 'bTp1', trail: 'bTrail', tp2: 'bTp2', drop: 'bDrop', npMin: 'bNpMin', npNeed: 'bNpNeed' };
+    for (const [k, id] of Object.entries(ids)) { const el = document.getElementById(id); if (el) el.value = S.cfg[k]; }
+    log(msg || 'Réglages de sortie modifiés', 'warn');
     render();
   }
   function symOf(mint) { const t = radar.get(mint); return (t && t.symbol) || short(mint); }
 
   function bindUI() {
     for (const id of ['#botBody', '#memeDetail']) { const el = $(id); if (el) el.addEventListener('click', onClick); }
-    const F = [['#bSize', 'size', 0.001, 50], ['#bMax', 'maxPos', 1, 10], ['#bSl', 'sl', 3, 90], ['#bTp1', 'tp1', 5, 1000], ['#bTrail', 'trail', 5, 90], ['#bTp2', 'tp2', 10, 10000], ['#bDrop', 'drop', 3, 80], ['#bSlip', 'slip', 1, 50], ['#bHold', 'maxHold', 2, 1440], ['#bDay', 'dayLoss', 0.001, 1000]];
+    const F = [['#bSize', 'size', 0.001, 50], ['#bMax', 'maxPos', 1, 10], ['#bSl', 'sl', 3, 90], ['#bTp1', 'tp1', 5, 1000], ['#bTrail', 'trail', 5, 90], ['#bTp2', 'tp2', 10, 10000], ['#bDrop', 'drop', 3, 80], ['#bSlip', 'slip', 1, 50], ['#bHold', 'maxHold', 2, 1440], ['#bDay', 'dayLoss', 0.001, 1000], ['#bNpMin', 'npMin', 0, 120], ['#bNpNeed', 'npNeed', 1, 200]];
     for (const [id, k, mn, mx] of F) {
       const el = $(id); if (!el) continue;
       el.value = S.cfg[k];
@@ -3806,6 +3829,7 @@ function TradeBot(h, radar, jup, tr) {
   }
   function start() {
     if (B.started) return;
+    if (S.migrated3) { delete S.migrated3; log('Perte et gain confiés au laboratoire : il choisit pour chaque stratégie entre Rapide, Équilibré et Patient. Base des trades manuels : perte −25 %, gain +30 % (moitié), suiveur −25 %, chute rapide −30 %. Ta règle « pas de hausse » est gardée.', 'warn'); }
     if (live()) live().onUpdate(onLive);
     B.started = true;
     bindUI(); render();
@@ -3817,7 +3841,7 @@ function TradeBot(h, radar, jup, tr) {
   }
   return { start, render, detailHtml, unlocked: () => !!kp, openCount: () => openPos().length, S,
     autoJoin, dayLossHit: () => day().pnl <= -S.cfg.dayLoss, lastClosed: () => S.hist[0] || null, cfg: () => S.cfg, hasWallet: () => !!S.pub,
-    traded: mint => !!(S.pos[mint] && S.pos[mint].state !== 'closed') || !!(S.ignored[mint] && Date.now() - S.ignored[mint] < 2 * 3600e3) || !!(S.done && S.done[mint] && Date.now() - S.done[mint] < DONE_MS), logMsg: (m, l) => log(m, l), decideCore, NET_FEE, onLive, _test: { decide, curV, pushHist, b58enc, b58dec } };
+    traded: mint => !!(S.pos[mint] && S.pos[mint].state !== 'closed') || !!(S.ignored[mint] && Date.now() - S.ignored[mint] < 2 * 3600e3) || !!(S.done && S.done[mint] && Date.now() - S.done[mint] < DONE_MS), logMsg: (m, l) => log(m, l), applyExits, decideCore, NET_FEE, onLive, _test: { decide, curV, pushHist, b58enc, b58dec } };
 }
 if (typeof module !== 'undefined') module.exports = TradeBot;
 
@@ -3961,8 +3985,8 @@ function NewCoins(h, radar, bot) {
       }
       if (x.kind === 'tweet' || x.kind === 'profile') N.xQ.push(t);
     }
-    if (L.telegram && /t\.me\//i.test(L.telegram)) s.tg = true;
-    if (L.website && !xLink(L.website) && /^https?:\/\//i.test(L.website)) s.web = true;
+    if (L.telegram && /t\.me\//i.test(L.telegram)) { s.tg = true; s.tgUrl = String(L.telegram).slice(0, 120); }
+    if (L.website && !xLink(L.website) && /^https?:\/\//i.test(L.website)) { s.web = true; s.webUrl = String(L.website).slice(0, 120); }
     if (L.description) s.desc = String(L.description).slice(0, 200);
   }
   function copyInfo(t) {
@@ -4169,10 +4193,10 @@ function NewCoins(h, radar, bot) {
         t.autoTried = true; if (t.nc) t.nc.autoTried = true;
         N.busy = true; N.status = `Entrée en cours sur ${t.symbol || '?'}…`;
         try {
-          await bot.autoJoin(t.mint, null, `Mode auto · ${pk.s.name} (simulation : ${pk.txt}), sorti il y a ${ageTxt(now() - t.created)}`, { strat: pk.s.id, exits: pk.s.exits });
+          await bot.autoJoin(t.mint, null, `Mode auto · ${pk.s.name} (simulation : ${pk.txt}), sorti il y a ${ageTxt(now() - t.created)}`, { strat: pk.s.id, exits: pk.exits || pk.s.exits, prof: pk.prof ? pk.prof.id : null, profName: pk.prof && pk.prof.id !== 'toi' ? pk.prof.name : null });
           A.entries.push(now()); save();
           if (t.nc) t.nc.status = 'bought';
-          h.notify(`Mode auto : achat ${t.symbol || ''} (${pk.s.name})`, 'long');
+          h.notify(`Mode auto : achat ${t.symbol || ''} (${pk.s.name}${pk.prof && pk.prof.id !== 'toi' ? ', ' + pk.prof.name : ''})`, 'long');
         } catch (e) {
           if (t.nc) { t.nc.fails = ['Entrée refusée : ' + e.message]; t.nc.status = 'reject'; }
         } finally { N.busy = false; }
@@ -4274,7 +4298,7 @@ function NewCoins(h, radar, bot) {
     box.innerHTML = `${c.on ? `<div class="advice" data-l="${realMoney ? 'ok' : 'warn'}" style="margin:0 0 10px"><h3>${realMoney ? 'Le bot entre et sort seul' : 'Mode auto actif, sans argent engagé'}</h3><p>${esc(N.status)}</p></div>` : ''}${win}
       <div class="w-top">
         <div class="kv"><div class="k">Mise par trade</div><div class="v">${String(bc.size).replace('.', ',')} SOL</div></div>
-        <div class="kv"><div class="k">Perte / gain</div><div class="v">−${bc.sl} % / +${bc.tp1} %</div></div>
+        <div class="kv"><div class="k">Perte / gain</div><div class="v">${bc.autoExits !== false ? (pk && pk.ok && pk.prof ? esc(pk.prof.name) + ' (labo)' : 'choisis par le labo') : `−${bc.sl} % / +${bc.tp1} %`}</div></div>
         <div class="kv"><div class="k">Entrées cette heure</div><div class="v">${inHour} / ${c.perHour}</div></div>
         <div class="kv"><div class="k">Âge du coin à l'entrée</div><div class="v">${windowTxt()}</div></div>
       </div>
@@ -4348,8 +4372,9 @@ if (typeof module !== 'undefined') module.exports = { NewCoins, XCheck };
    Rangé dans IndexedDB (pas dans le stockage du bot, pour ne jamais le saturer). Exportable en fichier. */
 function TradeJournal(h, radar, live, bot, X) {
   const fin = Number.isFinite, now = () => Date.now();
-  const MAX = 250, POST_MS = 15 * 60000;
-  let J = { v: 1, since: now(), entries: [], funnel: {} };
+  const MAX = 250, POST_MS = 30 * 60000, OBS_MS = 30 * 60000, OBS_MAX = 400, OBS_PER_H = 60;
+  let J = { v: 2, since: now(), entries: [], funnel: {}, seen: {}, obs: [], pauses: [] };
+  const obsIdx = new Set();
   let loaded = false, dirty = false, lastSave = 0;
   const r4 = x => (fin(x) ? Math.round(x * 1e4) / 1e4 : null);
   const r1 = x => (fin(x) ? Math.round(x * 10) / 10 : null);
@@ -4368,19 +4393,25 @@ function TradeJournal(h, radar, live, bot, X) {
       const d = await db();
       const v = await new Promise((res, rej) => { const q = d.transaction('kv').objectStore('kv').get('journal'); q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error); });
       if (v && Array.isArray(v.entries)) {
-        const cur = J.entries; // entrées créées pendant le chargement
-        J = Object.assign({ funnel: {} }, v);
+        const cur = J.entries, curObs = J.obs; // entrées créées pendant le chargement
+        J = Object.assign({ funnel: {}, seen: {}, obs: [], pauses: [] }, v);
         for (const e of cur) if (!J.entries.some(x => x.id === e.id)) J.entries.unshift(e);
+        for (const o of curObs) if (!J.obs.some(x => x.id === o.id)) J.obs.unshift(o);
+        if (v.v !== 2) { J.funnel = {}; J.seen = {}; J.v = 2; } // ancien format : l'entonnoir repart de zéro
       }
     } catch {}
-    // l'entonnoir repart de zéro à chaque ouverture de l'appli (sinon les mêmes coins seraient comptés deux fois)
-    J.funnel = {}; J.funnelSince = now(); for (const k of Object.keys(seen)) delete seen[k];
+    if (!J.funnelSince) J.funnelSince = now();
+    for (const k of Object.keys(seen)) delete seen[k];
+    for (const [st, m] of Object.entries(J.seen || {})) seen[st] = new Map(Object.entries(m));
+    for (const o of J.obs) obsIdx.add(o.id);
+    for (const o of J.obs) if (!o.done) radar.pin(o.mint, 'obs');
     loaded = true;
   }
   async function save(force) {
     if (!loaded || (!force && (!dirty || now() - lastSave < 15000))) return;
     dirty = false; lastSave = now();
     if (J.entries.length > MAX) J.entries.length = MAX;
+    J.seen = Object.fromEntries(Object.entries(seen).map(([k, m]) => [k, Object.fromEntries(m)]));
     try {
       const d = await db();
       await new Promise((res, rej) => { const tx = d.transaction('kv', 'readwrite'); tx.objectStore('kv').put(JSON.parse(JSON.stringify(J)), 'journal'); tx.oncomplete = res; tx.onerror = () => rej(tx.error); });
@@ -4413,8 +4444,11 @@ function TradeJournal(h, radar, live, bot, X) {
       devBuyPct: fin(t.devBuyPct) ? r1(t.devBuyPct) : null, dev: f ? f.dev : null, devMints: f ? f.devMints : null, top: f ? f.top : null,
       top10: s && fin(s.top10) ? r1(s.top10) : null, top1: s && fin(s.top1) ? r1(s.top1) : null, insiders: s ? s.insiders : null, insiderGraph: s ? s.insiderGraph : null, secSrc: s ? s.src : null,
       rug: s && s.risks ? s.risks.slice(0, 5).map(x => x.name) : [],
-      x: so.x ? { kind: so.x.kind, ok: so.xRes ? so.xRes.ok : null, mention: so.mention != null ? !!so.mention : null, tweetAgeH: fin(so.tweetAgeH) ? r1(so.tweetAgeH) : null } : null,
-      tg: !!so.tg, web: !!so.web,
+      x: so.x ? { kind: so.x.kind, handle: so.x.handle || (so.xRes && so.xRes.handle) || null, url: so.x.url || null, ok: so.xRes ? so.xRes.ok : null, author: so.xRes ? so.xRes.author || null : null,
+        text: so.xRes && so.xRes.text ? String(so.xRes.text).slice(0, 280) : null, mention: so.mention != null ? !!so.mention : null, tweetAgeH: fin(so.tweetAgeH) ? r1(so.tweetAgeH) : null,
+        copies: h.copies ? h.copies(t) : null } : null,
+      tg: !!so.tg, tgUrl: so.tgUrl || null, web: !!so.web, webUrl: so.webUrl || null, desc: so.desc ? String(so.desc).slice(0, 200) : null,
+      dexProfile: !!t.profile, dexBoost: !!t.boosted, cto: !!t.cto, name: (t.name || '').slice(0, 60),
       ncScore: fin(nc.score) ? nc.score : null, ncStatus: nc.status || null, score: fin(t.score) ? t.score : null, verdict: t.verdict || null,
       why: (nc.why && nc.why.length ? nc.why : t.why || []).slice(0, 5), risks: (nc.risks && nc.risks.length ? nc.risks : t.risks || []).slice(0, 5)
     };
@@ -4444,7 +4478,8 @@ function TradeJournal(h, radar, live, bot, X) {
     if (rel < e.mae) { e.mae = r4(rel); e.maeS = Math.round(dt); }
     const last = e.path[e.path.length - 1];
     const every = dt < 180 ? 5 : 30;
-    if (!last || dt - last[0] >= every) { e.path.push([Math.round(dt), r4(rel), P.src === 'live' ? 'l' : P.src === 'jup' ? 'j' : 'd']); dirty = true; }
+    if (!last || dt - last[0] >= every) { e.path.push([Math.round(dt), r4(rel), P.src === 'live' ? 'l' : P.src === 'jup' ? 'j' : 'd', t.live && t.live.c && !t.live.complete ? r4(Curve.progress(t.live.c)) : null]); dirty = true; }
+    if (t.migrated && t.migratedAt && e.migratedS == null && t.migratedAt >= e.fill.t - 5000) { e.migratedS = Math.round((t.migratedAt - e.fill.t) / 1000); dirty = true; }
   }
   function exitDecision(e, d, pnl) {
     if (!e) return;
@@ -4468,6 +4503,55 @@ function TradeJournal(h, radar, live, bot, X) {
     const dt = (now() - e.exit.t) / 1000, rel = P.px / e.exit.px - 1;
     const last = e.post[e.post.length - 1];
     if (!last || dt - last[0] >= 30) { e.post.push([Math.round(dt), r4(rel)]); dirty = true; }
+    if (t.migrated && t.migratedAt && e.migratedS == null && e.fill && t.migratedAt >= e.fill.t - 5000) { e.migratedS = Math.round((t.migratedAt - e.fill.t) / 1000); dirty = true; }
+  }
+  // Mêmes entrées, autres réglages de sortie : résultat ajouté au trade principal
+  function alt(e, a) { if (!e) return; (e.alts = e.alts || []).push(a); dirty = true; }
+  function pause(from, to) {
+    J.pauses.unshift({ from, to, s: Math.round((to - from) / 1000) });
+    if (J.pauses.length > 60) J.pauses.length = 60;
+    for (const e of J.entries) if (!e.exit && e.fill) e.paused = true;
+    dirty = true;
+  }
+
+  /* ---------- observation de coins (sans trade) ---------- */
+  // Photo d'un coin quand il devient actif, puis quand il est bien avancé sur la courbe, et ce qu'il fait pendant 30 min.
+  // Sert à trouver les bonnes entrées sur des centaines de coins, pas seulement sur nos trades.
+  function observe() {
+    const tn = now();
+    let room = OBS_PER_H - J.obs.filter(o => tn - o.t0 < 3600e3).length;
+    if (room <= 0) return;
+    for (const t of radar.R.tokens.values()) {
+      if (room <= 0) break;
+      if (t.sources && t.sources.has('démo')) continue;
+      const f = X.feat(t);
+      const stage = (f.prog >= 0.5 || (f.holders || 0) >= 150) ? 'avance' : (f.tx5 >= 40 || (f.holders || 0) >= 60) ? 'actif' : null;
+      if (!stage) continue;
+      const id = t.mint + ':' + stage;
+      if (obsIdx.has(id)) continue;
+      const P = X.pxSol(t);
+      if (!P) continue;
+      J.obs.unshift({ id, mint: t.mint, sym: t.symbol || '?', stage, t0: tn, px0: P.px, src: P.src, snap: snap(t, f), max: 0, maxS: 0, min: 0, minS: 0, last: 0, lastS: 0, path: [[0, 0]], migratedS: null, done: false });
+      obsIdx.add(id); radar.pin(t.mint, 'obs'); room--; dirty = true;
+    }
+    while (J.obs.length > OBS_MAX) { const o = J.obs.pop(); if (!o.done) radar.unpin(o.mint, 'obs'); }
+  }
+  function obsSample() {
+    const tn = now();
+    for (const o of J.obs) {
+      if (o.done) continue;
+      const t = radar.get(o.mint), dt = (tn - o.t0) / 1000;
+      if (!t || tn - o.t0 > OBS_MS) { o.done = true; radar.unpin(o.mint, 'obs'); dirty = true; continue; }
+      const P = X.pxSol(t);
+      if (!P) continue;
+      const rel = P.px / o.px0 - 1;
+      if (rel > o.max) { o.max = r4(rel); o.maxS = Math.round(dt); }
+      if (rel < o.min) { o.min = r4(rel); o.minS = Math.round(dt); }
+      o.last = r4(rel); o.lastS = Math.round(dt);
+      const last = o.path[o.path.length - 1];
+      if (dt - last[0] >= 60) { o.path.push([Math.round(dt), r4(rel)]); dirty = true; }
+      if (t.migrated && t.migratedAt && o.migratedS == null && t.migratedAt >= o.t0 - 5000) o.migratedS = Math.round((t.migratedAt - o.t0) / 1000);
+    }
   }
 
   /* ---------- diagnostic : ce qui n'allait pas ---------- */
@@ -4477,7 +4561,7 @@ function TradeJournal(h, radar, live, bot, X) {
     const pct = x => (x > 0 ? '+' : x < 0 ? '−' : '') + Math.abs(Math.round(x * 100)) + ' %';
     // entrée
     if (fin(s.ageS) && s.ageS < 60) add('trop_tot', `Coin de ${s.ageS} s à l'entrée : en pleine phase des snipers`);
-    if (fin(s.ch5) && s.ch5 >= 50) add('apres_pompe', `Déjà ${pct(s.ch5 / 100)} sur 5 min avant d'entrer : achat après la hausse`);
+    if (fin(s.ch5) && s.ch5 >= 50) add('apres_pompe', `Déjà ${pct(s.ch5 / 100)} sur 5 min avant d'entrer`, 'warn');
     if (fin(s.fromHi) && s.fromHi >= -0.05 && e.mfe < 0.05) add('au_sommet', 'Acheté au plus haut de sa vie, et le prix n\'est jamais remonté au-dessus');
     if (fin(s.share5) && s.tx5 >= 20 && s.share5 < 0.5) add('vendeurs_avant', `Les ventes dominaient déjà à l'entrée (${Math.round(s.share5 * 100)} % d'achats sur 5 min)`);
     if (s.flow60 && s.flow60.n >= 3 && s.flow60.sell > s.flow60.buy) add('flux_vendeur', `Flux de la dernière minute vendeur à l'entrée : ${s.flow60.sell} SOL vendus contre ${s.flow60.buy} achetés`);
@@ -4502,6 +4586,12 @@ function TradeJournal(h, radar, live, bot, X) {
       if (e.exit.pnl < 0 && hi >= 0.3) add('sortie_trop_tot', `Après la sortie, le prix est remonté de ${pct(hi)} : sortie prématurée`, 'warn');
       if (lo <= -0.3) add('sortie_justifiee', `Après la sortie, le prix a encore chuté de ${pct(lo)} : sortie justifiée`, 'ok');
     }
+    if (e.post.length && e.exit && e.exit.rel != null && e.exit.holdS <= 90 && /Perte acceptée|Chute rapide/.test(e.exit.why)) {
+      const best = Math.max(...e.post.map(p => (1 + e.exit.rel) * (1 + p[1]) - 1));
+      if (best >= 0.5) add('secousse_depart', `Sorti dans la secousse du départ : le coin a ensuite fait ${pct(best)} par rapport à l'entrée (perte fixée ou chute rapide trop serrées pour ce coin)`);
+    }
+    if (e.migratedS != null) add('migration', `A migré vers PumpSwap ${Math.round(e.migratedS / 60)} min après l'entrée`, 'warn');
+    if (e.paused) add('pause', 'Appli en pause pendant le trade : suivi interrompu', 'warn');
     if (e.exit && e.exit.pnl > 0) add('gagnant', `Trade gagnant : ${pct(e.exit.pnl)} net`, 'ok');
     return D;
   }
@@ -4554,8 +4644,10 @@ function TradeJournal(h, radar, live, bot, X) {
     }
   }
 
+  let obsAt = 0;
   function tick() {
     try { trackReal(); } catch {}
+    try { if (now() - obsAt > 20000) { obsAt = now(); observe(); } obsSample(); } catch {}
     for (const e of J.entries) {
       if (!e.exit || e.postDone) continue;
       if (now() - e.exit.t > POST_MS) { e.postDone = true; e.diag = diagnose(e); radar.unpin(e.mint, 'journal'); dirty = true; continue; }
@@ -4567,14 +4659,16 @@ function TradeJournal(h, radar, live, bot, X) {
   /* ---------- export ---------- */
   function build() {
     return {
-      app: 'Vigie Scalp', format: 'journal-1', exportedAt: new Date().toISOString(), since: new Date(J.since).toISOString(),
+      app: 'Vigie Scalp', format: 'journal-2', exportedAt: new Date().toISOString(), since: new Date(J.since).toISOString(),
       settings: { bot: bot.cfg(), auto: h.autoCfg ? h.autoCfg() : null },
       live: live ? live.status() : null, sources: radar.R && radar.R.src ? radar.R.src : null,
       strategies: X.describe ? X.describe() : null,
       stats: X.allStats ? X.allStats() : null,
       funnelSince: J.funnelSince ? new Date(J.funnelSince).toISOString() : null, funnel: J.funnel,
       radarSignals: (radar.R && radar.R.flags || []).slice(0, 150).map(f => ({ sym: f.sym, t: f.t, score: f.score, max: f.px0 ? r4(f.max / f.px0 - 1) : null, min: f.px0 ? r4(f.min / f.px0 - 1) : null, last: f.px0 ? r4(f.last / f.px0 - 1) : null })),
-      trades: J.entries
+      pauses: J.pauses,
+      trades: J.entries,
+      observations: J.obs
     };
   }
   async function exportFile() {
@@ -4592,11 +4686,11 @@ function TradeJournal(h, radar, live, bot, X) {
     setTimeout(() => URL.revokeObjectURL(a.href), 30000);
     return { ok: true, how: 'téléchargement', name, size: data.length };
   }
-  function reset() { J = { v: 1, since: now(), entries: [], funnel: {} }; for (const k of Object.keys(seen)) delete seen[k]; dirty = true; save(true); }
+  function reset() { for (const o of J.obs) if (!o.done) radar.unpin(o.mint, 'obs'); J = { v: 2, since: now(), entries: [], funnel: {}, seen: {}, obs: [], pauses: [], funnelSince: now() }; obsIdx.clear(); for (const k of Object.keys(seen)) delete seen[k]; dirty = true; save(true); }
 
   load();
   const funnelOf = strat => J.funnel[strat] || {};
-  return { open, fill, sample, exitDecision, close, funnel, funnelOf, tick, exportFile, build, reset, byId, entries: () => J.entries, diagnose, _test: { J: () => J, snap } };
+  return { open, fill, sample, exitDecision, close, alt, pause, funnel, funnelOf, tick, observations: () => J.obs, exportFile, build, reset, byId, entries: () => J.entries, diagnose, _test: { J: () => J, snap } };
 }
 if (typeof module !== 'undefined') module.exports = TradeJournal;
 
@@ -4636,13 +4730,21 @@ function StrategyLab(h, radar, live, bot) {
     { id: 'snipe', name: 'Sniper', age: [30, 120],
       desc: 'Coins de 30 s à 2 min jugés candidats (score, lien X, créateur). C\'est ce que faisait le mode auto.',
       conds: [C('candidat de l\'onglet Nouveaux', t => !!(t.nc && t.nc.status === 'cand'), t => (t.nc ? t.nc.status : null))],
-      exits: { drop: 12, maxHold: 20, flowExit: false, stallMin: 0 } },
+      exits: { maxHold: 20, flowExit: false, stallMin: 0 } },
     { id: 'elan', name: 'Élan confirmé', age: [180, 1500],
       desc: 'Coins de 3 à 25 min encore sur la courbe, déjà passés la vague des snipers : beaucoup de traders, acheteurs majoritaires, détenteurs en hausse, prix qui monte sans s\'emballer. Sort si les vendeurs prennent le dessus ou si rien ne se passe en 6 min.',
-      conds: ELAN, exits: { drop: 15, stallMin: 6, stallNeed: 6, flowExit: true, maxHold: 30 } },
-    { id: 'elanL', name: 'Élan confirmé, sorties larges', age: [180, 1500],
-      desc: 'Mêmes entrées que « Élan confirmé », mais laisse plus de place aux secousses : chute rapide à −25 %, patience de 10 min.',
-      conds: ELAN, exits: { drop: 25, stallMin: 10, stallNeed: 3, flowExit: false, maxHold: 45 } },
+      conds: ELAN, exits: { stallMin: 6, stallNeed: 6, flowExit: true, maxHold: 30 } },
+    { id: 'coureur', name: 'Coureur vers la migration', age: [600, 6 * 3600],
+      desc: 'Ce que montrent les gagnants du journal (Dirac Quantum, opc, Jamie, GARAGE) : coins d\'au moins 10 min, courbe déjà remplie de 55 à 97 %, beaucoup d\'activité, au moins 80 détenteurs, un vrai compte X, prix qui monte. Ils ont fait +100 à +177 % dans les 6 à 15 min, autour de la migration, après une secousse de −15 à −30 % au départ, puis se sont effondrés de −90 % dans les heures suivantes.',
+      conds: [
+        C('sur la courbe pump.fun', (t, f) => f.onCurve, (t, f) => f.onCurve),
+        C('courbe remplie de 55 à 97 %', (t, f) => f.prog >= 0.55 && f.prog <= 0.97, (t, f) => f.prog),
+        C('au moins 100 transactions ou 50 traders sur 5 min', (t, f) => f.tx5 >= 100 || f.traders >= 50, (t, f) => f.tx5),
+        C('au moins 80 détenteurs', (t, f) => f.holders >= 80, (t, f) => f.holders),
+        C('acheteurs entre 45 et 75 % (au-delà : souvent des bots)', (t, f) => f.share >= 0.45 && f.share <= 0.75, (t, f) => f.share),
+        C('prix en hausse sur 5 min (+5 % ou plus)', (t, f) => f.ch5 >= 5, (t, f) => f.ch5),
+        C('compte ou tweet X vérifié', t => !!(h.xOk && h.xOk(t)))],
+      exits: { flowExit: false, maxHold: 30 } },
     { id: 'migr', name: 'Après migration', age: [600, 6 * 3600],
       desc: 'Coins qui viennent de quitter la courbe pump.fun pour un vrai pool (moins de 45 min) : liquidité en place, acheteurs majoritaires, au moins 200 détenteurs.',
       conds: [
@@ -4652,7 +4754,7 @@ function StrategyLab(h, radar, live, bot) {
         C('au moins 55 % d\'achats sur 5 min', (t, f) => f.share >= 0.55, (t, f) => f.share),
         C('au moins 200 détenteurs', (t, f) => f.holders >= 200, (t, f) => f.holders),
         C('prix de 0 à +80 % sur 5 min', (t, f) => f.ch5 >= 0 && f.ch5 <= 80, (t, f) => f.ch5)],
-      exits: { drop: 15, stallMin: 15, stallNeed: 5, flowExit: true, maxHold: 60 } },
+      exits: { stallMin: 15, stallNeed: 5, flowExit: true, maxHold: 60 } },
     { id: 'rebond', name: 'Rebond après une chute', age: [300, 3600],
       desc: 'Coins de 5 à 60 min retombés de 35 à 75 % sous leur plus haut, mais dont les détenteurs tiennent et où les acheteurs reviennent.',
       conds: [
@@ -4664,11 +4766,11 @@ function StrategyLab(h, radar, live, bot) {
         C('au moins 60 % d\'achats sur 5 min', (t, f) => f.share >= 0.6, (t, f) => f.share),
         C('prix qui remonte sur 5 min', (t, f) => f.ch5 > 0, (t, f) => f.ch5),
         C('flux de la dernière minute acheteur', (t, f) => f.liveOk, (t, f) => f.liveOk)],
-      exits: { drop: 15, stallMin: 8, stallNeed: 5, flowExit: true, maxHold: 40 } },
+      exits: { stallMin: 8, stallNeed: 5, flowExit: true, maxHold: 40 } },
     { id: 'radar', name: 'Radar « intéressant »', age: [60, 24 * 3600],
       desc: 'Les jetons que le radar marque « intéressants ». Sert aussi à mesurer le radar lui-même.',
       conds: [C('marqué « intéressant » par le radar il y a moins de 4 min', t => t.verdict === 'buy' && (!t.flaggedAt || now() - t.flaggedAt < 4 * 60000), t => t.verdict)],
-      exits: { drop: 12, maxHold: 45 } }
+      exits: { maxHold: 45 } }
   ];
   // Conditions communes à toutes les stratégies (sécurité)
   const SAFE = [
@@ -4679,6 +4781,37 @@ function StrategyLab(h, radar, live, bot) {
     C('créateur avec moins de 10 coins lancés', (t, f) => !(fin(f.devMints) && f.devMints >= 10), (t, f) => f.devMints)
   ];
   const byId = id => STRATS.find(s => s.id === id);
+  // Réglages de sortie testés en parallèle sur chaque entrée : les tiens, et deux autres pour comparer
+  const EXIT_KEYS = ['sl', 'tp1', 'tp1Part', 'trail', 'tp2', 'beAt', 'beFloor', 'drop', 'npMin', 'npNeed'];
+  // auto : réglage que le laboratoire peut choisir seul pour l'argent réel. test : seulement comparé (et proposé), jamais appliqué seul.
+  const PROFILES = [
+    { id: 'toi', name: 'Tes réglages' },
+    { id: 'rapide', name: 'Rapide', auto: true, vals: { sl: 15, tp1: 12, tp1Part: 100, trail: 25, tp2: 150, beAt: 1000, beFloor: 3, drop: 15, npMin: 0.75, npNeed: 5 },
+      desc: 'perte −15 %, gain +12 % (tout vendre), chute rapide −15 %, sortie sans hausse de +5 % après 45 s' },
+    { id: 'equilibre', name: 'Équilibré', auto: true, vals: { sl: 25, tp1: 30, tp1Part: 50, trail: 25, tp2: 150, beAt: 1000, beFloor: 3, drop: 30 },
+      desc: 'perte −25 %, gain visé +30 % (vend la moitié, le reste suit avec un stop à −25 % du plus haut), chute rapide −30 %' },
+    { id: 'patient', name: 'Patient', auto: true, vals: { sl: 35, tp1: 50, tp1Part: 50, trail: 30, tp2: 300, beAt: 1000, beFloor: 3, drop: 40 },
+      desc: 'perte −35 %, gain visé +50 % (vend la moitié, le reste suit avec un stop à −30 % du plus haut), chute rapide −40 %' },
+    { id: 'patient10', name: 'Patient, 10 min sans hausse', test: true, vals: { sl: 35, tp1: 50, tp1Part: 50, trail: 30, tp2: 300, beAt: 1000, beFloor: 3, drop: 40, npMin: 10, npNeed: 10 },
+      desc: 'comme Patient, mais attend 10 min (au lieu de ta règle) avant de sortir un coin qui n\'a pas monté' }
+  ];
+  const profById = id => PROFILES.find(x => x.id === id);
+  const autoMode = () => bot.cfg().autoExits !== false;
+  function cfgFor(stratId, profId) {
+    const s = byId(stratId), pr = profById(profId), base = bot.cfg();
+    const c = Object.assign({}, base, (s && s.exits) || {}, (pr && pr.vals) || {});
+    // ta règle « pas de hausse » reste un maximum : un réglage choisi par le labo ne peut que sortir plus tôt (sauf le test 10 min)
+    if (pr && pr.vals && !pr.test) {
+      const own = pr.vals.npMin, mine = base.npMin || 0;
+      c.npMin = mine > 0 ? (own > 0 ? Math.min(own, mine) : mine) : (own || 0);
+      c.npNeed = own > 0 && (!mine || own <= mine) ? pr.vals.npNeed : base.npNeed;
+    }
+    return c;
+  }
+  const exitsFor = (stratId, profId) => { const c = cfgFor(stratId, profId), s = byId(stratId); return Object.assign({}, (s && s.exits) || {}, Object.fromEntries(EXIT_KEYS.map(k => [k, c[k]]))); };
+  const keyOf = c => EXIT_KEYS.map(k => (c[k] == null ? '-' : +c[k])).join('/');
+  const userKey = stratId => keyOf(cfgFor(stratId, 'toi'));
+  const exitTxt = c => `perte −${c.sl} %, gain visé +${c.tp1} %${c.tp1Part < 100 ? ` (vend ${c.tp1Part} %, suiveur −${c.trail} %)` : ' (tout vendre)'}, chute rapide −${c.drop} % en 1 min${c.npMin > 0 ? `, sortie sans hausse de +${c.npNeed} % après ${c.npMin < 1 ? Math.round(c.npMin * 60) + ' s' : c.npMin + ' min'}` : ''}`;
 
   let L = Object.assign({ open: [], closed: [], resetAt: now(), seq: 0 }, h.store.get('lab', {}));
   let jr = null; // journal d'analyse, créé plus bas
@@ -4768,23 +4901,35 @@ function StrategyLab(h, radar, live, bot) {
     p.hist.push({ t: tn, v: v + p.realized });
     p.hist = p.hist.filter(x => tn - x.t < 6 * 60000).slice(-400);
   }
-  const cfgOf = p => Object.assign({}, bot.cfg(), (byId(p.strat) || {}).exits || {});
+  const cfgOf = p => p.cfg || cfgFor(p.strat, p.prof || 'toi');
 
   /* ---------- moteur ---------- */
   function open(s, t, f) {
-    const size = bot.cfg().size;
-    const p = { id: ++L.seq, strat: s.id, mint: t.mint, sym: t.symbol || t.mint.slice(0, 4), t0: now(), state: 'pending', fillAt: now() + 4000,
-      cost: size + NETF, size, q: 0, realized: 0, hist: [], peakTot: null, tp1Done: false, pnl: 0 };
-    L.open.push(p); dirty = true;
-    if (jr) p.jid = jr.open('s' + p.id + '-' + p.strat, 'sim', s.id, t, f || feat(t)).id;
+    const size = bot.cfg().size, grp = ++L.seq, keys = new Set();
+    let primary = null;
+    for (const pr of PROFILES) {
+      const cfg = cfgFor(s.id, pr.id), key = keyOf(cfg);
+      if (keys.has(key)) continue;
+      keys.add(key);
+      const p = { id: ++L.seq, grp, strat: s.id, prof: pr.id, key, cfg, mint: t.mint, sym: t.symbol || t.mint.slice(0, 4), t0: now(), state: 'pending', fillAt: now() + 4000,
+        cost: size + NETF, size, q: 0, realized: 0, hist: [], peakTot: null, tp1Done: false, pnl: 0 };
+      if (jr) {
+        if (!primary) { p.jid = jr.open('s' + p.id + '-' + p.strat, 'sim', s.id, t, f || feat(t), { prof: pr.id, key }).id; primary = p; }
+        else p.jparent = primary.jid;
+      }
+      L.open.push(p);
+    }
+    dirty = true;
     radar.pin(t.mint, 'lab', { symbol: t.symbol, name: t.name, created: t.created });
     if (live) live.watch(t.mint, 'lab');
   }
   function finish(p, why, gap) {
     p.state = 'closed';
     const net = p.realized - p.cost;
-    L.closed.unshift({ id: p.id, jid: p.jid || null, strat: p.strat, mint: p.mint, sym: p.sym, t0: p.t0, t1: now(), cost: p.cost, net, pnl: net / p.cost, why, gap: !!gap, peak: p.peakTot ? p.peakTot / p.cost - 1 : null });
-    if (jr && p.jid) jr.close(jr.byId(p.jid), why, gap ? NaN : net / p.cost, gap ? NaN : net, gap ? { gap: true } : null);
+    if (p.paused && !gap) { gap = 'pause'; why = 'interrompu : appli en pause pendant le trade (pas compté) · ' + why; }
+    L.closed.unshift({ id: p.id, grp: p.grp, jid: p.jid || null, strat: p.strat, prof: p.prof || 'toi', key: p.key || null, mint: p.mint, sym: p.sym, t0: p.t0, t1: now(), cost: p.cost, net, pnl: net / p.cost, why, gap: !!gap, peak: p.peakTot ? p.peakTot / p.cost - 1 : null });
+    if (jr && p.jid) jr.close(jr.byId(p.jid), why, gap ? NaN : net / p.cost, gap ? NaN : net, gap ? { gap: gap === 'pause' ? 'pause' : true } : null);
+    if (jr && p.jparent) jr.alt(jr.byId(p.jparent), { prof: p.prof, key: p.key, pnl: gap ? null : Math.round(net / p.cost * 1e4) / 1e4, why, holdS: p.tOpen ? Math.round((now() - p.tOpen) / 1000) : null, peak: p.peakTot ? Math.round((p.peakTot / p.cost - 1) * 1e4) / 1e4 : null });
     if (L.closed.length > 400) L.closed.length = 400;
     L.open = L.open.filter(x => x !== p);
     if (!L.open.some(x => x.mint === p.mint)) { radar.unpin(p.mint, 'lab'); if (live) live.unwatch(p.mint, 'lab'); }
@@ -4824,8 +4969,9 @@ function StrategyLab(h, radar, live, bot) {
     const tn = now(), feats = new Map();
     const F = t => { let f = feats.get(t.mint); if (!f) { f = feat(t); feats.set(t.mint, f); } return f; };
     for (const s of STRATS) {
-      const full = L.open.filter(p => p.strat === s.id).length >= MAX_OPEN
-        || L.closed.filter(x => x.strat === s.id && tn - x.t0 < 3600e3).length + L.open.filter(p => p.strat === s.id).length >= MAX_PER_HOUR;
+      const grps = arr => new Set(arr.map(x => x.grp || x.id)).size;
+      const full = grps(L.open.filter(p => p.strat === s.id)) >= MAX_OPEN
+        || grps(L.closed.filter(x => x.strat === s.id && tn - x.t0 < 3600e3)) + grps(L.open.filter(p => p.strat === s.id)) >= MAX_PER_HOUR;
       let best = null, bs = -1, bf = null;
       const done = new Set([...L.open.filter(p => p.strat === s.id).map(p => p.mint), ...L.closed.filter(x => x.strat === s.id && tn - x.t0 < DONE_MS).map(x => x.mint)]);
       for (const t of radar.R.tokens.values()) {
@@ -4856,16 +5002,18 @@ function StrategyLab(h, radar, live, bot) {
   }
 
   /* ---------- résultats ---------- */
-  function stats(id, since) {
+  function stats(id, since, key) {
     const lim = Math.max(now() - DAY, since || 0, L.resetAt || 0);
-    const T = L.closed.filter(x => x.strat === id && x.t1 >= lim && !x.gap && !/^annulé|^données manquantes/.test(x.why));
+    const k = key === undefined ? userKey(id) : key;
+    // anciens trades sans réglage enregistré : comptés avec tes réglages
+    const T = L.closed.filter(x => x.strat === id && x.t1 >= lim && !x.gap && !/^annulé|^données manquantes|^interrompu/.test(x.why) && (k === null || (x.key ? x.key === k : (x.prof || 'toi') === 'toi' && k === userKey(id))));
     const n = T.length, P = T.map(x => x.pnl);
     const wins = P.filter(x => x > 0).length;
     const g = P.filter(x => x > 0).reduce((a, b) => a + b, 0), l = -P.filter(x => x < 0).reduce((a, b) => a + b, 0);
     const avg = n ? P.reduce((a, b) => a + b, 0) / n : 0;
     const sd = n > 1 ? Math.sqrt(P.reduce((a, b) => a + (b - avg) ** 2, 0) / (n - 1)) : 0;
     const last8 = P.slice(0, 8).reduce((a, b) => a + b, 0);
-    return { n, wins, avg, sd, pf: l > 0 ? g / l : (g > 0 ? 99 : 0), sum: T.reduce((a, x) => a + x.net, 0), last8, lcb: n ? avg - sd / Math.sqrt(n) : -1, open: L.open.filter(p => p.strat === id).length };
+    return { n, wins, avg, sd, pf: l > 0 ? g / l : (g > 0 ? 99 : 0), sum: T.reduce((a, x) => a + x.net, 0), last8, lcb: n ? avg - sd / Math.sqrt(n) : -1, open: new Set(L.open.filter(p => p.strat === id).map(p => p.grp || p.id)).size };
   }
   // Les vrais trades auto d'une stratégie repassent dans le rouge : retour en simulation seule
   function realHold(id) {
@@ -4873,26 +5021,57 @@ function StrategyLab(h, radar, live, bot) {
     if (R.length < 4 || R.reduce((a, x) => a + x.net, 0) >= 0) return null;
     return R[0].t1;
   }
-  function qualifies(s) {
+  function qualifies(s, profId) {
+    const pid = profId || 'toi';
     const hold = realHold(s.id);
-    const st = stats(s.id, hold ? hold + 1 : 0);
+    const st = stats(s.id, hold ? hold + 1 : 0, pid === 'toi' ? undefined : keyOf(cfgFor(s.id, pid)));
     const need = hold ? 8 : MIN_N;
     const ok = st.n >= need && (hold ? st.sum > 0 : st.avg >= MIN_AVG && st.pf >= MIN_PF && st.last8 > 0);
-    return { s, st, ok, hold, need };
+    return { s, st, ok, hold, need, prof: profById(pid) };
+  }
+  // Couples testés pour l'argent réel : avec « perte et gain choisis par le labo », chaque stratégie avec chacun des réglages auto ; sinon tes réglages seulement
+  function pairs(s) {
+    if (!autoMode()) return [qualifies(s, 'toi')];
+    const seenK = new Set();
+    return PROFILES.filter(pr => pr.auto).map(pr => qualifies(s, pr.id)).filter(q => { const k = keyOf(cfgFor(s.id, q.prof.id)); if (seenK.has(k)) return false; seenK.add(k); return true; });
   }
   const resTxt = st => `${st.n} trades simulés, moyenne ${fPct(st.avg)}`;
+  // Pour chaque stratégie : résultats avec chacun des réglages de sortie testés
+  function profStats(id) {
+    return PROFILES.map(pr => { const c = cfgFor(id, pr.id), key = keyOf(c); return { pr, cfg: c, key, st: stats(id, 0, key), mine: key === userKey(id) }; })
+      .filter((x, i, a) => a.findIndex(y => y.key === x.key) === i);
+  }
+  const good = st => st.n >= MIN_N && st.avg >= MIN_AVG && st.pf >= MIN_PF && st.last8 > 0;
+  // Un autre réglage gagne là où les tiens perdent : on le propose (tu décides)
+  function suggestion() {
+    let best = null;
+    for (const s of STRATS) for (const x of profStats(s.id)) {
+      if (x.mine || x.st.n < 8) continue;
+      if (autoMode() && !x.pr.test) continue; // les réglages auto, le labo les choisit déjà seul
+      const me = autoMode() ? STRATS.length && pairs(s).reduce((b, q) => (q.st.n && (!b || q.st.avg > b.avg) ? q.st : b), null) || stats(s.id) : stats(s.id);
+      if (x.st.avg > Math.max(0.02, me.avg + 0.05) && x.st.pf >= 1.2 && (!best || x.st.lcb > best.st.lcb)) best = Object.assign({ s, me }, x);
+    }
+    return best;
+  }
+  function applyProfile(pid) {
+    const pr = profById(pid);
+    if (!pr || !pr.vals || !bot.applyExits) return;
+    bot.applyExits(pr.vals, `Réglages de sortie « ${pr.name} » appliqués depuis le laboratoire`);
+    render();
+  }
   function pick() {
-    const Q = STRATS.map(qualifies);
+    const Q = STRATS.flatMap(pairs);
     const ok = Q.filter(x => x.ok).sort((a, b) => b.st.lcb - a.st.lcb);
-    if (ok.length) return { ok: true, s: ok[0].s, st: ok[0].st, txt: resTxt(ok[0].st) };
-    const best = Q.slice().sort((a, b) => b.st.avg * Math.min(1, b.st.n / MIN_N) - a.st.avg * Math.min(1, a.st.n / MIN_N))[0];
-    const tot = Q.reduce((a, x) => a + x.st.n, 0);
+    if (ok.length) { const w = ok[0], pid = autoMode() ? w.prof.id : 'toi'; return { ok: true, s: w.s, st: w.st, prof: w.prof, exits: autoMode() ? exitsFor(w.s.id, pid) : w.s.exits, txt: resTxt(w.st) + (autoMode() ? `, réglages « ${w.prof.name} »` : '') }; }
+    const tried = Q.filter(x => x.st.n > 0).sort((a, b) => b.st.avg - a.st.avg);
+    const best = tried[0] || null;
     let reason;
     const held = Q.find(x => x.hold);
     if (held) reason = `Pas d'argent engagé : les vrais trades de « ${held.s.name} » sont repassés dans le rouge, retour en simulation (${held.st.n}/${held.need} nouveaux trades simulés, il faut qu'ils soient gagnants au total)`;
-    else if (!tot) reason = 'Pas d\'argent engagé : le laboratoire commence ses essais (il faut au moins ' + MIN_N + ' trades simulés et une moyenne de +3 % net)';
-    else if (best.st.n < MIN_N) reason = `Pas d'argent engagé : meilleure piste « ${best.s.name} », ${best.st.n}/${MIN_N} trades simulés (moyenne ${fPct(best.st.avg)})`;
-    else reason = `Pas d'argent engagé : aucune stratégie n'est rentable en simulation (meilleure : « ${best.s.name} », moyenne ${fPct(best.st.avg)})`;
+    else if (!best) reason = 'Pas d\'argent engagé : le laboratoire commence ses essais (il faut au moins ' + MIN_N + ' trades simulés et une moyenne de +3 % net)';
+    else if (best.st.avg <= 0) reason = `Pas d'argent engagé : aucune stratégie n'est rentable${autoMode() ? ', quels que soient les réglages de sortie testés' : ' avec tes réglages'} (la moins mauvaise : « ${best.s.name} »${autoMode() ? ` en « ${best.prof.name} »` : ''}, ${fPct(best.st.avg)} sur ${best.st.n} trades)`;
+    else if (best.st.n < MIN_N) reason = `Pas d'argent engagé : meilleure piste « ${best.s.name} »${autoMode() ? ` en « ${best.prof.name} »` : ''}, ${best.st.n}/${MIN_N} trades simulés (moyenne ${fPct(best.st.avg)})`;
+    else reason = `Pas d'argent engagé : « ${best.s.name} » gagne (${fPct(best.st.avg)}) mais pas encore assez régulièrement (il faut +3 % de moyenne, des gains 1,3 fois plus gros que les pertes et les 8 derniers trades positifs)`;
     return { ok: false, reason, best: best && best.s };
   }
 
@@ -4905,24 +5084,31 @@ function StrategyLab(h, radar, live, bot) {
     const pk = pick();
     const opened0 = new Set([...box.querySelectorAll('details.l-row[open]')].map(d => d.dataset.id));
     const rows = STRATS.map(s => {
-      const q = qualifies(s), st = q.st, inUse = pk.ok && pk.s.id === s.id;
+      const P = pairs(s), q = P.find(x => x.ok) || P.slice().sort((a, b) => (b.st.n ? b.st.avg : -9) - (a.st.n ? a.st.avg : -9))[0], st = q.st, inUse = pk.ok && pk.s.id === s.id;
       const chip = inUse ? '<span class="chip long">EN SERVICE</span>' : q.ok ? '<span class="chip long">RENTABLE</span>' : q.hold ? '<span class="chip short">STOPPÉE</span>' : st.n < q.need ? `<span class="chip">ESSAI ${st.n}/${q.need}</span>` : '<span class="chip short">PERDANTE</span>';
-      return `<details class="l-row" data-id="${s.id}"${inUse ? ' data-use="1"' : ''}${opened0.has(s.id) ? ' open' : ''}><summary><span class="l-name"><b>${esc(s.name)}</b><small>${st.n ? `${st.n} trades · ${Math.round(st.wins / st.n * 100)} % gagnants · moyenne <span class="${st.avg > 0 ? 'pos' : st.avg < 0 ? 'neg' : ''}">${fPct(st.avg)}</span> · ${fSol(st.sum)}` : 'aucun trade terminé'}${st.open ? ` · ${st.open} en cours` : ''}</small></span>${chip}</summary>
+      return `<details class="l-row" data-id="${s.id}"${inUse ? ' data-use="1"' : ''}${opened0.has(s.id) ? ' open' : ''}><summary><span class="l-name"><b>${esc(s.name)}</b><small>${autoMode() && q.prof && st.n ? `${esc(q.prof.name)} · ` : ''}${st.n ? `${st.n} trades · ${Math.round(st.wins / st.n * 100)} % gagnants · moyenne <span class="${st.avg > 0 ? 'pos' : st.avg < 0 ? 'neg' : ''}">${fPct(st.avg)}</span> · ${fSol(st.sum)}` : 'aucun trade terminé'}${st.open ? ` · ${st.open} en cours` : ''}</small></span>${chip}</summary>
         <p class="note">${esc(s.desc)}</p>
         ${blockHtml(s)}
-        <p class="note">Âge d'entrée : ${ageTxt(s.age[0])} à ${ageTxt(s.age[1])}. Sorties : ta perte −${bot.cfg().sl} % et ton gain +${bot.cfg().tp1} %, chute rapide −${s.exits.drop} % en 1 min${s.exits.stallMin ? `, sortie si moins de +${s.exits.stallNeed} % après ${s.exits.stallMin} min` : ''}${s.exits.flowExit ? ', sortie si les vendeurs dominent' : ''}, sortie immédiate si le créateur vend, ${s.exits.maxHold} min maximum.</p></details>`;
+        <p class="note">Âge d'entrée : ${ageTxt(s.age[0])} à ${ageTxt(s.age[1])}. Avec tes réglages : ${exitTxt(cfgFor(s.id, 'toi'))}${s.exits.stallMin ? `, sortie si moins de +${s.exits.stallNeed} % après ${s.exits.stallMin} min` : ''}${s.exits.flowExit ? ', sortie si les vendeurs dominent' : ''}, sortie immédiate si le créateur vend, ${s.exits.maxHold} min maximum.</p>
+        <p class="note"><b>Mêmes entrées, autres sorties :</b> ${profStats(s.id).filter(x => !x.mine || autoMode()).map(x => `${esc(x.pr.name)} ${x.st.n ? `${fPct(x.st.avg)} sur ${x.st.n} trades` : 'pas encore de trade'}`).join(' · ')}</p></details>`;
     }).join('');
-    const opened = L.open.filter(p => p.state !== 'pending').slice(0, 6).map(p => `<div class="j-row"><span class="chip">${esc((byId(p.strat) || {}).name || p.strat)}</span><div class="j-mid"><div>${esc(p.sym)} · en cours</div><div class="mono">depuis ${ago(now() - p.t0)}</div></div><span class="j-r ${p.pnl > 0 ? 'pos' : p.pnl < 0 ? 'neg' : ''}">${fPct(p.pnl)}</span></div>`).join('');
+    const opened = L.open.filter(p => p.state !== 'pending' && (p.prof || 'toi') === 'toi').slice(0, 6).map(p => `<div class="j-row"><span class="chip">${esc((byId(p.strat) || {}).name || p.strat)}</span><div class="j-mid"><div>${esc(p.sym)} · en cours</div><div class="mono">depuis ${ago(now() - p.t0)}</div></div><span class="j-r ${p.pnl > 0 ? 'pos' : p.pnl < 0 ? 'neg' : ''}">${fPct(p.pnl)}</span></div>`).join('');
     const diagOf = x => { const e = jr && x.jid ? jr.byId(x.jid) : null; return e && e.diag ? e.diag.filter(d => d.lvl !== 'ok' || d.c === 'sortie_justifiee').slice(0, 3) : []; };
-    const last = L.closed.slice(0, 8).map(x => { const dg = diagOf(x); return `<div class="j-row"><span class="chip ${x.gap ? '' : x.net >= 0 ? 'long' : 'short'}">${x.gap ? 'sans prix' : fPct(x.pnl)}</span><div class="j-mid"><div>${esc(x.sym)} · ${esc((byId(x.strat) || {}).name || x.strat)}</div><div class="mono">${ago(now() - x.t1)} · ${esc(x.why)}</div>${dg.length ? `<ul class="l-diag">${dg.map(d => `<li data-l="${d.lvl}">${esc(d.txt)}</li>`).join('')}</ul>` : ''}</div><span class="j-r ${x.net >= 0 ? 'pos' : 'neg'}">${x.gap ? '—' : fSol(x.net)}</span></div>`; }).join('');
-    box.innerHTML = `<div class="advice" data-l="${pk.ok ? 'ok' : 'warn'}" style="margin:0 0 10px"><h3>${pk.ok ? `Argent réel : « ${esc(pk.s.name)} »` : 'Simulation seulement'}</h3><p>${pk.ok ? `${esc(pk.txt)}, ${Math.round(pk.st.wins / pk.st.n * 100)} % gagnants. Le mode auto n'entre qu'avec cette stratégie, tant qu'elle reste rentable.` : esc(pk.reason)}</p></div>
-      <p class="note">Mise simulée : ${fSol(size)} par trade, comme le bot. Frais, glissement et 3 à 5 s de délai inclus. Résultats des 24 dernières heures.</p>
+    const last = L.closed.filter(x => (x.prof || 'toi') === 'toi').slice(0, 8).map(x => { const dg = diagOf(x); return `<div class="j-row"><span class="chip ${x.gap ? '' : x.net >= 0 ? 'long' : 'short'}">${x.gap ? 'sans prix' : fPct(x.pnl)}</span><div class="j-mid"><div>${esc(x.sym)} · ${esc((byId(x.strat) || {}).name || x.strat)}</div><div class="mono">${ago(now() - x.t1)} · ${esc(x.why)}</div>${dg.length ? `<ul class="l-diag">${dg.map(d => `<li data-l="${d.lvl}">${esc(d.txt)}</li>`).join('')}</ul>` : ''}</div><span class="j-r ${x.net >= 0 ? 'pos' : 'neg'}">${x.gap ? '—' : fSol(x.net)}</span></div>`; }).join('');
+    const sg = suggestion();
+    const sgHtml = !sg ? '' : sg.pr.test && autoMode()
+      ? `<div class="advice" data-l="info" style="margin:0 0 10px"><h3>Ta règle « pas de hausse » coupe des gagnants</h3><p>Sur « ${esc(sg.s.name)} », attendre 10 min au lieu de ${bot.cfg().npMin} min fait ${fPct(sg.st.avg)} en moyenne sur ${sg.st.n} trades simulés, contre ${fPct(sg.me.avg)}. C'est toi qui décides.</p><div class="row-btns"><button class="btn sm pri" data-lnp="10">Passer à 10 min</button></div></div>`
+      : `<div class="advice" data-l="info" style="margin:0 0 10px"><h3>D'autres réglages de sortie feraient mieux</h3><p>Sur « ${esc(sg.s.name)} », les réglages « ${esc(sg.pr.name)} » (${esc(sg.pr.desc)}) font ${fPct(sg.st.avg)} en moyenne sur ${sg.st.n} trades simulés, contre ${fPct(sg.me.avg)} avec les tiens. C'est toi qui décides.</p><div class="row-btns"><button class="btn sm pri" data-lprof="${sg.pr.id}">Appliquer ces réglages au bot</button></div></div>`;
+    box.innerHTML = `${sgHtml}<div class="advice" data-l="${pk.ok ? 'ok' : 'warn'}" style="margin:0 0 10px"><h3>${pk.ok ? `Argent réel : « ${esc(pk.s.name)} »${pk.prof && autoMode() ? ` en « ${esc(pk.prof.name)} »` : ''}` : 'Simulation seulement'}</h3><p>${pk.ok ? `${esc(pk.txt)}, ${Math.round(pk.st.wins / pk.st.n * 100)} % gagnants. Le mode auto n'entre qu'avec cette stratégie, tant qu'elle reste rentable.` : esc(pk.reason)}</p></div>
+      <p class="note">Mise simulée : ${fSol(size)} par trade, comme le bot. Frais, glissement et 3 à 5 s de délai inclus. Résultats des 24 dernières heures.${autoMode() ? ' Perte et gain : le labo choisit, pour chaque stratégie, entre Rapide, Équilibré et Patient. Ta règle « pas de hausse » reste un maximum.' : ''}</p>
       <div class="l-list">${rows}</div>
       ${opened ? `<h3 class="w-h">Trades simulés en cours</h3><div class="journal">${opened}</div>` : ''}
       ${last ? `<h3 class="w-h">Derniers trades simulés</h3><div class="journal">${last}</div>` : ''}
       <h3 class="w-h">Journal d'analyse</h3>
       <p class="note">Chaque trade, simulé ou réel, est enregistré avec la photo complète du coin à l'entrée, le trajet du prix, la sortie, les 15 min qui suivent et ce qui n'allait pas. Plus l'entonnoir : à quelle condition chaque stratégie bloque. ${jr ? jr.entries().length + ' trades enregistrés.' : ''}</p>
       <div class="row-btns"><button class="btn sm pri" id="labExport">Exporter le journal (fichier)</button><button class="btn sm" id="labReset">Remettre le laboratoire à zéro</button></div>`;
+    for (const b of box.querySelectorAll('[data-lprof]')) b.onclick = () => applyProfile(b.dataset.lprof);
+    for (const b of box.querySelectorAll('[data-lnp]')) b.onclick = () => { bot.applyExits({ npMin: +b.dataset.lnp }, `Sortie sans hausse passée à ${b.dataset.lnp} min depuis le laboratoire`); render(); };
     const eb = $('#labExport');
     if (eb && jr) eb.onclick = async () => { eb.disabled = true; try { const r = await jr.exportFile(); if (r.ok && h.toast) h.toast(`Journal exporté (${r.how}) : ${r.name}, ${Math.round(r.size / 1024)} ko`, 'long'); } catch (e) { if (h.toast) h.toast('Export impossible : ' + e.message, 'short'); } eb.disabled = false; };
     const rb = $('#labReset');
@@ -4940,17 +5126,25 @@ function StrategyLab(h, radar, live, bot) {
     return `<p class="note"><b>Où ça bloque</b> (${tot} coins vus) : ${top.map(([k, v]) => `${esc(k.slice(3))} ${Math.round(v.n / tot * 100)} %`).join(' · ')}${okN ? ` · ${okN} coin${okN > 1 ? 's ont' : ' a'} tout rempli` : ''}</p>`;
   }
 
-  function tick() { for (const p of L.open.slice()) { try { step(p); } catch {} } if (dirty) { dirty = false; save(); } if (jr) jr.tick(); }
+  let lastTick = now();
+  function tick() {
+    // appli en pause (téléphone en veille, onglet caché) : les trades en cours ne sont plus suivis, on les marque
+    if (now() - lastTick > 20000) { for (const p of L.open) p.paused = true; if (jr) jr.pause(lastTick, now()); }
+    lastTick = now();
+    for (const p of L.open.slice()) { try { step(p); } catch {} }
+    if (dirty) { dirty = false; save(); }
+    if (jr) jr.tick();
+  }
   function start() {
     for (const p of L.open) { radar.pin(p.mint, 'lab', { symbol: p.sym }); if (live) live.watch(p.mint, 'lab'); }
     if (live) live.onUpdate(onLive);
     setInterval(tick, 1500);
     setInterval(() => { if (!radar.demo()) try { scan(); } catch {} }, 4000);
   }
-  const describe = () => STRATS.map(s => ({ id: s.id, name: s.name, age: s.age, exits: s.exits, conditions: [...SAFE.map(c => c.l), 'âge dans la fenêtre', ...s.conds.map(c => c.l), ...(xNeeded() ? ['lien X vérifié'] : [])] }));
+  const describe = () => STRATS.map(s => ({ id: s.id, name: s.name, age: s.age, exits: s.exits, profiles: profStats(s.id).map(x => ({ id: x.pr.id, key: x.key, mine: x.mine, cfg: Object.fromEntries(EXIT_KEYS.map(k => [k, x.cfg[k]])), stats: x.st })), conditions: [...SAFE.map(c => c.l), 'âge dans la fenêtre', ...s.conds.map(c => c.l), ...(xNeeded() ? ['lien X vérifié'] : [])] }));
   const allStats = () => Object.fromEntries(STRATS.map(s => [s.id, Object.assign({ name: s.name }, stats(s.id), { closed: L.closed.filter(x => x.strat === s.id).length })]));
   if (typeof TradeJournal === 'function') jr = TradeJournal(h, radar, live, bot, { pxSol, feat, exitsOf: id => (byId(id) || {}).exits, describe, allStats });
-  return { start, render, pick, candidates, stats, STRATS, byId, L, journal: () => jr, _test: { feat, safe, passes, check, step, open, scan, value, buyQty, qualifies, finish, pxSol } };
+  return { start, render, pick, candidates, stats, STRATS, byId, L, journal: () => jr, PROFILES, profStats, suggestion, pairs, cfgFor, _test: { feat, safe, passes, check, step, open, scan, value, buyQty, qualifies, finish, pxSol, tick } };
 }
 if (typeof module !== 'undefined') module.exports = StrategyLab;
 
