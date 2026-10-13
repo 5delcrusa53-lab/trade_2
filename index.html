@@ -403,6 +403,11 @@ a.btn{text-decoration:none;color:inherit;display:inline-block}
 .pp-now{color:var(--fg)}
 .pp-row[data-l="ok"]{border-color:var(--long)}
 .pp-h .chip{font-size:.66rem}
+.pp-ctl{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin-top:8px}
+.pp-sw{display:inline-flex;align-items:center;gap:8px;font-size:.86rem;font-weight:500;cursor:pointer}
+.pp-sw input{width:20px;height:20px;margin:0;accent-color:var(--long)}
+.pp-ctl .pp-del{margin-left:auto}
+.pp-row[data-l="bad"] .pp-tf:first-of-type{color:var(--short)}
 #perpsBody .add{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0}
 #perpsBody .add input{flex:1 1 140px;min-width:0}
 #perpsBody .add input{text-transform:none}
@@ -5390,7 +5395,7 @@ function PerpsBot(h) {
   if (S.v !== 2) S = Object.assign({}, BLANK, { acct: S.acct || '', agent: S.agent || null, log: S.log || [], peak: S.peak || 0 }); // ancienne version : on repart propre (compte et clé gardés)
   S.cfg = Object.assign({}, DEF, S.cfg);
   const save = () => h.store.set('perps', S);
-  const P = { meta: null, metaAt: 0, candles: {}, ws: null, wsOk: false, q: [], qBusy: false, wallet: null, acctState: null, acctAt: 0, orders: [], agents: null, spotUsdc: null, guardQ: null, refill: {}, ui: {}, started: false };
+  const P = { meta: null, metaAt: 0, candles: {}, ws: null, wsOk: false, q: [], qBusy: false, wallet: null, acctState: null, acctAt: 0, orders: [], agents: null, spotUsdc: null, guardQ: null, refill: {}, ui: {}, testing: {}, started: false };
 
   /* ---------- formats ---------- */
   const n2 = (x, d = 2) => (fin(x) ? x.toLocaleString('fr-FR', { minimumFractionDigits: d, maximumFractionDigits: d }) : '—');
@@ -5629,21 +5634,59 @@ function PerpsBot(h) {
   }
   const sumUp = R => { const g = R.filter(x => x > 0).reduce((a, b) => a + b, 0), l = -R.filter(x => x <= 0).reduce((a, b) => a + b, 0); let eq = 0, pk = 0, dd = 0; for (const x of R) { eq += x; pk = Math.max(pk, eq); dd = Math.max(dd, pk - eq); } return { n: R.length, totalR: g - l, avgR: R.length ? (g - l) / R.length : 0, pf: l > 0 ? g / l : (g > 0 ? 99 : 0), win: R.length ? R.filter(x => x > 0).length / R.length : 0, dd }; };
   // Test de la règle sur l'historique de la crypto chez Hyperliquid (contrôle de bon sens, rien n'est ajusté)
-  function retest(coin) {
+  function retest(coin, sim = true) {
     const b = closed(coin);
-    if (b.length < 300) return null;
+    if (b.length < 300) { if (b.length) { S.bt[coin] = { at: now(), tooShort: true, bars: b.length }; save(); } return null; }
     const { trades } = backtest(b, fees(coin).taker);
     const mid = b[Math.floor(b.length / 2)].t;
     const all = sumUp(trades.map(x => x.R)), h1 = sumUp(trades.filter(x => x.t < mid).map(x => x.R)), h2 = sumUp(trades.filter(x => x.t >= mid).map(x => x.R));
     S.bt[coin] = { at: now(), bars: b.length, from: b[0].t, to: b[b.length - 1].t + TFMS, ...all, h1: { n: h1.n, totalR: h1.totalR }, h2: { n: h2.n, totalR: h2.totalR }, last: trades.slice(-5) };
     // premier passage : si la règle est en position en ce moment, la simulation reprend cette position
-    const op = backtest(b, fees(coin).taker).open;
-    if (!S.seen[coin] && !S.paper.open[coin] && op) { S.paper.open[coin] = Object.assign({}, op, { stop0: op.stop, lastT: b[b.length - 1].t, trailed: false }); S.seen[coin] = b[b.length - 1].t; }
+    const op = sim ? backtest(b, fees(coin).taker).open : null;
+    if (op && !S.seen[coin] && !S.paper.open[coin] && op) { S.paper.open[coin] = Object.assign({}, op, { stop0: op.stop, lastT: b[b.length - 1].t, trailed: false }); S.seen[coin] = b[b.length - 1].t; }
     save();
     return S.bt[coin];
   }
   const btOk = coin => { const t = S.bt[coin]; return !!(t && t.n >= 20 && t.totalR > 0 && t.pf >= 1.1); };
   const eligible = coin => S.cfg.real.includes(coin) && btOk(coin);
+
+  /* ---------- choix des cryptos : proposer, tester, suivre, retirer ---------- */
+  // Test à blanc d'une crypto proposée : historique 4 h chez Hyperliquid, règle rejouée, rien d'engagé
+  function testCoin(coin) {
+    if (P.testing[coin]) return;
+    P.testing[coin] = 1;
+    enqueue(async () => {
+      try { await history(coin); retest(coin, S.cfg.coins.includes(coin)); }
+      finally { delete P.testing[coin]; if (!S.cfg.coins.includes(coin)) delete P.candles[coin]; if (h.visible && h.visible()) render(); }
+    });
+  }
+  function follow(coin) {
+    if (!P.meta || !P.meta[coin]) throw new Error(coin + ' : marché introuvable chez Hyperliquid');
+    if (S.cfg.coins.includes(coin)) return;
+    S.cfg.coins = [...S.cfg.coins, coin]; save();
+    log(`${coin} ajouté aux marchés suivis, en simulation`);
+    if (P.ws && P.wsOk) try { P.ws.send(JSON.stringify({ method: 'subscribe', subscription: { type: 'candle', coin, interval: TF } })); } catch {}
+    enqueue(async () => { await history(coin); retest(coin); onBar(coin); if (h.visible && h.visible()) render(); });
+  }
+  function unfollow(coin) {
+    if (S.real.pos[coin]) throw new Error(coin + ' : le bot a une position ouverte, ferme-la avant de retirer la crypto');
+    S.cfg.coins = S.cfg.coins.filter(x => x !== coin); S.cfg.real = S.cfg.real.filter(x => x !== coin);
+    delete S.paper.open[coin]; delete S.seen[coin]; delete S.lastSig[coin];
+    if (P.ws && P.wsOk) try { P.ws.send(JSON.stringify({ method: 'unsubscribe', subscription: { type: 'candle', coin, interval: TF } })); } catch {}
+    delete P.candles[coin];
+    save(); log(`${coin} retiré des marchés suivis`);
+  }
+  // Propositions : marchés Hyperliquid pas encore suivis, testés positifs d'abord, puis par volume
+  function suggestions() {
+    if (!P.meta) return [];
+    const have = new Set(S.cfg.coins), q = (P.ui.q || '').trim().toUpperCase();
+    const rank = c => (btOk(c) ? 0 : !S.bt[c] ? 1 : 2);
+    return Object.values(P.meta)
+      .filter(a => !have.has(a.name) && (q ? a.name.toUpperCase().includes(q) : a.vol > 0))
+      .sort((x, y) => (q ? 0 : rank(x.name) - rank(y.name)) || (y.vol || 0) - (x.vol || 0))
+      .slice(0, q ? 20 : P.ui.more ? 40 : 12);
+  }
+  const stale = c => !S.bt[c] || now() - S.bt[c].at > RETEST;
 
   /* ---------- simulation (toutes les cryptos) et signaux ---------- */
   // Rejoue chaque bougie fermée pas encore vue (même après des heures appli fermée) : sorties, puis nouvelles cassures.
@@ -5939,21 +5982,49 @@ function PerpsBot(h) {
   }
 
   /* ---------- affichage ---------- */
+  const big = x => (!fin(x) ? '—' : x >= 1e9 ? n2(x / 1e9, 1) + ' Md$' : x >= 1e6 ? n2(x / 1e6, 0) + ' M$' : n2(x / 1e3, 0) + ' k$');
+  // Résultat du test de la règle, en clair
+  function btTxt(coin) {
+    const t = S.bt[coin], mine = S.cfg.coins.includes(coin);
+    if (P.testing[coin]) return 'test en cours (historique 4 h chez Hyperliquid)…';
+    if (mine && !P.candles[coin]) return 'chargement de l\'historique…';
+    if (!t) return mine ? 'test en attente' : 'pas encore testée';
+    if (t.tooShort) return `trop récente pour être testée : ${t.bars} bougies 4 h, il en faut 300 (≈ 50 jours)`;
+    const yrs = (t.to - t.from) / (365 * 86400e3);
+    return `Règle rejouée sur ${n2(yrs, 1)} an${yrs >= 2 ? 's' : ''} : ${t.n} trades, ${Rf(t.totalR)}, ${Math.round(t.win * 100)} % gagnants, PF ${n2(t.pf, 2)} (1re moitié ${Rf(t.h1.totalR)}, 2e ${Rf(t.h2.totalR)})${btOk(coin) ? '' : ' : pas assez bon pour de l\'argent réel'}`;
+  }
+  const testChip = coin => { const t = S.bt[coin]; return !t || P.testing[coin] ? '' : t.tooShort ? '<span class="chip">trop récente</span>' : btOk(coin) ? '<span class="chip long">test ✓</span>' : '<span class="chip short">test ✗</span>'; };
   function marketHtml(coin) {
     const a = P.meta && P.meta[coin], t = S.bt[coin], st = stateOf(coin), real = S.cfg.real.includes(coin), ok = btOk(coin);
     const px = a ? a.mid || a.mark : NaN, ch = a && a.prev ? px / a.prev - 1 : NaN;
-    const yrs = t ? (t.to - t.from) / (365 * 86400e3) : 0;
     const lvl = real && ok ? 'ok' : t && !ok ? 'bad' : '';
-    const btTxt = !P.candles[coin] ? 'chargement de l\'historique…' : !t ? 'test en attente' :
-      `Règle rejouée sur ${n2(yrs, 1)} an${yrs >= 2 ? 's' : ''} : ${t.n} trades, ${Rf(t.totalR)}, ${Math.round(t.win * 100)} % gagnants, PF ${n2(t.pf, 2)} (1re moitié ${Rf(t.h1.totalR)}, 2e ${Rf(t.h2.totalR)})${ok ? '' : ' : pas assez bon pour de l\'argent réel'}`;
     let now1 = '';
     if (st && st.open) now1 = `Tendance ${st.open.dir > 0 ? 'haussière' : 'baissière'} en cours : simulation ${st.open.dir > 0 ? 'LONG' : 'SHORT'} depuis ${ago(now() - st.open.t)} (entrée ${pxf(st.open.entry)}, stop ${pxf(st.open.stop)})`;
     else if (st) now1 = `En attente d'une cassure : LONG si une bougie 4 h clôture au-dessus de ${pxf(st.hi)}, SHORT si sous ${pxf(st.lo)}`;
     const mode = real ? (ok ? '<span class="chip long">argent réel</span>' : '<span class="chip warn">réel demandé, test insuffisant</span>') : '<span class="chip">simulation</span>';
-    // Toujours réversible : repasser en réel remet la crypto dans la liste ; le bot n'y entre que si son test est bon (eligible)
-    const btn = real ? `<button class="btn sm" data-preal="${esc(coin)}">Simulation seulement</button>` : `<button class="btn sm" data-preal="${esc(coin)}">${ok ? 'Trader en réel' : 'Repasser en réel'}</button>${ok ? '' : '<span class="muted small" style="align-self:center">le bot n\'y entrera qu\'une fois le test bon</span>'}`;
-    return `<div class="pp-row" data-l="${lvl}"><div class="pp-h"><b>${esc(coin)}</b><span class="mono">${pxf(px)}</span><span class="${ch > 0 ? 'pos' : ch < 0 ? 'neg' : ''}">${pct(ch)}</span>${mode}<span class="muted small">${a ? `levier max ${a.maxLev}x · funding ${pct(a.funding, 4)}/h` : ''}</span></div>
-      <p class="pp-tf">${esc(btTxt)}</p>${now1 ? `<p class="pp-tf pp-now">${esc(now1)}</p>` : ''}${btn ? `<div class="row-btns" style="margin:6px 0 0">${btn}</div>` : ''}</div>`;
+    // Toujours réversible : l'interrupteur dit ce que TU autorises ; le bot n'entre en réel que si le test est bon (eligible)
+    const sw = `<label class="pp-sw"><input type="checkbox" data-preal="${esc(coin)}"${real ? ' checked' : ''}>Argent réel autorisé</label>`;
+    const wait = real && !ok ? '<span class="muted small">le bot attend un test positif</span>' : '';
+    const del = S.real.pos[coin] ? '' : `<button class="btn sm pp-del" data-pdel="${esc(coin)}">Retirer</button>`;
+    return `<div class="pp-row" data-l="${lvl}"><div class="pp-h"><b>${esc(coin)}</b><span class="mono">${pxf(px)}</span><span class="${ch > 0 ? 'pos' : ch < 0 ? 'neg' : ''}">${pct(ch)}</span>${mode}<span class="muted small">${a ? `levier max ${a.maxLev}x · funding ${pct(a.funding, 4)}/h · volume 24 h ${big(a.vol)}` : ''}</span></div>
+      <p class="pp-tf">${esc(btTxt(coin))}</p>${now1 ? `<p class="pp-tf pp-now">${esc(now1)}</p>` : ''}<div class="pp-ctl">${sw}${wait}${del}</div></div>`;
+  }
+  // Une crypto proposée (pas encore suivie)
+  function suggHtml(a) {
+    const c = a.name, ok = btOk(c), px = a.mid || a.mark, ch = a.prev ? px / a.prev - 1 : NaN;
+    return `<div class="pp-row" data-l="${ok ? 'ok' : ''}"><div class="pp-h"><b>${esc(c)}</b><span class="mono">${pxf(px)}</span><span class="${ch > 0 ? 'pos' : ch < 0 ? 'neg' : ''}">${pct(ch)}</span>${testChip(c)}<span class="muted small">volume 24 h ${big(a.vol)} · levier max ${a.maxLev}x</span></div>
+      <p class="pp-tf">${esc(btTxt(c))}</p>
+      <div class="pp-ctl"><button class="btn sm${ok ? ' pri' : ''}" data-padd="${esc(c)}">Suivre</button>${!P.testing[c] && stale(c) ? `<button class="btn sm" data-ptest="${esc(c)}">Tester</button>` : ''}</div></div>`;
+  }
+  function addHtml() {
+    if (!P.meta) return '';
+    const L = suggestions(), toTest = L.filter(a => !P.testing[a.name] && stale(a.name)), q = (P.ui.q || '').trim(), busy = Object.keys(P.testing).length;
+    return `<h3 class="w-h">Ajouter des cryptos</h3>
+      <p class="note" style="margin:0 0 6px">${q ? 'Marchés Hyperliquid trouvés.' : 'Les plus échangées chez Hyperliquid, celles dont le test est bon en premier.'} « Tester » rejoue la règle sur ~2 ans sans rien engager. Une crypto suivie démarre en simulation : l'argent réel, c'est toi qui l'autorises.</p>
+      <div class="add" style="margin:0 0 8px"><input id="ppQ" placeholder="Chercher : HYPE, XRP, DOGE…" autocomplete="off" value="${esc(P.ui.qd != null ? P.ui.qd : P.ui.q || '')}"><button class="btn" data-pp="q">${q && (P.ui.qd == null || P.ui.qd.trim() === q) ? 'Effacer' : 'Chercher'}</button></div>
+      ${toTest.length || busy ? `<div class="row-btns" style="margin:0 0 8px">${toTest.length ? `<button class="btn sm" data-pp="testall">Tester les ${toTest.length}</button>` : ''}${busy ? `<span class="muted small" style="align-self:center">${busy} test${busy > 1 ? 's' : ''} en cours, un toutes les 6 s</span>` : ''}</div>` : ''}
+      <div class="pp-list">${L.map(suggHtml).join('') || '<p class="note">Aucun marché Hyperliquid de ce nom.</p>'}</div>
+      ${q ? '' : `<div class="row-btns" style="margin:0"><button class="btn sm" data-pp="more">${P.ui.more ? 'Voir moins' : 'Voir plus de cryptos'}</button></div>`}`;
   }
   // Ce que contient vraiment le compte, et quoi faire si l'argent n'apparaît pas
   function acctHelp() {
@@ -6049,7 +6120,8 @@ function PerpsBot(h) {
     box.innerHTML = `${acctHtml}${S.acct ? keyHtml + delHtml : ''}${autoHtml}
       ${live ? `<h3 class="w-h">Positions du bot</h3>${live}` : ''}${other ? `<div class="journal">${other}</div>` : ''}
       <h3 class="w-h">Marchés suivis (bougies 4 h)</h3>
-      <div class="pp-list">${rows || '<p class="note">Chargement des marchés…</p>'}</div>
+      <div class="pp-list">${rows || (S.cfg.coins.length ? '<p class="note">Chargement des marchés…</p>' : '<p class="note">Aucune crypto suivie : ajoute-en ci-dessous.</p>')}</div>
+      ${addHtml()}
       ${done ? `<h3 class="w-h">Derniers trades</h3><div class="journal">${done}</div>` : ''}
       ${setHtml}
       <h3 class="w-h">Journal</h3><div class="b-logs">${logs || '<p class="note">Rien pour l\'instant.</p>'}</div>
@@ -6065,7 +6137,12 @@ function PerpsBot(h) {
       const val = id => { const el = document.getElementById(id); return el ? el.value.trim() : ''; };
       try {
         if (b.dataset.pq) { const k = b.dataset.pq, v = +b.dataset.v; S.cfg[k] = v; save(); log(`Réglage : ${{ risk: 'risque par trade ' + String(v).replace('.', ',') + ' %', levCap: 'levier maximum ' + v + 'x', maxPos: v + ' position' + (v > 1 ? 's' : '') + ' en même temps', dayLoss: 'arrêt du jour après −' + v + ' %' }[k] || k + ' = ' + v}`); return; }
-        if (b.dataset.preal) { const coin = b.dataset.preal, on = !S.cfg.real.includes(coin); S.cfg.real = on ? [...S.cfg.real, coin] : S.cfg.real.filter(x => x !== coin); save(); log(`${coin} : ${on ? (btOk(coin) ? 'argent réel autorisé' : 'argent réel demandé (le bot attend que le test soit bon)') : 'simulation seulement'}`); render(); return; }
+        if (b.dataset.padd) { follow(b.dataset.padd); return; }
+        if (b.dataset.ptest) { testCoin(b.dataset.ptest); return; }
+        if (b.dataset.pdel) { unfollow(b.dataset.pdel); return; }
+        if (b.dataset.pp === 'testall') { for (const a of suggestions()) if (stale(a.name)) testCoin(a.name); return; }
+        if (b.dataset.pp === 'q') { const typed = val('ppQ'), cur = (P.ui.q || '').trim(); P.ui.q = cur && typed === cur ? '' : typed; P.ui.qd = null; return; }
+        if (b.dataset.pp === 'more') { P.ui.more = !P.ui.more; return; }
         if (b.dataset.pclose) { b.disabled = true; await closeNow(b.dataset.pclose, 'fermeture demandée par toi'); return; }
         const a = b.dataset.pp;
         if (a === 'connect') { await connectPhantom(); await refreshAcct().catch(() => {}); await checkAgent(); }
@@ -6089,6 +6166,21 @@ function PerpsBot(h) {
       } catch (err) { h.toast && h.toast(err.message, 'short'); log(err.message, 'warn'); }
       finally { b.disabled = false; render(); }
     });
+    // Interrupteur « Argent réel autorisé » : ton choix, réversible à tout moment
+    box.addEventListener('change', e => {
+      const el = e.target;
+      if (!el.dataset || !el.dataset.preal) return;
+      const coin = el.dataset.preal, on = el.checked;
+      S.cfg.real = on ? [...new Set([...S.cfg.real, coin])] : S.cfg.real.filter(x => x !== coin);
+      save(); log(`${coin} : ${on ? (btOk(coin) ? 'argent réel autorisé' : 'argent réel autorisé, le bot attend que le test soit bon') : 'simulation seulement'}`);
+      el.blur(); render();
+    });
+    // Recherche : Entrée lance la recherche
+    box.addEventListener('keydown', e => {
+      if (e.key !== 'Enter' || !e.target || e.target.id !== 'ppQ') return;
+      e.preventDefault(); P.ui.q = e.target.value.trim(); P.ui.qd = null; e.target.blur(); render();
+    });
+    box.addEventListener('input', e => { if (e.target && e.target.id === 'ppQ') P.ui.qd = e.target.value; });
   }
 
   return { start, render, bindUI, S, P, build, _test: { build, catchUp, revokeWithPhantom, forgetKey, equity, available, unified, acctHelp, sizeFor, riskGate, backtest, retest, btOk, eligible, sigAt, step, onBar, stateOf, history, loadMeta, tryReal, guard, settle, closeNow, refreshAcct, createAgent, unlock, approveWithPhantom, checkAgent, universe, fees, closed, P, RULE } };
