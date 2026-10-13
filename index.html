@@ -5453,7 +5453,7 @@ function PerpsBot(h) {
     S.acct = acc[0]; save(); log('Compte Phantom relié : ' + short(S.acct));
     return S.acct;
   }
-  async function approveWithPhantom(agentAddr, agentName = 'vigie') {
+  async function approveWithPhantom(agentAddr, agentName = 'vigie', revoke = false) {
     const p = phEth();
     if (!p) throw new Error('Ouvre cette page dans le navigateur de Phantom pour signer l\'autorisation');
     const acct = S.acct || await connectPhantom();
@@ -5466,6 +5466,7 @@ function PerpsBot(h) {
     const signature = await HL.splitSig(sig);
     const r = await HL.post('/exchange', { action, nonce, signature, vaultAddress: null, expiresAfter: null });
     if (!r || r.status !== 'ok') throw new Error('Hyperliquid refuse l\'autorisation : ' + (r && typeof r.response === 'string' ? r.response : JSON.stringify(r && r.response)));
+    if (revoke) return true;
     if (S.agent && S.agent.addr.toLowerCase() === agentAddr.toLowerCase()) S.agent.approved = true;
     save(); log('Clé du bot autorisée par Phantom : elle peut trader sur ton compte, pas retirer', 'ok');
     return true;
@@ -5483,6 +5484,22 @@ function PerpsBot(h) {
     } catch { return null; }
   }
   // Lien pour ouvrir l'autorisation dans le navigateur de Phantom (la clé privée ne quitte jamais ce téléphone-ci)
+  // Révocation : Hyperliquid remplace la clé nommée « vigie » quand une nouvelle autorisation porte le même nom.
+  // On autorise donc une adresse tirée au hasard dont personne n'a la clé : l'ancienne clé du bot ne peut plus trader.
+  async function revokeWithPhantom() {
+    const E = await HL.loadEthers();
+    const dead = E.getAddress(E.hexlify(crypto.getRandomValues(new Uint8Array(20))));
+    await approveWithPhantom(dead, 'vigie', true);
+    if (S.agent) S.agent.approved = false;
+    if (S.cfg.on) S.cfg.on = false;
+    save(); log('Clé du bot révoquée chez Hyperliquid : elle ne peut plus trader. Mode auto coupé.', 'warn');
+  }
+  function forgetKey() {
+    S.agent = null; P.wallet = null; P.ui.forget = false;
+    if (S.cfg.on) S.cfg.on = false;
+    save(); log('Clé du bot supprimée de ce téléphone', 'warn');
+  }
+  const revokeLink = () => 'https://phantom.app/ul/browse/' + encodeURIComponent(location.origin + location.pathname + '#perps-revoke') + '?ref=' + encodeURIComponent(location.origin);
   function approveLink() {
     if (!S.agent) return null;
     const url = location.origin + location.pathname + '#perps-approve=' + S.agent.addr;
@@ -5897,6 +5914,7 @@ function PerpsBot(h) {
     const hash = location.hash || '';
     // page ouverte dans Phantom juste pour signer l'autorisation : rien d'autre ne tourne ici
     if (hash.startsWith('#perps-approve=')) { P.ui.approveFor = hash.slice('#perps-approve='.length); render(); return; }
+    if (hash.startsWith('#perps-revoke')) { P.ui.revoke = true; render(); return; }
     boot();
     setInterval(() => { loadMeta().catch(() => {}); for (const coin of universe()) catchUp(coin).catch(() => {}); }, 60000);
     document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { for (const coin of universe()) catchUp(coin).catch(() => {}); if (S.acct) guard().catch(() => {}); } });
@@ -5944,7 +5962,7 @@ function PerpsBot(h) {
     const hs = `<a href="https://hypurrscan.io/address/${esc(S.acct)}" target="_blank" rel="noopener">Hypurrscan</a>`;
     if (!unified() && P.spotUsdc - (P.spotHold || 0) > 1) out.push(`<b>${usd(P.spotUsdc - (P.spotHold || 0))} en USDC « spot »</b> : dans Phantom, transfère-les vers Perps pour que le bot puisse s'en servir.`);
     if (P.spotOther && P.spotOther.length) out.push(`Aussi sur ce compte Hyperliquid : <b>${P.spotOther.map(b => esc(n2(b.total, b.total >= 100 ? 2 : 4) + ' ' + b.coin)).join(', ')}</b>. Le bot ne trade qu'avec des USDC : si c'est ton SOL déposé (souvent noté USOL), la conversion en USDC n'est pas finie. Dans Phantom, ouvre Perps et termine l'ajout de fonds, ou échange-le en USDC.`);
-    if (fin(eq) && eq < 1 && !(P.spotOther && P.spotOther.length)) out.push(`Rien n'est arrivé sur cette adresse chez Hyperliquid. Vérifie : (1) que c'est l'adresse Ethereum du <b>même compte</b> Phantom que celui où tu as fait le dépôt (Phantom peut avoir plusieurs comptes) ; (2) que l'ajout de fonds est terminé dans Phantom (environ 1 minute pour du SOL). Tu peux voir le contenu exact de l'adresse sur ${hs}.`);
+    if (fin(eq) && eq < 1 && !(P.spotOther && P.spotOther.length) && !(P.spotUsdc > 1)) out.push(`Rien n'est arrivé sur cette adresse chez Hyperliquid. Vérifie : (1) que c'est l'adresse Ethereum du <b>même compte</b> Phantom que celui où tu as fait le dépôt (Phantom peut avoir plusieurs comptes) ; (2) que l'ajout de fonds est terminé dans Phantom (environ 1 minute pour du SOL). Tu peux voir le contenu exact de l'adresse sur ${hs}.`);
     if (!out.length) return `<p class="note" style="margin-top:-4px">Contenu exact de l'adresse : ${hs}.</p>`;
     if (!/Hypurrscan/.test(out[out.length - 1])) out.push(`Contenu exact de l'adresse : ${hs}.`);
     return `<div class="advice" data-l="warn" style="margin:6px 0 10px"><p>${out.join('</p><p>')}</p></div>`;
@@ -5958,6 +5976,14 @@ function PerpsBot(h) {
     const st = P.acctState, eq = equity(), pos = positions(), d = day(), g = S.acct ? riskGate() : 'compte Phantom non relié';
     { const sp = $('#perpsState'); if (sp) sp.innerHTML = S.cfg.on ? `<span class="chip ${g ? 'warn' : 'long'}">${g ? 'auto · en attente' : 'auto'}</span>` : '<span class="chip">simulation</span>'; }
     const ph = !!phEth();
+    // page de révocation ouverte dans le navigateur de Phantom
+    if (P.ui.revoke) {
+      box.innerHTML = P.ui.revoked
+        ? `<div class="advice" data-l="ok" style="margin:0 0 10px"><h3>Clé du bot révoquée</h3><p>Hyperliquid a remplacé la clé « vigie » par une adresse dont personne n'a la clé : l'ancienne clé du bot ne peut plus trader sur ton compte.</p></div><p class="note">Retourne dans l'appli Vigie habituelle, touche « Vérifier », puis « Supprimer la clé de ce téléphone ».</p>`
+        : `<div class="advice" data-l="warn" style="margin:0 0 10px"><h3>Révoquer la clé du bot</h3><p>Phantom va signer une nouvelle autorisation au nom « vigie » pour une adresse tirée au hasard, dont personne n'a la clé. Hyperliquid remplace alors l'ancienne clé du bot : elle ne pourra plus trader. Ton argent et tes positions restent sur ton compte.</p></div>
+        ${ph ? '<div class="row-btns"><button class="btn danger" data-pp="revoke-link">Révoquer avec Phantom</button></div>' : '<p class="note">Ouvre ce lien dans le navigateur de Phantom pour signer.</p>'}`;
+      return;
+    }
     // page d'autorisation ouverte dans le navigateur de Phantom
     if (P.ui.approveFor) {
       box.innerHTML = `<div class="advice" data-l="warn" style="margin:0 0 10px"><h3>Autoriser le bot à trader</h3><p>Clé du bot : <span class="mono">${esc(short(P.ui.approveFor))}</span>. Elle pourra ouvrir et fermer des positions sur ton compte Perps. Elle ne pourra pas retirer ton argent.</p></div>
@@ -5983,6 +6009,11 @@ function PerpsBot(h) {
         ? `<h3 class="w-h">Clé de trading du bot</h3><div class="add"><input id="ppPin" type="password" placeholder="Code du bot futures" autocomplete="current-password"><button class="btn pri" data-pp="unlock">Déverrouiller</button></div>`
         : `<h3 class="w-h">Clé de trading du bot</h3><p class="note">Clé <span class="mono">${esc(short(S.agent.addr))}</span> · ${S.agent.approved ? '<b class="pos">autorisée par Phantom</b>' : '<b class="neg">pas encore autorisée</b>'}</p>
           ${S.agent.approved ? '' : `<div class="row-btns">${ph ? '<button class="btn pri" data-pp="approve">Autoriser avec Phantom</button>' : `<a class="btn pri" href="${esc(approveLink())}" rel="noopener">Ouvrir Phantom pour autoriser</a>`}<button class="btn sm" data-pp="check">Vérifier</button></div>`}`;
+    const delHtml = !S.agent ? '' : `<details class="w-oth" data-k="del"${P.ui.forget ? ' open' : ''}><summary>Retirer la clé du bot</summary>
+        <p class="note">Déconnecter Vigie dans Phantom ne suffit pas : l'autorisation est enregistrée chez Hyperliquid. Pour l'annuler :</p>
+        <ol class="i-steps"><li>Si le bot a des positions ouvertes, ferme-les d'abord (« Tout fermer ») : sans clé, il ne pourra plus remonter leur stop.</li><li>Révoque la clé : Phantom signe une autorisation qui la remplace par une adresse sans clé.</li><li>Supprime la clé de ce téléphone.</li></ol>
+        <div class="row-btns">${ph ? '<button class="btn sm danger" data-pp="revoke">Révoquer avec Phantom</button>' : `<a class="btn sm danger" href="${esc(revokeLink())}" rel="noopener">Ouvrir Phantom pour révoquer</a>`}<button class="btn sm" data-pp="check">Vérifier</button><button class="btn sm" data-pp="forget">Supprimer la clé de ce téléphone</button></div>
+        ${P.ui.forget ? `<div class="confirm"><span>${S.agent.approved ? 'La clé est encore autorisée chez Hyperliquid. Si tu la supprimes sans la révoquer, plus personne ne l\'aura (elle ne servira plus à rien), mais elle restera dans la liste de Hyperliquid.' : 'La clé n\'est plus autorisée : tu peux la supprimer.'}</span><button class="btn sm danger" data-pp="forget-yes">Supprimer</button><button class="btn sm" data-pp="forget-no">Annuler</button></div>` : ''}</details>`;
     const chip = (k, v, label, cur) => `<button class="btn sm ${cur ? 'pri' : ''}" data-pq="${k}" data-v="${v}" aria-pressed="${cur}">${label}</button>`;
     const c = S.cfg;
     const setHtml = `<h3 class="w-h">Réglages du risque</h3>
@@ -6014,7 +6045,8 @@ function PerpsBot(h) {
     const autoHtml = `<div class="advice" data-l="${live1 ? 'ok' : 'warn'}" style="margin:10px 0"><h3>${!c.on ? 'Mode auto coupé' : live1 ? 'Mode auto : le bot trade seul' : 'Mode auto actif, en attente'}</h3><p>${autoTxt}</p>
       <div class="row-btns">${c.on ? '<button class="btn danger" data-pp="off">Couper le mode auto</button>' : '<button class="btn pri" data-pp="arm">Activer le mode auto</button>'}${pos.length ? '<button class="btn danger" data-pp="closeall">Tout fermer</button>' : ''}</div>
       ${P.ui.confirm ? `<div class="confirm"><span>Le bot va ouvrir et fermer des positions à levier seul, avec ${String(c.risk).replace('.', ',')} % de risque par trade. Les pertes sont réelles.</span><button class="btn sm danger" data-pp="arm-yes">Oui, activer</button><button class="btn sm" data-pp="cancel">Annuler</button></div>` : ''}</div>`;
-    box.innerHTML = `${acctHtml}${S.acct ? keyHtml : ''}${autoHtml}
+    const openD = new Set([...box.querySelectorAll('details[open]')].map(d => d.dataset.k));
+    box.innerHTML = `${acctHtml}${S.acct ? keyHtml + delHtml : ''}${autoHtml}
       ${live ? `<h3 class="w-h">Positions du bot</h3>${live}` : ''}${other ? `<div class="journal">${other}</div>` : ''}
       <h3 class="w-h">Marchés suivis (bougies 4 h)</h3>
       <div class="pp-list">${rows || '<p class="note">Chargement des marchés…</p>'}</div>
@@ -6022,7 +6054,8 @@ function PerpsBot(h) {
       ${setHtml}
       <h3 class="w-h">Journal</h3><div class="b-logs">${logs || '<p class="note">Rien pour l\'instant.</p>'}</div>
       <div class="row-btns"><button class="btn sm" data-pp="export">Exporter le journal futures</button></div>
-      <details class="w-oth"><summary>Déposer de l'argent</summary><p class="note">Dans Phantom : onglet Perps, puis « Déposer ». Phantom fait le pont depuis Solana et affiche les frais avant de valider. Hyperliquid prend 1 USDC sur le premier dépôt. Si l'argent arrive en USDC « spot », transfère-le vers Perps dans Phantom. Les ordres du bot ne paient que les frais Hyperliquid (0,045 %), pas la commission de Phantom (0,05 %) prise quand tu trades depuis son écran. Prévois au moins 100 $ : Hyperliquid refuse les ordres de moins de 10 $, et avec 1 % de risque et un stop à 3-5 %, une position fait environ le quart du compte.</p></details>`;
+      <details class="w-oth" data-k="dep"><summary>Déposer de l'argent</summary><p class="note">Dans Phantom : onglet Perps, puis « Déposer ». Phantom fait le pont depuis Solana et affiche les frais avant de valider. Hyperliquid prend 1 USDC sur le premier dépôt. Si l'argent arrive en USDC « spot », transfère-le vers Perps dans Phantom. Les ordres du bot ne paient que les frais Hyperliquid (0,045 %), pas la commission de Phantom (0,05 %) prise quand tu trades depuis son écran. Prévois au moins 100 $ : Hyperliquid refuse les ordres de moins de 10 $, et avec 1 % de risque et un stop à 3-5 %, une position fait environ le quart du compte.</p></details>`;
+    box.querySelectorAll('details[data-k]').forEach(d => { if (openD.has(d.dataset.k)) d.open = true; });
   }
   function bindUI() {
     const box = $('#perpsBody');
@@ -6041,7 +6074,12 @@ function PerpsBot(h) {
         else if (a === 'unlock') { b.disabled = true; await unlock(val('ppPin')); await checkAgent(); guard().catch(() => {}); }
         else if (a === 'approve') { b.disabled = true; await approveWithPhantom(S.agent.addr); await checkAgent(); }
         else if (a === 'approve-link') { b.disabled = true; await approveWithPhantom(P.ui.approveFor); h.toast && h.toast('Autorisation enregistrée chez Hyperliquid. Retourne dans l\'appli Vigie.', 'long'); }
-        else if (a === 'check') { const ok = await checkAgent(); h.toast && h.toast(ok ? 'Clé du bot autorisée' : 'Pas encore autorisée'); }
+        else if (a === 'revoke') { b.disabled = true; await revokeWithPhantom(); await checkAgent(); h.toast && h.toast(S.agent && S.agent.approved ? 'La clé apparaît encore : touche « Vérifier » dans un instant' : 'Clé du bot révoquée chez Hyperliquid', 'long'); }
+        else if (a === 'revoke-link') { b.disabled = true; await revokeWithPhantom(); P.ui.revoked = true; h.toast && h.toast('Clé du bot révoquée. Retourne dans l\'appli Vigie.', 'long'); }
+        else if (a === 'forget') P.ui.forget = true;
+        else if (a === 'forget-no') P.ui.forget = false;
+        else if (a === 'forget-yes') forgetKey();
+        else if (a === 'check') { const ok = await checkAgent(); h.toast && h.toast(ok ? 'Clé du bot autorisée chez Hyperliquid' : 'Clé du bot non autorisée chez Hyperliquid (révoquée ou pas encore autorisée)'); }
         else if (a === 'arm') P.ui.confirm = true;
         else if (a === 'cancel') P.ui.confirm = false;
         else if (a === 'export') { await exportFile(); return; }
@@ -6053,7 +6091,7 @@ function PerpsBot(h) {
     });
   }
 
-  return { start, render, bindUI, S, P, build, _test: { build, catchUp, equity, available, unified, acctHelp, sizeFor, riskGate, backtest, retest, btOk, eligible, sigAt, step, onBar, stateOf, history, loadMeta, tryReal, guard, settle, closeNow, refreshAcct, createAgent, unlock, approveWithPhantom, checkAgent, universe, fees, closed, P, RULE } };
+  return { start, render, bindUI, S, P, build, _test: { build, catchUp, revokeWithPhantom, forgetKey, equity, available, unified, acctHelp, sizeFor, riskGate, backtest, retest, btOk, eligible, sigAt, step, onBar, stateOf, history, loadMeta, tryReal, guard, settle, closeNow, refreshAcct, createAgent, unlock, approveWithPhantom, checkAgent, universe, fees, closed, P, RULE } };
 }
 if (typeof module !== 'undefined') module.exports = PerpsBot;
 
