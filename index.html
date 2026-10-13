@@ -5446,6 +5446,7 @@ function PerpsBot(h) {
   const phEth = () => (typeof window !== 'undefined' && window.phantom && window.phantom.ethereum) || null;
   async function connectPhantom() {
     const p = phEth();
+    if (!p && typeof window !== 'undefined' && window.phantom && window.phantom.solana) throw new Error('Phantom ne montre que Solana : dans Phantom, Réglages > Réseaux actifs > active Ethereum, puis recharge la page');
     if (!p) throw new Error('Phantom n\'est pas disponible dans ce navigateur : ouvre l\'appli dans le navigateur de Phantom, ou colle ton adresse');
     const acc = await p.request({ method: 'eth_requestAccounts' });
     if (!acc || !acc[0]) throw new Error('Phantom n\'a pas donné d\'adresse');
@@ -5681,19 +5682,30 @@ function PerpsBot(h) {
   /* ---------- compte ---------- */
   async function refreshAcct() {
     if (!S.acct) return null;
-    const [st, oo, sp] = await Promise.all([
+    const needMode = !P.modeAt || now() - P.modeAt > 600000 || P.modeFor !== S.acct;
+    const [st, oo, sp, mode] = await Promise.all([
       HL.info({ type: 'clearinghouseState', user: S.acct }),
       HL.info({ type: 'frontendOpenOrders', user: S.acct }).catch(() => []),
-      HL.info({ type: 'spotClearinghouseState', user: S.acct }).catch(() => null)
+      HL.info({ type: 'spotClearinghouseState', user: S.acct }).catch(() => null),
+      needMode ? HL.info({ type: 'userAbstraction', user: S.acct }).catch(() => null) : Promise.resolve(P.mode)
     ]);
+    // Mode du compte : « unifié » (conseillé par Hyperliquid, souvent celui de Phantom) = l'USDC reste dans le solde spot
+    // et sert directement de marge aux perps ; le solde « perps » seul y vaut 0.
+    if (needMode && typeof mode === 'string') { P.mode = mode; P.modeAt = now(); P.modeFor = S.acct; }
     P.acctState = st; P.orders = Array.isArray(oo) ? oo : []; P.acctAt = now();
-    const u = sp && (sp.balances || []).find(b => b.coin === 'USDC');
-    P.spotUsdc = u ? +u.total - +(u.hold || 0) : 0;
+    const bal = (sp && Array.isArray(sp.balances)) ? sp.balances : [];
+    const u = bal.find(b => b.coin === 'USDC');
+    P.spotUsdc = u ? +u.total : 0; P.spotHold = u ? +(u.hold || 0) : 0;
+    P.spotOther = bal.filter(b => b.coin !== 'USDC' && +b.total > 0).map(b => ({ coin: b.coin, total: +b.total }));
+    P.spotRead = !!sp;
     const eq = equity();
     if (fin(eq)) { S.peak = Math.max(S.peak || 0, eq); const d = day(); if (d.start == null) d.start = eq; }
     return st;
   }
-  const equity = () => (P.acctState ? +P.acctState.marginSummary.accountValue : NaN);
+  const unified = () => P.mode === 'unifiedAccount' || P.mode === 'portfolioMargin';
+  const upnl = () => positions().reduce((s, p) => s + (+p.unrealizedPnl || 0), 0);
+  const equity = () => (!P.acctState ? NaN : unified() ? (P.spotUsdc || 0) + upnl() : +P.acctState.marginSummary.accountValue);
+  const available = () => (!P.acctState ? NaN : unified() ? Math.max(0, (P.spotUsdc || 0) - (P.spotHold || 0)) : +P.acctState.withdrawable);
   const positions = () => ((P.acctState && P.acctState.assetPositions) || []).map(x => x.position).filter(p => p && +p.szi !== 0);
 
   /* ---------- taille et levier ---------- */
@@ -5925,6 +5937,18 @@ function PerpsBot(h) {
     return `<div class="pp-row" data-l="${lvl}"><div class="pp-h"><b>${esc(coin)}</b><span class="mono">${pxf(px)}</span><span class="${ch > 0 ? 'pos' : ch < 0 ? 'neg' : ''}">${pct(ch)}</span>${mode}<span class="muted small">${a ? `levier max ${a.maxLev}x · funding ${pct(a.funding, 4)}/h` : ''}</span></div>
       <p class="pp-tf">${esc(btTxt)}</p>${now1 ? `<p class="pp-tf pp-now">${esc(now1)}</p>` : ''}${btn ? `<div class="row-btns" style="margin:6px 0 0">${btn}</div>` : ''}</div>`;
   }
+  // Ce que contient vraiment le compte, et quoi faire si l'argent n'apparaît pas
+  function acctHelp() {
+    if (!P.acctState) return '';
+    const eq = equity(), out = [];
+    const hs = `<a href="https://hypurrscan.io/address/${esc(S.acct)}" target="_blank" rel="noopener">Hypurrscan</a>`;
+    if (!unified() && P.spotUsdc - (P.spotHold || 0) > 1) out.push(`<b>${usd(P.spotUsdc - (P.spotHold || 0))} en USDC « spot »</b> : dans Phantom, transfère-les vers Perps pour que le bot puisse s'en servir.`);
+    if (P.spotOther && P.spotOther.length) out.push(`Aussi sur ce compte Hyperliquid : <b>${P.spotOther.map(b => esc(n2(b.total, b.total >= 100 ? 2 : 4) + ' ' + b.coin)).join(', ')}</b>. Le bot ne trade qu'avec des USDC : si c'est ton SOL déposé (souvent noté USOL), la conversion en USDC n'est pas finie. Dans Phantom, ouvre Perps et termine l'ajout de fonds, ou échange-le en USDC.`);
+    if (fin(eq) && eq < 1 && !(P.spotOther && P.spotOther.length)) out.push(`Rien n'est arrivé sur cette adresse chez Hyperliquid. Vérifie : (1) que c'est l'adresse Ethereum du <b>même compte</b> Phantom que celui où tu as fait le dépôt (Phantom peut avoir plusieurs comptes) ; (2) que l'ajout de fonds est terminé dans Phantom (environ 1 minute pour du SOL). Tu peux voir le contenu exact de l'adresse sur ${hs}.`);
+    if (!out.length) return `<p class="note" style="margin-top:-4px">Contenu exact de l'adresse : ${hs}.</p>`;
+    if (!/Hypurrscan/.test(out[out.length - 1])) out.push(`Contenu exact de l'adresse : ${hs}.`);
+    return `<div class="advice" data-l="warn" style="margin:6px 0 10px"><p>${out.join('</p><p>')}</p></div>`;
+  }
   function render() {
     const box = $('#perpsBody');
     if (!box) return;
@@ -5944,13 +5968,14 @@ function PerpsBot(h) {
     const acctHtml = S.acct
       ? `<div class="w-top">
           <div class="kv"><div class="k">Compte Perps</div><div class="v">${usd(eq)}</div></div>
-          <div class="kv"><div class="k">Disponible</div><div class="v">${st ? usd(+st.withdrawable) : '—'}</div></div>
+          <div class="kv"><div class="k">Disponible</div><div class="v">${usd(available())}</div></div>
           <div class="kv"><div class="k">Résultat du jour</div><div class="v ${d.pnl > 0 ? 'pos' : d.pnl < 0 ? 'neg' : ''}">${usd(d.pnl)}</div></div>
         </div>
-        <p class="note">Compte Phantom <span class="mono">${esc(short(S.acct))}</span>${P.acctAt ? ' · relu il y a ' + Math.round((now() - P.acctAt) / 1000) + ' s' : ''}${P.spotUsdc > 1 ? ` · <b>${usd(P.spotUsdc)} en USDC « spot »</b> : dans Phantom, transfère-les vers Perps pour que le bot puisse s'en servir` : ''}${st && eq === 0 ? ' · <b>solde à 0 : si Phantom Perps affiche de l\'argent, vérifie que c\'est bien ton adresse Ethereum de Phantom</b>' : ''}</p>`
-      : `<p class="note" style="margin:0 0 8px">Relie ton compte Phantom (adresse Ethereum, qui sert aussi pour Perps).</p>
+        <p class="note">Compte Phantom <span class="mono">${esc(short(S.acct))}</span>${P.acctAt ? ' · relu il y a ' + Math.round((now() - P.acctAt) / 1000) + ' s' : ''}${unified() ? ' · compte unifié (l\'USDC sert directement de marge)' : ''}</p>${acctHelp()}`
+      : `<p class="note" style="margin:0 0 8px">Phantom Perps est lié à l'adresse <b>Ethereum</b> de ton compte Phantom (elle commence par 0x), pas à l'adresse Solana. Le même compte a les deux.</p>
+        <ol class="i-steps"><li>Dans Phantom : Réglages, Réseaux actifs, active <b>Ethereum</b>.</li><li>Accueil, « Recevoir », ligne <b>Ethereum</b> : copie l'adresse 0x….</li><li>Colle-la ci-dessous. Aucun ETH n'est nécessaire : l'argent reste en USDC chez Perps.</li></ol>
         <div class="row-btns">${ph ? '<button class="btn pri" data-pp="connect">Relier Phantom</button>' : ''}</div>
-        <div class="add"><input id="ppAddr" placeholder="Ou colle ton adresse 0x…" autocomplete="off"><button class="btn" data-pp="addr">Valider</button></div>`;
+        <div class="add"><input id="ppAddr" placeholder="Adresse Ethereum 0x…" autocomplete="off"><button class="btn" data-pp="addr">Valider</button></div>`;
     const keyHtml = !S.agent
       ? `<h3 class="w-h">Clé de trading du bot</h3><p class="note">Le bot a besoin de sa propre clé pour signer seul. Elle est protégée par un code et ne peut pas retirer ton argent.</p>
         <div class="add"><input id="ppPin1" type="password" placeholder="Code (6 caractères min.)" autocomplete="new-password"><input id="ppPin2" type="password" placeholder="Confirme" autocomplete="new-password"><button class="btn pri" data-pp="create">Créer</button></div>`
@@ -5997,7 +6022,7 @@ function PerpsBot(h) {
       ${setHtml}
       <h3 class="w-h">Journal</h3><div class="b-logs">${logs || '<p class="note">Rien pour l\'instant.</p>'}</div>
       <div class="row-btns"><button class="btn sm" data-pp="export">Exporter le journal futures</button></div>
-      <details class="w-oth"><summary>Déposer de l'argent</summary><p class="note">Dans Phantom : onglet Perps, puis « Déposer ». Phantom fait le pont depuis Solana et affiche les frais avant de valider. Si l'argent arrive en USDC « spot », transfère-le vers Perps dans Phantom. Prévois au moins 100 $ : Hyperliquid refuse les ordres de moins de 10 $, et avec 1 % de risque et un stop à 3-5 %, une position fait environ le quart du compte.</p></details>`;
+      <details class="w-oth"><summary>Déposer de l'argent</summary><p class="note">Dans Phantom : onglet Perps, puis « Déposer ». Phantom fait le pont depuis Solana et affiche les frais avant de valider. Hyperliquid prend 1 USDC sur le premier dépôt. Si l'argent arrive en USDC « spot », transfère-le vers Perps dans Phantom. Les ordres du bot ne paient que les frais Hyperliquid (0,045 %), pas la commission de Phantom (0,05 %) prise quand tu trades depuis son écran. Prévois au moins 100 $ : Hyperliquid refuse les ordres de moins de 10 $, et avec 1 % de risque et un stop à 3-5 %, une position fait environ le quart du compte.</p></details>`;
   }
   function bindUI() {
     const box = $('#perpsBody');
@@ -6011,7 +6036,7 @@ function PerpsBot(h) {
         if (b.dataset.pclose) { b.disabled = true; await closeNow(b.dataset.pclose, 'fermeture demandée par toi'); return; }
         const a = b.dataset.pp;
         if (a === 'connect') { await connectPhantom(); await refreshAcct().catch(() => {}); await checkAgent(); }
-        else if (a === 'addr') { const v = val('ppAddr'); if (!/^0x[0-9a-fA-F]{40}$/.test(v)) throw new Error('Adresse invalide : elle commence par 0x et fait 42 caractères'); S.acct = v; save(); log('Compte relié : ' + short(v)); await refreshAcct().catch(() => {}); await checkAgent(); }
+        else if (a === 'addr') { const v = val('ppAddr'); if (/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(v)) throw new Error('C\'est ton adresse Solana. Il faut l\'adresse Ethereum (0x…) du même compte Phantom : Réglages, Réseaux actifs, Ethereum, puis Recevoir, Ethereum'); if (!/^0x[0-9a-fA-F]{40}$/.test(v)) throw new Error('Adresse invalide : elle commence par 0x et fait 42 caractères'); S.acct = v; save(); log('Compte relié : ' + short(v)); await refreshAcct().catch(() => {}); await checkAgent(); }
         else if (a === 'create') { const p1 = val('ppPin1'), p2 = val('ppPin2'); if (p1 !== p2) throw new Error('Les deux codes sont différents'); b.disabled = true; await createAgent(p1); }
         else if (a === 'unlock') { b.disabled = true; await unlock(val('ppPin')); await checkAgent(); guard().catch(() => {}); }
         else if (a === 'approve') { b.disabled = true; await approveWithPhantom(S.agent.addr); await checkAgent(); }
@@ -6028,7 +6053,7 @@ function PerpsBot(h) {
     });
   }
 
-  return { start, render, bindUI, S, P, build, _test: { build, catchUp, sizeFor, riskGate, backtest, retest, btOk, eligible, sigAt, step, onBar, stateOf, history, loadMeta, tryReal, guard, settle, closeNow, refreshAcct, createAgent, unlock, approveWithPhantom, checkAgent, universe, fees, closed, P, RULE } };
+  return { start, render, bindUI, S, P, build, _test: { build, catchUp, equity, available, unified, acctHelp, sizeFor, riskGate, backtest, retest, btOk, eligible, sigAt, step, onBar, stateOf, history, loadMeta, tryReal, guard, settle, closeNow, refreshAcct, createAgent, unlock, approveWithPhantom, checkAgent, universe, fees, closed, P, RULE } };
 }
 if (typeof module !== 'undefined') module.exports = PerpsBot;
 
