@@ -403,6 +403,7 @@ a.btn{text-decoration:none;color:inherit;display:inline-block}
 .pp-now{color:var(--fg)}
 .pp-row[data-l="ok"]{border-color:var(--long)}
 .pp-h .chip{font-size:.66rem}
+.pp-rk{font-family:var(--f-mono);font-size:.72rem;color:var(--muted);min-width:1.4em}
 .pp-ctl{display:flex;flex-wrap:wrap;align-items:center;gap:8px 12px;margin-top:8px}
 .pp-sw{display:inline-flex;align-items:center;gap:8px;font-size:.86rem;font-weight:500;cursor:pointer}
 .pp-sw input{width:20px;height:20px;margin:0;accent-color:var(--long)}
@@ -5663,7 +5664,7 @@ function PerpsBot(h) {
   function follow(coin) {
     if (!P.meta || !P.meta[coin]) throw new Error(coin + ' : marché introuvable chez Hyperliquid');
     if (S.cfg.coins.includes(coin)) return;
-    S.cfg.coins = [...S.cfg.coins, coin]; save();
+    S.cfg.coins = [...S.cfg.coins, coin]; S.removed = (S.removed || []).filter(x => x !== coin); save();
     log(`${coin} ajouté aux marchés suivis, en simulation`);
     if (P.ws && P.wsOk) try { P.ws.send(JSON.stringify({ method: 'subscribe', subscription: { type: 'candle', coin, interval: TF } })); } catch {}
     enqueue(async () => { await history(coin); retest(coin); onBar(coin); if (h.visible && h.visible()) render(); });
@@ -5674,17 +5675,34 @@ function PerpsBot(h) {
     delete S.paper.open[coin]; delete S.seen[coin]; delete S.lastSig[coin];
     if (P.ws && P.wsOk) try { P.ws.send(JSON.stringify({ method: 'unsubscribe', subscription: { type: 'candle', coin, interval: TF } })); } catch {}
     delete P.candles[coin];
-    save(); log(`${coin} retiré des marchés suivis`);
+    S.removed = [coin, ...(S.removed || []).filter(x => x !== coin)].slice(0, 10);
+    save(); log(`${coin} retiré des marchés suivis : il reste dans les propositions`);
   }
-  // Propositions : marchés Hyperliquid pas encore suivis, testés positifs d'abord, puis par volume
+  // Rentabilité du test ramenée à un an (en R : 1 R = la perte d'un stop touché), pour comparer des historiques de longueurs différentes
+  function rpy(c) {
+    const t = S.bt[c];
+    if (!t || t.tooShort || !fin(t.totalR) || !(t.to > t.from)) return null;
+    return t.totalR / ((t.to - t.from) / (365 * 86400e3));
+  }
+  // Du plus rentable au moins rentable ; sans test : à la fin (ordre d'origine gardé)
+  const byProfit = (a, b) => { const x = rpy(a), y = rpy(b); return x == null && y == null ? 0 : x == null ? 1 : y == null ? -1 : y - x; };
+  const volOf = c => (P.meta && P.meta[c] && P.meta[c].vol) || 0;
+  // Propositions : les plus échangées chez Hyperliquid (et celles que tu as retirées), puis classées :
+  // test bon (de la plus rentable à la moins rentable), pas encore testées (par volume), test mauvais, trop récentes
   function suggestions() {
     if (!P.meta) return [];
     const have = new Set(S.cfg.coins), q = (P.ui.q || '').trim().toUpperCase();
-    const rank = c => (btOk(c) ? 0 : !S.bt[c] ? 1 : 2);
-    return Object.values(P.meta)
-      .filter(a => !have.has(a.name) && (q ? a.name.toUpperCase().includes(q) : a.vol > 0))
-      .sort((x, y) => (q ? 0 : rank(x.name) - rank(y.name)) || (y.vol || 0) - (x.vol || 0))
-      .slice(0, q ? 20 : P.ui.more ? 40 : 12);
+    const all = Object.values(P.meta).filter(a => !have.has(a.name));
+    const byVol = (x, y) => (y.vol || 0) - (x.vol || 0);
+    let L;
+    if (q) L = all.filter(a => a.name.toUpperCase().includes(q)).sort(byVol).slice(0, 20);
+    else {
+      const top = all.filter(a => a.vol > 0).sort(byVol).slice(0, P.ui.more ? 40 : 12);
+      const back = all.filter(a => (S.removed || []).includes(a.name) && !top.includes(a));
+      L = [...back, ...top];
+    }
+    const grp = c => (btOk(c) ? 0 : !S.bt[c] ? 1 : S.bt[c].tooShort ? 3 : 2);
+    return L.sort((x, y) => grp(x.name) - grp(y.name) || (grp(x.name) === 1 || grp(x.name) === 3 ? byVol(x, y) : byProfit(x.name, y.name)));
   }
   const stale = c => !S.bt[c] || now() - S.bt[c].at > RETEST;
 
@@ -5993,8 +6011,10 @@ function PerpsBot(h) {
     const yrs = (t.to - t.from) / (365 * 86400e3);
     return `Règle rejouée sur ${n2(yrs, 1)} an${yrs >= 2 ? 's' : ''} : ${t.n} trades, ${Rf(t.totalR)}, ${Math.round(t.win * 100)} % gagnants, PF ${n2(t.pf, 2)} (1re moitié ${Rf(t.h1.totalR)}, 2e ${Rf(t.h2.totalR)})${btOk(coin) ? '' : ' : pas assez bon pour de l\'argent réel'}`;
   }
-  const testChip = coin => { const t = S.bt[coin]; return !t || P.testing[coin] ? '' : t.tooShort ? '<span class="chip">trop récente</span>' : btOk(coin) ? '<span class="chip long">test ✓</span>' : '<span class="chip short">test ✗</span>'; };
-  function marketHtml(coin) {
+  const fRy = x => (x > 0 ? '+' : x < 0 ? '−' : '') + n2(Math.abs(x), 1) + ' R/an';
+  const rpyChip = coin => { const x = rpy(coin); return x == null || P.testing[coin] ? '' : `<span class="chip ${x > 0 ? 'long' : 'short'}" title="Résultat du test ramené à un an">${fRy(x)}</span>`; };
+  const testChip = coin => { const t = S.bt[coin]; return !t || P.testing[coin] ? '' : t.tooShort ? '<span class="chip">trop récente</span>' : (btOk(coin) ? '<span class="chip long">test ✓</span>' : '<span class="chip short">test ✗</span>') + rpyChip(coin); };
+  function marketHtml(coin, rk) {
     const a = P.meta && P.meta[coin], t = S.bt[coin], st = stateOf(coin), real = S.cfg.real.includes(coin), ok = btOk(coin);
     const px = a ? a.mid || a.mark : NaN, ch = a && a.prev ? px / a.prev - 1 : NaN;
     const lvl = real && ok ? 'ok' : t && !ok ? 'bad' : '';
@@ -6006,7 +6026,7 @@ function PerpsBot(h) {
     const sw = `<label class="pp-sw"><input type="checkbox" data-preal="${esc(coin)}"${real ? ' checked' : ''}>Argent réel autorisé</label>`;
     const wait = real && !ok ? '<span class="muted small">le bot attend un test positif</span>' : '';
     const del = S.real.pos[coin] ? '' : `<button class="btn sm pp-del" data-pdel="${esc(coin)}">Retirer</button>`;
-    return `<div class="pp-row" data-l="${lvl}"><div class="pp-h"><b>${esc(coin)}</b><span class="mono">${pxf(px)}</span><span class="${ch > 0 ? 'pos' : ch < 0 ? 'neg' : ''}">${pct(ch)}</span>${mode}<span class="muted small">${a ? `levier max ${a.maxLev}x · funding ${pct(a.funding, 4)}/h · volume 24 h ${big(a.vol)}` : ''}</span></div>
+    return `<div class="pp-row" data-l="${lvl}"><div class="pp-h">${rk ? `<span class="pp-rk">${rk}</span>` : ''}<b>${esc(coin)}</b><span class="mono">${pxf(px)}</span><span class="${ch > 0 ? 'pos' : ch < 0 ? 'neg' : ''}">${pct(ch)}</span>${rpyChip(coin)}${mode}<span class="muted small">${a ? `levier max ${a.maxLev}x · funding ${pct(a.funding, 4)}/h · volume 24 h ${big(a.vol)}` : ''}</span></div>
       <p class="pp-tf">${esc(btTxt(coin))}</p>${now1 ? `<p class="pp-tf pp-now">${esc(now1)}</p>` : ''}<div class="pp-ctl">${sw}${wait}${del}</div></div>`;
   }
   // Une crypto proposée (pas encore suivie)
@@ -6095,7 +6115,7 @@ function PerpsBot(h) {
         <div class="q-row"><span class="q-lab">Arrêt pour la journée après une perte de</span><div class="row-btns" style="margin:0">${[3, 5, 8].map(v => chip('dayLoss', v, v + ' %', c.dayLoss === v)).join('')}</div></div>
       </div>
       <p class="note">Avec ${usd(eq)} : un stop touché coûte environ ${usd(eq * c.risk / 100)}. Attends-toi à des séries de pertes (jusqu'à 8 à 10 de suite dans les tests) : c'est normal pour un suivi de tendance, les gains viennent de quelques gros mouvements. Le mode auto se coupe seul si le compte perd ${c.ddStop} % depuis son plus haut.</p>`;
-    const rows = universe().map(marketHtml).join('');
+    const rows = universe().slice().sort(byProfit).map((c, i) => marketHtml(c, rpy(c) == null ? 0 : i + 1)).join('');
     const live = Object.values(S.real.pos).map(r => {
       const p = pos.find(x => x.coin === r.coin), a = P.meta && P.meta[r.coin], mid = a ? a.mid || a.mark : NaN;
       const upnl = p ? +p.unrealizedPnl : NaN, lockR = r.dist ? ((r.stop - r.entry) * r.dir) / Math.abs(r.entry - r.stop0) : NaN;
@@ -6119,7 +6139,8 @@ function PerpsBot(h) {
     const openD = new Set([...box.querySelectorAll('details[open]')].map(d => d.dataset.k));
     box.innerHTML = `${acctHtml}${S.acct ? keyHtml + delHtml : ''}${autoHtml}
       ${live ? `<h3 class="w-h">Positions du bot</h3>${live}` : ''}${other ? `<div class="journal">${other}</div>` : ''}
-      <h3 class="w-h">Marchés suivis (bougies 4 h)</h3>
+      <h3 class="w-h">Marchés suivis, du plus rentable au moins rentable</h3>
+      <p class="note" style="margin:0 0 6px">Rentabilité = résultat de la règle rejouée sur ~2 ans (bougies 4 h), ramené à un an. 1 R = ce que coûte un stop touché, soit ${String(c.risk).replace('.', ',')} % du compte : +5 R/an ≈ +${n2(5 * c.risk, 1).replace(/,0$/, '')} % du compte par an. C'est le passé : rien n'est garanti.</p>
       <div class="pp-list">${rows || (S.cfg.coins.length ? '<p class="note">Chargement des marchés…</p>' : '<p class="note">Aucune crypto suivie : ajoute-en ci-dessous.</p>')}</div>
       ${addHtml()}
       ${done ? `<h3 class="w-h">Derniers trades</h3><div class="journal">${done}</div>` : ''}
