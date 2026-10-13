@@ -389,6 +389,11 @@ a.btn{text-decoration:none;color:inherit;display:inline-block}
 .l-name .pos{color:var(--long)} .l-name .neg{color:var(--short)}
 .l-row .note{margin:0;padding:0 10px 8px;font-size:.8rem}
 .l-row .chip{white-space:nowrap}
+.l-diag{margin:4px 0 0;padding-left:16px;display:grid;gap:2px;font-size:.76rem;list-style:disc}
+.l-diag li{color:var(--fg)}
+.l-diag li[data-l="bad"]{color:var(--short)}
+.l-diag li[data-l="warn"]{color:var(--warn)}
+.l-diag li[data-l="ok"]{color:var(--long)}
 
 </style>
 </head>
@@ -1711,7 +1716,7 @@ function MemeRadar(h) {
         t.jup = { organic: +x.organicScore, label: x.organicScoreLabel || null, sus: !!a.isSus, mintOff: a.mintAuthorityDisabled, freezeOff: a.freezeAuthorityDisabled,
           top: a.topHoldersPercentage, dev: a.devBalancePercentage, devMints: a.devMints, holders: x.holderCount, decimals: x.decimals, verified: !!x.isVerified,
           orgBuyers5: s5.numOrganicBuyers, traders5: s5.numTraders, launchpad: x.launchpad || null,
-          buys5: s5.numBuys, sells5: s5.numSells, buys1: s1.numBuys, sells1: s1.numSells, hch5: s5.holderChange, hch1: s1.holderChange, at: now() };
+          buys5: s5.numBuys, sells5: s5.numSells, buys1: s1.numBuys, sells1: s1.numSells, hch5: s5.holderChange, hch1: s1.holderChange, px: +x.usdPrice || null, mcap: +x.mcap || null, at: now() };
         noteHolders(t, +x.holderCount, 'jup');
         if (t.pair) analyze(t);
       }
@@ -4327,9 +4332,273 @@ function NewCoins(h, radar, bot) {
     setInterval(autoTick, 4000);
     setInterval(() => { if (curVisible()) render(); }, 1500);
   }
-  return { start, render, onNew, socialHtml, autoOn, requireX: () => !!A.cfg.requireX, xOk: t => { ensureSocial(t); return xVerified(t); }, _test: { xLink, mentions, evaluate, copyInfo, xVerified, ageOk, autoTick, N, A } };
+  return { start, render, onNew, socialHtml, autoOn, cfg: () => A.cfg, requireX: () => !!A.cfg.requireX, xOk: t => { ensureSocial(t); return xVerified(t); }, _test: { xLink, mentions, evaluate, copyInfo, xVerified, ageOk, autoTick, N, A } };
 }
 if (typeof module !== 'undefined') module.exports = { NewCoins, XCheck };
+
+/* ================= JOURNAL DES TRADES (analyse de chaque prise de position) =================
+   Pour chaque trade, simulé ou réel :
+   - la photo complète du coin au moment de décider (prix, âge, courbe, détenteurs, achats/ventes, flux temps réel,
+     sécurité, créateur, lien X, scores, raisons et risques),
+   - le trajet du prix après l'entrée (toutes les 5 s pendant 3 min, puis toutes les 30 s),
+   - le plus haut et le plus bas atteints pendant le trade, et quand,
+   - la sortie (raison, résultat net, écart avec la perte fixée),
+   - le prix pendant les 15 min qui suivent la sortie (la sortie était-elle trop tôt ou justifiée ?),
+   - un diagnostic automatique : ce qui n'allait pas dans l'entrée et dans la sortie.
+   Rangé dans IndexedDB (pas dans le stockage du bot, pour ne jamais le saturer). Exportable en fichier. */
+function TradeJournal(h, radar, live, bot, X) {
+  const fin = Number.isFinite, now = () => Date.now();
+  const MAX = 250, POST_MS = 15 * 60000;
+  let J = { v: 1, since: now(), entries: [], funnel: {} };
+  let loaded = false, dirty = false, lastSave = 0;
+  const r4 = x => (fin(x) ? Math.round(x * 1e4) / 1e4 : null);
+  const r1 = x => (fin(x) ? Math.round(x * 10) / 10 : null);
+
+  /* ---------- stockage IndexedDB ---------- */
+  function db() {
+    return new Promise((res, rej) => {
+      if (typeof indexedDB === 'undefined') { rej(new Error('IndexedDB indisponible')); return; }
+      const rq = indexedDB.open('vigie', 1);
+      rq.onupgradeneeded = () => { if (!rq.result.objectStoreNames.contains('kv')) rq.result.createObjectStore('kv'); };
+      rq.onsuccess = () => res(rq.result); rq.onerror = () => rej(rq.error);
+    });
+  }
+  async function load() {
+    try {
+      const d = await db();
+      const v = await new Promise((res, rej) => { const q = d.transaction('kv').objectStore('kv').get('journal'); q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error); });
+      if (v && Array.isArray(v.entries)) {
+        const cur = J.entries; // entrées créées pendant le chargement
+        J = Object.assign({ funnel: {} }, v);
+        for (const e of cur) if (!J.entries.some(x => x.id === e.id)) J.entries.unshift(e);
+      }
+    } catch {}
+    // l'entonnoir repart de zéro à chaque ouverture de l'appli (sinon les mêmes coins seraient comptés deux fois)
+    J.funnel = {}; J.funnelSince = now(); for (const k of Object.keys(seen)) delete seen[k];
+    loaded = true;
+  }
+  async function save(force) {
+    if (!loaded || (!force && (!dirty || now() - lastSave < 15000))) return;
+    dirty = false; lastSave = now();
+    if (J.entries.length > MAX) J.entries.length = MAX;
+    try {
+      const d = await db();
+      await new Promise((res, rej) => { const tx = d.transaction('kv', 'readwrite'); tx.objectStore('kv').put(JSON.parse(JSON.stringify(J)), 'journal'); tx.oncomplete = res; tx.onerror = () => rej(tx.error); });
+    } catch {}
+  }
+
+  /* ---------- photo du coin au moment de décider ---------- */
+  function snap(t, f) {
+    const nc = t.nc || {}, j = nc.j || {}, Jp = t.jup || {}, m = t.m || {}, s = t.sec || null, so = nc.social || {};
+    const fl = (radar.flow && radar.flow(t.mint)) || {};
+    const lf = live && live.fresh(t) ? live.flowOf(t, 60000) : null;
+    const lf3 = live && live.fresh(t) ? live.flowOf(t, 180000) : null;
+    const P = X.pxSol(t), su = h.solUsd && h.solUsd();
+    const D = t.live && t.live.dev;
+    return {
+      ageS: fin(t.created) ? Math.round((now() - t.created) / 1000) : null, launchpad: t.launchpad || null, sources: t.sources ? [...t.sources] : [],
+      migrated: !!t.migrated, migratedMinAgo: t.migratedAt ? Math.round((now() - t.migratedAt) / 60000) : null,
+      px: P ? P.px : null, pxSrc: P ? P.src : null, solUsd: su || null,
+      mcUsd: (t.pair && (t.pair.marketCap || t.pair.fdv)) || j.mcap || null, liqUsd: fin(m.liq) ? Math.round(m.liq) : null, dex: (t.pair && t.pair.dexId) || null,
+      onCurve: f ? f.onCurve : null, curve: f && fin(f.prog) ? r4(f.prog) : null, vSol: t.live && t.live.c ? r1(t.live.c.vSol / 1e9) : null,
+      tx5: f ? f.tx5 : null, b5: fl.b5 != null ? fl.b5 : null, s5: fl.s5 != null ? fl.s5 : null, b1: fl.b1 != null ? fl.b1 : null, s1: fl.s1 != null ? fl.s1 : null,
+      share5: f && fin(f.share) ? r4(f.share) : null, traders5: f ? f.traders : null, orgBuyers5: fin(Jp.orgBuyers5) ? Jp.orgBuyers5 : fin(j.org) ? j.org : null,
+      organic: fin(Jp.organic) ? Math.round(Jp.organic) : fin(j.organic) ? Math.round(j.organic) : null, organicLabel: Jp.label || j.label || null,
+      ch5: f && fin(f.ch5) ? r1(f.ch5) : null, ch1: fin(m.ch1) ? r1(m.ch1) : null, vol5: fin(m.v5) ? Math.round(m.v5) : null, volH: fin(m.vh) ? Math.round(m.vh) : null,
+      holders: fl.holders || null, holdersD: fl.dH != null ? fl.dH : null, holdersWinS: fl.win ? Math.round(fl.win / 1000) : null, holdersChg5Pct: fin(fl.dHp) ? r1(fl.dHp) : null,
+      fromHi: t.life && fin(t.life.fromHi) ? r4(t.life.fromHi) : null, lifeHiMinAgo: t.life && t.life.hiT ? Math.round((now() - t.life.hiT) / 60000) : null,
+      live: !!(live && live.fresh(t)), flow60: lf ? { buy: r4(lf.buy), sell: r4(lf.sell), big: r4(lf.big), n: lf.n } : null, flow180: lf3 ? { buy: r4(lf3.buy), sell: r4(lf3.sell), n: lf3.n } : null,
+      pxChg30s: live ? r4(live.pxChange(t, 30000)) : null, pxChg60s: live ? r4(live.pxChange(t, 60000)) : null,
+      devHoldPct: D && D.known && t.live.c && t.live.c.supply ? r4(D.tot / t.live.c.supply * 100) : null, devSoldBefore: D && D.events.length ? r4(D.events.reduce((a, e) => a + e.frac, 0)) : 0,
+      devBuyPct: fin(t.devBuyPct) ? r1(t.devBuyPct) : null, dev: f ? f.dev : null, devMints: f ? f.devMints : null, top: f ? f.top : null,
+      top10: s && fin(s.top10) ? r1(s.top10) : null, top1: s && fin(s.top1) ? r1(s.top1) : null, insiders: s ? s.insiders : null, insiderGraph: s ? s.insiderGraph : null, secSrc: s ? s.src : null,
+      rug: s && s.risks ? s.risks.slice(0, 5).map(x => x.name) : [],
+      x: so.x ? { kind: so.x.kind, ok: so.xRes ? so.xRes.ok : null, mention: so.mention != null ? !!so.mention : null, tweetAgeH: fin(so.tweetAgeH) ? r1(so.tweetAgeH) : null } : null,
+      tg: !!so.tg, web: !!so.web,
+      ncScore: fin(nc.score) ? nc.score : null, ncStatus: nc.status || null, score: fin(t.score) ? t.score : null, verdict: t.verdict || null,
+      why: (nc.why && nc.why.length ? nc.why : t.why || []).slice(0, 5), risks: (nc.risks && nc.risks.length ? nc.risks : t.risks || []).slice(0, 5)
+    };
+  }
+
+  /* ---------- cycle de vie d'une entrée ---------- */
+  const byId = id => J.entries.find(e => e.id === id);
+  function open(id, kind, strat, t, f, extra) {
+    if (byId(id)) return byId(id);
+    const e = Object.assign({ id, kind, strat, mint: t.mint, sym: t.symbol || '?', name: (t.name || '').slice(0, 40), t0: now(), snap: snap(t, f), fill: null, path: [], mfe: 0, mae: 0, mfeS: 0, maeS: 0, exits: [], exit: null, post: [], diag: [] }, extra || {});
+    J.entries.unshift(e);
+    dirty = true;
+    return e;
+  }
+  function fill(e, P, cost, v0) {
+    if (!e || !P) return;
+    e.fill = { t: now(), px: P.px, src: P.src, cost: r4(cost), v0: r4(v0), rt: fin(v0) && cost ? r4(v0 / cost - 1) : null };
+    e.path.push([0, 0, P.src === 'live' ? 'l' : P.src === 'jup' ? 'j' : 'd']);
+    dirty = true;
+  }
+  function sample(e, t) {
+    if (!e || !e.fill || e.exit) return;
+    const P = X.pxSol(t);
+    if (!P) { e.gaps = (e.gaps || 0) + 1; return; }
+    const dt = (now() - e.fill.t) / 1000, rel = P.px / e.fill.px - 1;
+    if (rel > e.mfe) { e.mfe = r4(rel); e.mfeS = Math.round(dt); }
+    if (rel < e.mae) { e.mae = r4(rel); e.maeS = Math.round(dt); }
+    const last = e.path[e.path.length - 1];
+    const every = dt < 180 ? 5 : 30;
+    if (!last || dt - last[0] >= every) { e.path.push([Math.round(dt), r4(rel), P.src === 'live' ? 'l' : P.src === 'jup' ? 'j' : 'd']); dirty = true; }
+  }
+  function exitDecision(e, d, pnl) {
+    if (!e) return;
+    const rel = e.path.length ? e.path[e.path.length - 1][1] : null;
+    e.exits.push({ s: e.fill ? Math.round((now() - e.fill.t) / 1000) : null, why: d.why, urgent: !!d.urgent, pct: d.pct, pnl: r4(pnl), rel });
+    dirty = true;
+  }
+  function close(e, why, pnl, net, extra) {
+    if (!e || e.exit) return;
+    const t = radar.get(e.mint), P = t ? X.pxSol(t) : null;
+    e.exit = Object.assign({ t: now(), why, pnl: r4(pnl), net: r4(net), holdS: e.fill ? Math.round((now() - e.fill.t) / 1000) : null, px: P ? P.px : null, rel: P && e.fill ? r4(P.px / e.fill.px - 1) : null }, extra || {});
+    if (t) radar.pin(e.mint, 'journal');
+    e.diag = diagnose(e);
+    dirty = true; save(true);
+  }
+  function postSample(e) {
+    const t = radar.get(e.mint);
+    if (!t || !e.exit || !e.exit.px) return;
+    const P = X.pxSol(t);
+    if (!P) return;
+    const dt = (now() - e.exit.t) / 1000, rel = P.px / e.exit.px - 1;
+    const last = e.post[e.post.length - 1];
+    if (!last || dt - last[0] >= 30) { e.post.push([Math.round(dt), r4(rel)]); dirty = true; }
+  }
+
+  /* ---------- diagnostic : ce qui n'allait pas ---------- */
+  function diagnose(e) {
+    const s = e.snap || {}, D = [], cfg = Object.assign({}, bot.cfg(), (X.exitsOf && X.exitsOf(e.strat)) || {});
+    const add = (c, txt, lvl = 'bad') => D.push({ c, lvl, txt });
+    const pct = x => (x > 0 ? '+' : x < 0 ? '−' : '') + Math.abs(Math.round(x * 100)) + ' %';
+    // entrée
+    if (fin(s.ageS) && s.ageS < 60) add('trop_tot', `Coin de ${s.ageS} s à l'entrée : en pleine phase des snipers`);
+    if (fin(s.ch5) && s.ch5 >= 50) add('apres_pompe', `Déjà ${pct(s.ch5 / 100)} sur 5 min avant d'entrer : achat après la hausse`);
+    if (fin(s.fromHi) && s.fromHi >= -0.05 && e.mfe < 0.05) add('au_sommet', 'Acheté au plus haut de sa vie, et le prix n\'est jamais remonté au-dessus');
+    if (fin(s.share5) && s.tx5 >= 20 && s.share5 < 0.5) add('vendeurs_avant', `Les ventes dominaient déjà à l'entrée (${Math.round(s.share5 * 100)} % d'achats sur 5 min)`);
+    if (s.flow60 && s.flow60.n >= 3 && s.flow60.sell > s.flow60.buy) add('flux_vendeur', `Flux de la dernière minute vendeur à l'entrée : ${s.flow60.sell} SOL vendus contre ${s.flow60.buy} achetés`);
+    if ((fin(s.holdersD) && s.holdersD < 0) || (fin(s.holdersChg5Pct) && s.holdersChg5Pct < 0)) add('detenteurs_baisse', 'Le nombre de détenteurs baissait à l\'entrée');
+    if (s.organicLabel === 'low' || (fin(s.organic) && s.organic < 20)) add('bots', `Activité surtout faite par des bots (score organique ${s.organic != null ? s.organic : 'faible'})`);
+    if (fin(s.top) && s.top >= 25) add('concentre', `Les plus gros portefeuilles détenaient ${Math.round(s.top)} %`, 'warn');
+    if (fin(s.devSoldBefore) && s.devSoldBefore >= 0.5) add('createur_parti', 'Le créateur avait déjà vendu l\'essentiel de sa part avant l\'entrée', 'warn');
+    if (s.x == null) add('sans_x', 'Aucun lien X déclaré', 'warn');
+    if (e.fill && fin(e.fill.rt) && e.fill.rt <= -0.05) add('frais', `Frais et impact à l'aller-retour : ${pct(e.fill.rt)} dès l'achat`);
+    // pendant le trade
+    if (e.fill && e.mfe < 0.03) add('jamais_monte', `Le prix n'est jamais monté au-dessus de l'entrée (au mieux ${pct(e.mfe)})`);
+    if (e.fill && e.mae <= -0.15 && e.maeS <= 60) add('chute_immediate', `Chute de ${pct(e.mae)} dans la première minute (au bout de ${e.maeS} s)`);
+    if (e.exit && /créateur vend/.test(e.exit.why)) add('createur_vend', 'Le créateur a vendu pendant le trade');
+    if (e.fill && e.exit && e.mfe >= Math.max(0.1, cfg.tp1 / 100 * 0.6) && e.exit.pnl < 0) add('gain_rendu', `Était monté à ${pct(e.mfe)} puis est reparti en perte : gain non sécurisé`);
+    // sortie
+    if (e.exit && fin(e.exit.pnl) && e.exit.pnl < -cfg.sl / 100 - 0.05) add('glissement', `Sortie à ${pct(e.exit.pnl)} alors que la perte fixée est −${cfg.sl} % : prix trop rapide${e.path.filter(p => p[2] === 'l').length < e.path.length / 2 ? ' ou relevés trop espacés (pas de temps réel)' : ' (chute plus rapide que le délai de vente)'}`);
+    if (e.fill && s.onCurve && !e.path.some(p => p[2] === 'l')) add('sans_temps_reel', 'Coin sur la courbe suivi sans flux temps réel : prix toutes les ~8 s', 'warn');
+    if (e.gaps >= 20) add('trous', `Prix manquant ${e.gaps} fois pendant le trade`, 'warn');
+    // après la sortie
+    if (e.post.length) {
+      const hi = Math.max(...e.post.map(p => p[1])), lo = Math.min(...e.post.map(p => p[1]));
+      if (e.exit.pnl < 0 && hi >= 0.3) add('sortie_trop_tot', `Après la sortie, le prix est remonté de ${pct(hi)} : sortie prématurée`, 'warn');
+      if (lo <= -0.3) add('sortie_justifiee', `Après la sortie, le prix a encore chuté de ${pct(lo)} : sortie justifiée`, 'ok');
+    }
+    if (e.exit && e.exit.pnl > 0) add('gagnant', `Trade gagnant : ${pct(e.exit.pnl)} net`, 'ok');
+    return D;
+  }
+
+  /* ---------- entonnoir : pourquoi les stratégies n'entrent pas ---------- */
+  // Pour chaque stratégie : combien de coins distincts s'arrêtent à chaque condition, avec des exemples de valeurs
+  const seen = {};
+  function funnel(strat, mint, stage, label, value) {
+    const S = seen[strat] || (seen[strat] = new Map());
+    const prev = S.get(mint);
+    if (prev != null && prev >= stage) return;
+    S.set(mint, stage);
+    if (S.size > 4000) S.delete(S.keys().next().value);
+    const F = J.funnel[strat] || (J.funnel[strat] = {});
+    const k = String(stage).padStart(2, '0') + ' ' + label;
+    const c = F[k] || (F[k] = { n: 0, ex: [] });
+    c.n++;
+    if (value !== undefined) { c.ex.push(value); if (c.ex.length > 25) c.ex.shift(); }
+    if (prev != null) { const pk = Object.keys(F).find(x => x.startsWith(String(prev).padStart(2, '0') + ' ')); if (pk && F[pk].n > 0) F[pk].n--; }
+    dirty = true;
+  }
+
+  /* ---------- trades réels du bot ---------- */
+  const realId = p => 'r' + p.t0 + p.mint.slice(0, 6);
+  function trackReal() {
+    const S = bot.S;
+    if (!S) return;
+    for (const p of Object.values(S.pos || {})) {
+      if (p.state === 'closed') continue;
+      const id = realId(p);
+      let e = byId(id);
+      const t = radar.get(p.mint);
+      if (!e && t) {
+        e = open(id, 'real', p.strat || 'manuel', t, X.feat(t), { auto: !!p.auto, why0: p.why });
+        e.t0 = p.t0;
+        const P = X.pxSol(t);
+        if (P) fill(e, P, p.cost, fin(p.vLive) ? p.vLive : p.v);
+        if (e.fill) e.fill.rt = fin(p.rt) ? r4(-p.rt) : e.fill.rt;
+      }
+      if (e && !e.fill && t) { const P = X.pxSol(t); if (P) fill(e, P, p.cost, p.v); }
+      if (e && t) sample(e, t);
+    }
+    for (const e of J.entries) {
+      if (e.kind !== 'real' || e.exit) continue;
+      const still = Object.values(S.pos || {}).some(p => realId(p) === e.id && p.state !== 'closed');
+      if (still) continue;
+      const hst = (S.hist || []).find(x => x.mint === e.mint && Math.abs((x.t0 || 0) - e.t0) < 5000);
+      if (hst) close(e, hst.why, hst.pnl, hst.net);
+      else if (now() - e.t0 > 6 * 3600e3) close(e, 'clôture non retrouvée', NaN, NaN);
+    }
+  }
+
+  function tick() {
+    try { trackReal(); } catch {}
+    for (const e of J.entries) {
+      if (!e.exit || e.postDone) continue;
+      if (now() - e.exit.t > POST_MS) { e.postDone = true; e.diag = diagnose(e); radar.unpin(e.mint, 'journal'); dirty = true; continue; }
+      postSample(e);
+    }
+    save();
+  }
+
+  /* ---------- export ---------- */
+  function build() {
+    return {
+      app: 'Vigie Scalp', format: 'journal-1', exportedAt: new Date().toISOString(), since: new Date(J.since).toISOString(),
+      settings: { bot: bot.cfg(), auto: h.autoCfg ? h.autoCfg() : null },
+      live: live ? live.status() : null, sources: radar.R && radar.R.src ? radar.R.src : null,
+      strategies: X.describe ? X.describe() : null,
+      stats: X.allStats ? X.allStats() : null,
+      funnelSince: J.funnelSince ? new Date(J.funnelSince).toISOString() : null, funnel: J.funnel,
+      radarSignals: (radar.R && radar.R.flags || []).slice(0, 150).map(f => ({ sym: f.sym, t: f.t, score: f.score, max: f.px0 ? r4(f.max / f.px0 - 1) : null, min: f.px0 ? r4(f.min / f.px0 - 1) : null, last: f.px0 ? r4(f.last / f.px0 - 1) : null })),
+      trades: J.entries
+    };
+  }
+  async function exportFile() {
+    const data = JSON.stringify(build());
+    const d = new Date(), z = n => String(n).padStart(2, '0');
+    const name = `vigie-journal-${d.getFullYear()}-${z(d.getMonth() + 1)}-${z(d.getDate())}-${z(d.getHours())}${z(d.getMinutes())}.json`;
+    const blob = new Blob([data], { type: 'application/json' });
+    try {
+      const file = new File([blob], name, { type: 'application/json' });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: 'Journal Vigie Scalp' }); return { ok: true, how: 'partage', name, size: data.length }; }
+    } catch (e) { if (e && e.name === 'AbortError') return { ok: false, how: 'annulé' }; }
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob); a.download = name;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 30000);
+    return { ok: true, how: 'téléchargement', name, size: data.length };
+  }
+  function reset() { J = { v: 1, since: now(), entries: [], funnel: {} }; for (const k of Object.keys(seen)) delete seen[k]; dirty = true; save(true); }
+
+  load();
+  const funnelOf = strat => J.funnel[strat] || {};
+  return { open, fill, sample, exitDecision, close, funnel, funnelOf, tick, exportFile, build, reset, byId, entries: () => J.entries, diagnose, _test: { J: () => J, snap } };
+}
+if (typeof module !== 'undefined') module.exports = TradeJournal;
 
 /* ================= LABORATOIRE DE STRATÉGIES (simulation) =================
    Chaque stratégie « achète » et « revend » pour de faux sur les vrais coins, en continu, avec :
@@ -4350,35 +4619,69 @@ function StrategyLab(h, radar, live, bot) {
 
   /* ---------- stratégies ---------- */
   // age : fenêtre d'âge du coin à l'entrée (secondes). exits : règles en plus de ta perte/gain fixés.
+  // Conditions nommées : le journal compte à quelle condition chaque coin s'arrête (entonnoir)
+  const C = (l, ok, v) => ({ l, ok, v });
+  const ELAN = [
+    C('sur la courbe pump.fun', (t, f) => f.onCurve, (t, f) => f.onCurve),
+    C('courbe remplie de 12 à 85 %', (t, f) => f.prog >= 0.12 && f.prog <= 0.85, (t, f) => f.prog),
+    C('au moins 35 traders sur 5 min', (t, f) => f.traders >= 35, (t, f) => f.traders),
+    C('au moins 30 transactions sur 5 min', (t, f) => f.tx5 >= 30, (t, f) => f.tx5),
+    C('au moins 56 % d\'achats sur 5 min', (t, f) => f.share >= 0.56, (t, f) => f.share),
+    C('prix de +3 à +120 % sur 5 min', (t, f) => f.ch5 >= 3 && f.ch5 <= 120, (t, f) => f.ch5),
+    C('au moins 60 détenteurs', (t, f) => f.holders >= 60, (t, f) => f.holders),
+    C('détenteurs en hausse', (t, f) => f.hUp, (t, f) => f.hUp),
+    C('flux de la dernière minute acheteur', (t, f) => f.liveOk, (t, f) => f.liveOk)
+  ];
   const STRATS = [
     { id: 'snipe', name: 'Sniper', age: [30, 120],
       desc: 'Coins de 30 s à 2 min jugés candidats (score, lien X, créateur). C\'est ce que faisait le mode auto.',
-      entry: (t, f) => t.nc && t.nc.status === 'cand',
+      conds: [C('candidat de l\'onglet Nouveaux', t => !!(t.nc && t.nc.status === 'cand'), t => (t.nc ? t.nc.status : null))],
       exits: { drop: 12, maxHold: 20, flowExit: false, stallMin: 0 } },
     { id: 'elan', name: 'Élan confirmé', age: [180, 1500],
       desc: 'Coins de 3 à 25 min encore sur la courbe, déjà passés la vague des snipers : beaucoup de traders, acheteurs majoritaires, détenteurs en hausse, prix qui monte sans s\'emballer. Sort si les vendeurs prennent le dessus ou si rien ne se passe en 6 min.',
-      entry: (t, f) => f.onCurve && f.prog >= 0.12 && f.prog <= 0.85 && f.traders >= 35 && f.tx5 >= 30 && f.share >= 0.56 && f.ch5 >= 3 && f.ch5 <= 120 && f.holders >= 60 && f.hUp && f.liveOk,
-      exits: { drop: 15, stallMin: 6, stallNeed: 6, flowExit: true, maxHold: 30 } },
+      conds: ELAN, exits: { drop: 15, stallMin: 6, stallNeed: 6, flowExit: true, maxHold: 30 } },
     { id: 'elanL', name: 'Élan confirmé, sorties larges', age: [180, 1500],
       desc: 'Mêmes entrées que « Élan confirmé », mais laisse plus de place aux secousses : chute rapide à −25 %, patience de 10 min.',
-      entry: (t, f) => f.onCurve && f.prog >= 0.12 && f.prog <= 0.85 && f.traders >= 35 && f.tx5 >= 30 && f.share >= 0.56 && f.ch5 >= 3 && f.ch5 <= 120 && f.holders >= 60 && f.hUp && f.liveOk,
-      exits: { drop: 25, stallMin: 10, stallNeed: 3, flowExit: false, maxHold: 45 } },
+      conds: ELAN, exits: { drop: 25, stallMin: 10, stallNeed: 3, flowExit: false, maxHold: 45 } },
     { id: 'migr', name: 'Après migration', age: [600, 6 * 3600],
       desc: 'Coins qui viennent de quitter la courbe pump.fun pour un vrai pool (moins de 45 min) : liquidité en place, acheteurs majoritaires, au moins 200 détenteurs.',
-      entry: (t, f) => t.migrated && fin(t.migratedAt) && now() - t.migratedAt <= 45 * 60000 && f.liq >= 15000 && f.tx5 >= 40 && f.share >= 0.55 && f.holders >= 200 && f.ch5 >= 0 && f.ch5 <= 80,
+      conds: [
+        C('migré il y a moins de 45 min', t => !!(t.migrated && fin(t.migratedAt) && now() - t.migratedAt <= 45 * 60000), t => (t.migratedAt ? Math.round((now() - t.migratedAt) / 60000) : null)),
+        C('liquidité d\'au moins 15 000 $', (t, f) => f.liq >= 15000, (t, f) => f.liq),
+        C('au moins 40 transactions sur 5 min', (t, f) => f.tx5 >= 40, (t, f) => f.tx5),
+        C('au moins 55 % d\'achats sur 5 min', (t, f) => f.share >= 0.55, (t, f) => f.share),
+        C('au moins 200 détenteurs', (t, f) => f.holders >= 200, (t, f) => f.holders),
+        C('prix de 0 à +80 % sur 5 min', (t, f) => f.ch5 >= 0 && f.ch5 <= 80, (t, f) => f.ch5)],
       exits: { drop: 15, stallMin: 15, stallNeed: 5, flowExit: true, maxHold: 60 } },
     { id: 'rebond', name: 'Rebond après une chute', age: [300, 3600],
       desc: 'Coins de 5 à 60 min retombés de 35 à 75 % sous leur plus haut, mais dont les détenteurs tiennent et où les acheteurs reviennent.',
-      entry: (t, f) => f.fromHi != null && f.fromHi <= -0.35 && f.fromHi >= -0.75 && f.holders >= 120 && !f.hDown && f.tx5 >= 30 && f.share >= 0.6 && f.ch5 > 0 && f.liveOk,
+      conds: [
+        C('plus haut de sa vie connu', (t, f) => f.fromHi != null, (t, f) => f.fromHi),
+        C('35 à 75 % sous son plus haut', (t, f) => f.fromHi <= -0.35 && f.fromHi >= -0.75, (t, f) => f.fromHi),
+        C('au moins 120 détenteurs', (t, f) => f.holders >= 120, (t, f) => f.holders),
+        C('détenteurs qui ne baissent pas', (t, f) => !f.hDown, (t, f) => f.hDown),
+        C('au moins 30 transactions sur 5 min', (t, f) => f.tx5 >= 30, (t, f) => f.tx5),
+        C('au moins 60 % d\'achats sur 5 min', (t, f) => f.share >= 0.6, (t, f) => f.share),
+        C('prix qui remonte sur 5 min', (t, f) => f.ch5 > 0, (t, f) => f.ch5),
+        C('flux de la dernière minute acheteur', (t, f) => f.liveOk, (t, f) => f.liveOk)],
       exits: { drop: 15, stallMin: 8, stallNeed: 5, flowExit: true, maxHold: 40 } },
     { id: 'radar', name: 'Radar « intéressant »', age: [60, 24 * 3600],
       desc: 'Les jetons que le radar marque « intéressants ». Sert aussi à mesurer le radar lui-même.',
-      entry: (t, f) => t.verdict === 'buy' && (!t.flaggedAt || now() - t.flaggedAt < 4 * 60000),
+      conds: [C('marqué « intéressant » par le radar il y a moins de 4 min', t => t.verdict === 'buy' && (!t.flaggedAt || now() - t.flaggedAt < 4 * 60000), t => t.verdict)],
       exits: { drop: 12, maxHold: 45 } }
+  ];
+  // Conditions communes à toutes les stratégies (sécurité)
+  const SAFE = [
+    C('coin ni rejeté ni mort', t => !(t.verdict === 'reject' || t.verdict === 'dead' || (t.nc && t.nc.status === 'reject')), t => (t.nc && t.nc.status === 'reject' ? 'rejeté (Nouveaux) : ' + ((t.nc.fails || [])[0] || '') : t.verdict === 'reject' ? 'rejeté (radar) : ' + ((t.fails || [])[0] || '') : t.verdict)),
+    C('mint et freeze révoqués', (t, f) => f.mintOff !== false && f.freezeOff !== false && !(t.sec && (t.sec.mintAuth || t.sec.freezeAuth || t.sec.rugged))),
+    C('créateur à 6 % maximum', (t, f) => !(fin(f.dev) && f.dev > 6), (t, f) => f.dev),
+    C('gros portefeuilles à 35 % maximum', (t, f) => !(fin(f.top) && f.top > 35), (t, f) => f.top),
+    C('créateur avec moins de 10 coins lancés', (t, f) => !(fin(f.devMints) && f.devMints >= 10), (t, f) => f.devMints)
   ];
   const byId = id => STRATS.find(s => s.id === id);
 
   let L = Object.assign({ open: [], closed: [], resetAt: now(), seq: 0 }, h.store.get('lab', {}));
+  let jr = null; // journal d'analyse, créé plus bas
   const save = () => h.store.set('lab', { open: L.open, closed: L.closed.slice(0, 400), resetAt: L.resetAt, seq: L.seq });
   let dirty = false;
 
@@ -4388,7 +4691,7 @@ function StrategyLab(h, radar, live, bot) {
     const fl = (radar.flow && radar.flow(t.mint)) || {};
     const age = fin(t.created) ? (now() - t.created) / 1000 : null;
     const lc = t.live && t.live.c && !t.live.complete ? t.live.c : null;
-    const onCurve = lc ? true : t.pair ? t.pair.dexId === 'pumpfun' : (!t.migrated && /pump$/.test(t.mint));
+    const onCurve = lc ? true : t.pair ? t.pair.dexId === 'pumpfun' : (!t.migrated && (/pump$/.test(t.mint) || t.launchpad === 'pump.fun'));
     const prog = lc ? Curve.progress(lc) : (fin(m.progress) ? m.progress : null);
     const tx5 = (fl.b5 || 0) + (fl.s5 || 0);
     const lf = live && live.fresh(t) ? live.flowOf(t, 60000) : null;
@@ -4402,23 +4705,20 @@ function StrategyLab(h, radar, live, bot) {
       top: pick(J.top, j.top), dev: pick(J.dev, j.dev), devMints: pick(J.devMints, j.devMints), mintOff: J.mintOff != null ? J.mintOff : j.mintOff, freezeOff: J.freezeOff != null ? J.freezeOff : j.freezeOff
     };
   }
-  function safe(t, f) {
-    if (t.sources && t.sources.has('démo')) return false;
-    if (t.verdict === 'reject' || t.verdict === 'dead' || (t.nc && t.nc.status === 'reject')) return false;
-    if (f.mintOff === false || f.freezeOff === false) return false;
-    if (t.sec && (t.sec.mintAuth || t.sec.freezeAuth || t.sec.rugged)) return false;
-    if (fin(f.dev) && f.dev > 6) return false;
-    if (fin(f.top) && f.top > 35) return false;
-    if (fin(f.devMints) && f.devMints >= 10) return false;
-    return true;
+  const xNeeded = () => !!(h.requireX && h.requireX());
+  // Toutes les conditions d'une stratégie, dans l'ordre : renvoie le rang de la première qui échoue (-1 si tout passe)
+  function check(s, t, f) {
+    const list = [...SAFE, C('âge dans la fenêtre de la stratégie', (tt, ff) => ff.age != null && ff.age >= s.age[0] && ff.age <= s.age[1], (tt, ff) => (ff.age != null ? Math.round(ff.age) : null)), ...s.conds];
+    if (xNeeded()) list.push(C('lien X vérifié (réglage du mode auto)', tt => !!(h.xOk && h.xOk(tt))));
+    for (let i = 0; i < list.length; i++) {
+      let ok = false;
+      try { ok = !!list[i].ok(t, f); } catch {}
+      if (!ok) return { i, c: list[i], n: list.length };
+    }
+    return { i: -1, n: list.length };
   }
-  const inAge = (s, f) => f.age != null && f.age >= s.age[0] && f.age <= s.age[1];
-  function passes(s, t, f) {
-    if (!safe(t, f) || !inAge(s, f)) return false;
-    try { if (!s.entry(t, f)) return false; } catch { return false; }
-    if (h.requireX && h.requireX() && !(h.xOk && h.xOk(t))) return false;
-    return true;
-  }
+  const safe = (t, f) => SAFE.every(c => { try { return c.ok(t, f); } catch { return false; } }) && !(t.sources && t.sources.has('démo'));
+  const passes = (s, t, f) => !(t.sources && t.sources.has('démo')) && check(s, t, f).i < 0;
   // Coins qui remplissent les conditions d'une stratégie à cet instant (pour le mode auto)
   function candidates(id) {
     const s = byId(id); if (!s) return [];
@@ -4436,6 +4736,10 @@ function StrategyLab(h, radar, live, bot) {
       const su = h.solUsd && h.solUsd();
       if (+p.priceUsd > 0 && su) return { px: +p.priceUsd / su, src: 'dex' };
     }
+    // repli : prix Jupiter (relevé toutes les 15 à 25 s)
+    const su = h.solUsd && h.solUsd(), J = t.jup, nj = t.nc && t.nc.j;
+    if (su && J && +J.px > 0 && now() - (J.at || 0) < 90000) return { px: +J.px / su, src: 'jup' };
+    if (su && nj && +nj.px > 0 && now() - (nj.at || 0) < 90000) return { px: +nj.px / su, src: 'jup' };
     return null;
   }
   function impact(t, sol) {
@@ -4467,18 +4771,20 @@ function StrategyLab(h, radar, live, bot) {
   const cfgOf = p => Object.assign({}, bot.cfg(), (byId(p.strat) || {}).exits || {});
 
   /* ---------- moteur ---------- */
-  function open(s, t) {
+  function open(s, t, f) {
     const size = bot.cfg().size;
     const p = { id: ++L.seq, strat: s.id, mint: t.mint, sym: t.symbol || t.mint.slice(0, 4), t0: now(), state: 'pending', fillAt: now() + 4000,
       cost: size + NETF, size, q: 0, realized: 0, hist: [], peakTot: null, tp1Done: false, pnl: 0 };
     L.open.push(p); dirty = true;
+    if (jr) p.jid = jr.open('s' + p.id + '-' + p.strat, 'sim', s.id, t, f || feat(t)).id;
     radar.pin(t.mint, 'lab', { symbol: t.symbol, name: t.name, created: t.created });
     if (live) live.watch(t.mint, 'lab');
   }
-  function finish(p, why) {
+  function finish(p, why, gap) {
     p.state = 'closed';
     const net = p.realized - p.cost;
-    L.closed.unshift({ id: p.id, strat: p.strat, mint: p.mint, sym: p.sym, t0: p.t0, t1: now(), cost: p.cost, net, pnl: net / p.cost, why, peak: p.peakTot ? p.peakTot / p.cost - 1 : null });
+    L.closed.unshift({ id: p.id, jid: p.jid || null, strat: p.strat, mint: p.mint, sym: p.sym, t0: p.t0, t1: now(), cost: p.cost, net, pnl: net / p.cost, why, gap: !!gap, peak: p.peakTot ? p.peakTot / p.cost - 1 : null });
+    if (jr && p.jid) jr.close(jr.byId(p.jid), why, gap ? NaN : net / p.cost, gap ? NaN : net, gap ? { gap: true } : null);
     if (L.closed.length > 400) L.closed.length = 400;
     L.open = L.open.filter(x => x !== p);
     if (!L.open.some(x => x.mint === p.mint)) { radar.unpin(p.mint, 'lab'); if (live) live.unwatch(p.mint, 'lab'); }
@@ -4486,21 +4792,22 @@ function StrategyLab(h, radar, live, bot) {
   }
   function step(p) {
     const t = radar.get(p.mint);
-    if (!t) { if (now() - p.t0 > 60000) { p.realized = p.state === 'pending' ? p.cost : 0; finish(p, p.state === 'pending' ? 'annulé : coin introuvable' : 'coin disparu des sources : compté comme perdu'); } return; }
+    if (!t) { if (now() - p.t0 > 60000) { p.realized = p.cost; finish(p, p.state === 'pending' ? 'annulé : coin introuvable' : 'données manquantes : coin disparu des sources', p.state !== 'pending'); } return; }
     if (p.state === 'pending') {
       if (now() < p.fillAt) return;
       const q = buyQty(t, p.size);
-      if (fin(q) && q > 0) { p.q = q; p.state = 'open'; p.tOpen = now(); p.t0 = now(); pushHist(p, value(t, q)); dirty = true; }
+      if (fin(q) && q > 0) { p.q = q; p.state = 'open'; p.tOpen = now(); p.t0 = now(); const v0 = value(t, q); pushHist(p, v0); if (jr && p.jid) jr.fill(jr.byId(p.jid), pxSol(t), p.cost, v0); dirty = true; }
       else if (now() - p.fillAt > 30000) { p.realized = p.cost; finish(p, 'annulé : pas de prix au moment de l\'achat'); }
       return;
     }
     const V = value(t, p.q);
-    if (!fin(V)) { p.noRoute = (p.noRoute || 0) + 1; if (now() - (p.lastV || p.t0) > 5 * 60000) { p.realized += 0; finish(p, 'plus de prix pendant 5 min : compté comme perdu'); } return; }
+    if (!fin(V)) { p.noRoute = (p.noRoute || 0) + 1; if (now() - (p.lastV || p.t0) > 5 * 60000) { p.realized = p.cost; finish(p, 'données manquantes : aucun prix pendant 5 min (pas compté dans les résultats)', true); } return; }
     p.noRoute = 0; p.lastV = now();
+    if (jr && p.jid) jr.sample(jr.byId(p.jid), t);
     if (p.state === 'open') {
       pushHist(p, V);
       const d = bot.decideCore(p, cfgOf(p), V);
-      if (d) { p.state = 'exiting'; p.exitAt = now() + (d.urgent ? 3000 : 5000); p.exitD = d; }
+      if (d) { p.state = 'exiting'; p.exitAt = now() + (d.urgent ? 3000 : 5000); p.exitD = d; if (jr && p.jid) jr.exitDecision(jr.byId(p.jid), d, p.pnl); }
     } else if (p.state === 'exiting' && now() >= p.exitAt) {
       const d = p.exitD, part = clamp(d.pct / 100, 0, 1);
       const got = value(t, p.q * part) * (d.urgent ? 0.98 : 1);
@@ -4517,19 +4824,22 @@ function StrategyLab(h, radar, live, bot) {
     const tn = now(), feats = new Map();
     const F = t => { let f = feats.get(t.mint); if (!f) { f = feat(t); feats.set(t.mint, f); } return f; };
     for (const s of STRATS) {
-      if (L.open.filter(p => p.strat === s.id).length >= MAX_OPEN) continue;
-      if (L.closed.filter(x => x.strat === s.id && tn - x.t0 < 3600e3).length + L.open.filter(p => p.strat === s.id).length >= MAX_PER_HOUR) continue;
-      let best = null, bs = -1;
+      const full = L.open.filter(p => p.strat === s.id).length >= MAX_OPEN
+        || L.closed.filter(x => x.strat === s.id && tn - x.t0 < 3600e3).length + L.open.filter(p => p.strat === s.id).length >= MAX_PER_HOUR;
+      let best = null, bs = -1, bf = null;
       const done = new Set([...L.open.filter(p => p.strat === s.id).map(p => p.mint), ...L.closed.filter(x => x.strat === s.id && tn - x.t0 < DONE_MS).map(x => x.mint)]);
       for (const t of radar.R.tokens.values()) {
-        // mêmes règles que l'argent réel : pas de reprise d'un coin déjà tradé (par cette stratégie ou par le bot) dans les 24 h
-        if (done.has(t.mint) || bot.traded(t.mint)) continue;
+        if (t.sources && t.sources.has('démo')) continue;
         const f = F(t);
-        if (!passes(s, t, f)) continue;
+        const r = check(s, t, f);
+        // entonnoir : à quelle condition ce coin s'arrête
+        if (jr) { if (r.i >= 0) { let v; try { v = r.c.v ? r.c.v(t, f) : undefined; } catch {} jr.funnel(s.id, t.mint, r.i, r.c.l, v === undefined ? undefined : (typeof v === 'number' ? Math.round(v * 1000) / 1000 : v)); } else jr.funnel(s.id, t.mint, r.n, 'toutes les conditions remplies'); }
+        // mêmes règles que l'argent réel : pas de reprise d'un coin déjà tradé (par cette stratégie ou par le bot) dans les 24 h
+        if (r.i >= 0 || full || done.has(t.mint) || bot.traded(t.mint)) continue;
         const sc = (t.nc && t.nc.score) || t.score || 0;
-        if (sc > bs) { bs = sc; best = t; }
+        if (sc > bs) { bs = sc; best = t; bf = f; }
       }
-      if (best) open(s, best);
+      if (best) open(s, best, bf);
     }
     // flux temps réel sur les coins proches des conditions, pour juger le flux d'achats avant d'entrer
     if (live) {
@@ -4548,7 +4858,7 @@ function StrategyLab(h, radar, live, bot) {
   /* ---------- résultats ---------- */
   function stats(id, since) {
     const lim = Math.max(now() - DAY, since || 0, L.resetAt || 0);
-    const T = L.closed.filter(x => x.strat === id && x.t1 >= lim && !/^annulé/.test(x.why));
+    const T = L.closed.filter(x => x.strat === id && x.t1 >= lim && !x.gap && !/^annulé|^données manquantes/.test(x.why));
     const n = T.length, P = T.map(x => x.pnl);
     const wins = P.filter(x => x > 0).length;
     const g = P.filter(x => x > 0).reduce((a, b) => a + b, 0), l = -P.filter(x => x < 0).reduce((a, b) => a + b, 0);
@@ -4599,29 +4909,48 @@ function StrategyLab(h, radar, live, bot) {
       const chip = inUse ? '<span class="chip long">EN SERVICE</span>' : q.ok ? '<span class="chip long">RENTABLE</span>' : q.hold ? '<span class="chip short">STOPPÉE</span>' : st.n < q.need ? `<span class="chip">ESSAI ${st.n}/${q.need}</span>` : '<span class="chip short">PERDANTE</span>';
       return `<details class="l-row" data-id="${s.id}"${inUse ? ' data-use="1"' : ''}${opened0.has(s.id) ? ' open' : ''}><summary><span class="l-name"><b>${esc(s.name)}</b><small>${st.n ? `${st.n} trades · ${Math.round(st.wins / st.n * 100)} % gagnants · moyenne <span class="${st.avg > 0 ? 'pos' : st.avg < 0 ? 'neg' : ''}">${fPct(st.avg)}</span> · ${fSol(st.sum)}` : 'aucun trade terminé'}${st.open ? ` · ${st.open} en cours` : ''}</small></span>${chip}</summary>
         <p class="note">${esc(s.desc)}</p>
+        ${blockHtml(s)}
         <p class="note">Âge d'entrée : ${ageTxt(s.age[0])} à ${ageTxt(s.age[1])}. Sorties : ta perte −${bot.cfg().sl} % et ton gain +${bot.cfg().tp1} %, chute rapide −${s.exits.drop} % en 1 min${s.exits.stallMin ? `, sortie si moins de +${s.exits.stallNeed} % après ${s.exits.stallMin} min` : ''}${s.exits.flowExit ? ', sortie si les vendeurs dominent' : ''}, sortie immédiate si le créateur vend, ${s.exits.maxHold} min maximum.</p></details>`;
     }).join('');
     const opened = L.open.filter(p => p.state !== 'pending').slice(0, 6).map(p => `<div class="j-row"><span class="chip">${esc((byId(p.strat) || {}).name || p.strat)}</span><div class="j-mid"><div>${esc(p.sym)} · en cours</div><div class="mono">depuis ${ago(now() - p.t0)}</div></div><span class="j-r ${p.pnl > 0 ? 'pos' : p.pnl < 0 ? 'neg' : ''}">${fPct(p.pnl)}</span></div>`).join('');
-    const last = L.closed.slice(0, 8).map(x => `<div class="j-row"><span class="chip ${x.net >= 0 ? 'long' : 'short'}">${fPct(x.pnl)}</span><div class="j-mid"><div>${esc(x.sym)} · ${esc((byId(x.strat) || {}).name || x.strat)}</div><div class="mono">${ago(now() - x.t1)} · ${esc(x.why)}</div></div><span class="j-r ${x.net >= 0 ? 'pos' : 'neg'}">${fSol(x.net)}</span></div>`).join('');
+    const diagOf = x => { const e = jr && x.jid ? jr.byId(x.jid) : null; return e && e.diag ? e.diag.filter(d => d.lvl !== 'ok' || d.c === 'sortie_justifiee').slice(0, 3) : []; };
+    const last = L.closed.slice(0, 8).map(x => { const dg = diagOf(x); return `<div class="j-row"><span class="chip ${x.gap ? '' : x.net >= 0 ? 'long' : 'short'}">${x.gap ? 'sans prix' : fPct(x.pnl)}</span><div class="j-mid"><div>${esc(x.sym)} · ${esc((byId(x.strat) || {}).name || x.strat)}</div><div class="mono">${ago(now() - x.t1)} · ${esc(x.why)}</div>${dg.length ? `<ul class="l-diag">${dg.map(d => `<li data-l="${d.lvl}">${esc(d.txt)}</li>`).join('')}</ul>` : ''}</div><span class="j-r ${x.net >= 0 ? 'pos' : 'neg'}">${x.gap ? '—' : fSol(x.net)}</span></div>`; }).join('');
     box.innerHTML = `<div class="advice" data-l="${pk.ok ? 'ok' : 'warn'}" style="margin:0 0 10px"><h3>${pk.ok ? `Argent réel : « ${esc(pk.s.name)} »` : 'Simulation seulement'}</h3><p>${pk.ok ? `${esc(pk.txt)}, ${Math.round(pk.st.wins / pk.st.n * 100)} % gagnants. Le mode auto n'entre qu'avec cette stratégie, tant qu'elle reste rentable.` : esc(pk.reason)}</p></div>
       <p class="note">Mise simulée : ${fSol(size)} par trade, comme le bot. Frais, glissement et 3 à 5 s de délai inclus. Résultats des 24 dernières heures.</p>
       <div class="l-list">${rows}</div>
       ${opened ? `<h3 class="w-h">Trades simulés en cours</h3><div class="journal">${opened}</div>` : ''}
       ${last ? `<h3 class="w-h">Derniers trades simulés</h3><div class="journal">${last}</div>` : ''}
-      <div class="row-btns"><button class="btn sm" id="labReset">Remettre le laboratoire à zéro</button></div>`;
+      <h3 class="w-h">Journal d'analyse</h3>
+      <p class="note">Chaque trade, simulé ou réel, est enregistré avec la photo complète du coin à l'entrée, le trajet du prix, la sortie, les 15 min qui suivent et ce qui n'allait pas. Plus l'entonnoir : à quelle condition chaque stratégie bloque. ${jr ? jr.entries().length + ' trades enregistrés.' : ''}</p>
+      <div class="row-btns"><button class="btn sm pri" id="labExport">Exporter le journal (fichier)</button><button class="btn sm" id="labReset">Remettre le laboratoire à zéro</button></div>`;
+    const eb = $('#labExport');
+    if (eb && jr) eb.onclick = async () => { eb.disabled = true; try { const r = await jr.exportFile(); if (r.ok && h.toast) h.toast(`Journal exporté (${r.how}) : ${r.name}, ${Math.round(r.size / 1024)} ko`, 'long'); } catch (e) { if (h.toast) h.toast('Export impossible : ' + e.message, 'short'); } eb.disabled = false; };
     const rb = $('#labReset');
     if (rb) rb.onclick = () => { for (const p of L.open.slice()) { radar.unpin(p.mint, 'lab'); if (live) live.unwatch(p.mint, 'lab'); } L.open = []; L.closed = []; L.resetAt = now(); save(); render(); };
   }
   const ageTxt = s => (s < 60 ? s + ' s' : s < 3600 ? Math.round(s / 60) + ' min' : Math.round(s / 3600) + ' h');
+  // Où chaque stratégie bloque : coins distincts arrêtés à chaque condition depuis l'ouverture de l'appli
+  function blockHtml(s) {
+    if (!jr) return '';
+    const F = jr.funnelOf(s.id), rows = Object.entries(F).filter(([, v]) => v.n > 0);
+    if (!rows.length) return '';
+    const tot = rows.reduce((a, [, v]) => a + v.n, 0);
+    const top = rows.filter(([k]) => !/toutes les conditions/.test(k)).sort((a, b) => b[1].n - a[1].n).slice(0, 4);
+    const okN = (rows.find(([k]) => /toutes les conditions/.test(k)) || [0, { n: 0 }])[1].n;
+    return `<p class="note"><b>Où ça bloque</b> (${tot} coins vus) : ${top.map(([k, v]) => `${esc(k.slice(3))} ${Math.round(v.n / tot * 100)} %`).join(' · ')}${okN ? ` · ${okN} coin${okN > 1 ? 's ont' : ' a'} tout rempli` : ''}</p>`;
+  }
 
-  function tick() { for (const p of L.open.slice()) { try { step(p); } catch {} } if (dirty) { dirty = false; save(); } }
+  function tick() { for (const p of L.open.slice()) { try { step(p); } catch {} } if (dirty) { dirty = false; save(); } if (jr) jr.tick(); }
   function start() {
     for (const p of L.open) { radar.pin(p.mint, 'lab', { symbol: p.sym }); if (live) live.watch(p.mint, 'lab'); }
     if (live) live.onUpdate(onLive);
     setInterval(tick, 1500);
     setInterval(() => { if (!radar.demo()) try { scan(); } catch {} }, 4000);
   }
-  return { start, render, pick, candidates, stats, STRATS, byId, L, _test: { feat, safe, passes, step, open, scan, value, buyQty, qualifies, finish } };
+  const describe = () => STRATS.map(s => ({ id: s.id, name: s.name, age: s.age, exits: s.exits, conditions: [...SAFE.map(c => c.l), 'âge dans la fenêtre', ...s.conds.map(c => c.l), ...(xNeeded() ? ['lien X vérifié'] : [])] }));
+  const allStats = () => Object.fromEntries(STRATS.map(s => [s.id, Object.assign({ name: s.name }, stats(s.id), { closed: L.closed.filter(x => x.strat === s.id).length })]));
+  if (typeof TradeJournal === 'function') jr = TradeJournal(h, radar, live, bot, { pxSol, feat, exitsOf: id => (byId(id) || {}).exits, describe, allStats });
+  return { start, render, pick, candidates, stats, STRATS, byId, L, journal: () => jr, _test: { feat, safe, passes, check, step, open, scan, value, buyQty, qualifies, finish, pxSol } };
 }
 if (typeof module !== 'undefined') module.exports = StrategyLab;
 
@@ -5625,7 +5954,7 @@ if (typeof module !== 'undefined') module.exports = StrategyLab;
     lab: () => lab
   }, radar, bot);
   lab = StrategyLab({
-    $, esc, store, fmt: trader.fmt,
+    $, esc, store, toast, fmt: trader.fmt, autoCfg: () => newCoins.cfg(),
     solUsd: () => trader.solUsd(),
     requireX: () => newCoins.requireX(),
     xOk: t => newCoins.xOk(t)
