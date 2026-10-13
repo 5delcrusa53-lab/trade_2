@@ -3,15 +3,13 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#0a0f15">
-<title>Vigie Scalp</title>
 <link rel="manifest" href="manifest.webmanifest">
-<link rel="icon" type="image/png" href="icon-192.png">
-<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="theme-color" content="#f2f4f8" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0a0f15" media="(prefers-color-scheme: dark)">
 <meta name="mobile-web-app-capable" content="yes">
+<title>Vigie Scalp</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Semi+Condensed:wght@600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
 <style>
-:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}img{max-width:100%}[hidden]{display:none!important}
 /* Disposition : pupitre de quart — instruments en tête (paire, prix, unité de temps), verdict en premier, puis graphique et raisons ; navigation au pouce en bas */
 :root{
   --bg:#f2f4f8; --panel:#ffffff; --panel2:#e9edf3; --line:#d7dde6; --fg:#111722; --muted:#5a6577;
@@ -410,8 +408,6 @@ a.btn{text-decoration:none;color:inherit;display:inline-block}
 #perpsBody .add input{text-transform:none}
 
 </style>
-</head>
-<body>
 <header class="top">
   <div class="top-row meme-only">
     <span class="pair" id="memeTitle" style="cursor:default;white-space:nowrap">Radar mèmes</span>
@@ -698,9 +694,12 @@ a.btn{text-decoration:none;color:inherit;display:inline-block}
     </div>
     <div class="card">
       <h2>Alertes</h2>
+      <p class="note" style="margin:0 0 4px">Par défaut, seuls les trades pris sonnent : achats et ventes du bot, positions futures ouvertes ou clôturées, danger sur ta position.</p>
+      <label class="toggle"><span>Opportunités aussi<small>Signaux, jetons repérés, propositions du bot. Ils restent visibles dans l'appli même coupé</small></span><input type="checkbox" id="aOpp"></label>
       <label class="toggle"><span>Son<small>Deux notes montantes pour LONG, descendantes pour SHORT</small></span><input type="checkbox" id="aSound"></label>
       <label class="toggle"><span>Vibration</span><input type="checkbox" id="aVib"></label>
-      <label class="toggle"><span>Notification système<small>Marche quand l'appli est ouverte dans Chrome</small></span><input type="checkbox" id="aNotif"></label>
+      <label class="toggle"><span>Notifications sur le téléphone<small>Quand Vigie est ouverte mais pas à l'écran. Écran éteint, Android la met en pause au bout de quelques minutes</small></span><input type="checkbox" id="aNotif"></label>
+      <div id="notifState"></div>
       <label class="toggle"><span>Garder l'écran allumé</span><input type="checkbox" id="aWake"></label>
       <div class="row-btns"><button class="btn sm" id="aTest">Tester l'alerte</button></div>
     </div>
@@ -5951,7 +5950,8 @@ function PerpsBot(h) {
     if (st && st.open) now1 = `Tendance ${st.open.dir > 0 ? 'haussière' : 'baissière'} en cours : simulation ${st.open.dir > 0 ? 'LONG' : 'SHORT'} depuis ${ago(now() - st.open.t)} (entrée ${pxf(st.open.entry)}, stop ${pxf(st.open.stop)})`;
     else if (st) now1 = `En attente d'une cassure : LONG si une bougie 4 h clôture au-dessus de ${pxf(st.hi)}, SHORT si sous ${pxf(st.lo)}`;
     const mode = real ? (ok ? '<span class="chip long">argent réel</span>' : '<span class="chip warn">réel demandé, test insuffisant</span>') : '<span class="chip">simulation</span>';
-    const btn = real ? `<button class="btn sm" data-preal="${esc(coin)}">Simulation seulement</button>` : ok ? `<button class="btn sm" data-preal="${esc(coin)}">Trader en réel</button>` : '';
+    // Toujours réversible : repasser en réel remet la crypto dans la liste ; le bot n'y entre que si son test est bon (eligible)
+    const btn = real ? `<button class="btn sm" data-preal="${esc(coin)}">Simulation seulement</button>` : `<button class="btn sm" data-preal="${esc(coin)}">${ok ? 'Trader en réel' : 'Repasser en réel'}</button>${ok ? '' : '<span class="muted small" style="align-self:center">le bot n\'y entrera qu\'une fois le test bon</span>'}`;
     return `<div class="pp-row" data-l="${lvl}"><div class="pp-h"><b>${esc(coin)}</b><span class="mono">${pxf(px)}</span><span class="${ch > 0 ? 'pos' : ch < 0 ? 'neg' : ''}">${pct(ch)}</span>${mode}<span class="muted small">${a ? `levier max ${a.maxLev}x · funding ${pct(a.funding, 4)}/h` : ''}</span></div>
       <p class="pp-tf">${esc(btTxt)}</p>${now1 ? `<p class="pp-tf pp-now">${esc(now1)}</p>` : ''}${btn ? `<div class="row-btns" style="margin:6px 0 0">${btn}</div>` : ''}</div>`;
   }
@@ -6065,7 +6065,7 @@ function PerpsBot(h) {
       const val = id => { const el = document.getElementById(id); return el ? el.value.trim() : ''; };
       try {
         if (b.dataset.pq) { const k = b.dataset.pq, v = +b.dataset.v; S.cfg[k] = v; save(); log(`Réglage : ${{ risk: 'risque par trade ' + String(v).replace('.', ',') + ' %', levCap: 'levier maximum ' + v + 'x', maxPos: v + ' position' + (v > 1 ? 's' : '') + ' en même temps', dayLoss: 'arrêt du jour après −' + v + ' %' }[k] || k + ' = ' + v}`); return; }
-        if (b.dataset.preal) { const coin = b.dataset.preal, on = !S.cfg.real.includes(coin); if (on && !btOk(coin)) throw new Error(coin + ' : le test de la règle n\'est pas assez bon'); S.cfg.real = on ? [...S.cfg.real, coin] : S.cfg.real.filter(x => x !== coin); save(); log(`${coin} : ${on ? 'argent réel autorisé' : 'simulation seulement'}`); return; }
+        if (b.dataset.preal) { const coin = b.dataset.preal, on = !S.cfg.real.includes(coin); S.cfg.real = on ? [...S.cfg.real, coin] : S.cfg.real.filter(x => x !== coin); save(); log(`${coin} : ${on ? (btOk(coin) ? 'argent réel autorisé' : 'argent réel demandé (le bot attend que le test soit bon)') : 'simulation seulement'}`); render(); return; }
         if (b.dataset.pclose) { b.disabled = true; await closeNow(b.dataset.pclose, 'fermeture demandée par toi'); return; }
         const a = b.dataset.pp;
         if (a === 'connect') { await connectPhantom(); await refreshAcct().catch(() => {}); await checkAgent(); }
@@ -6107,7 +6107,7 @@ if (typeof module !== 'undefined') module.exports = PerpsBot;
   };
   const DEFAULTS = {
     ex: 'binance', sym: 'BTCUSDT', tf: '5m', capital: 500, risk: 1, leverage: 10, fee: 0.05, feeMaker: 0.02, mmr: 0.5,
-    threshold: 50, sound: true, vibrate: true, wake: false,
+    threshold: 50, sound: true, vibrate: true, wake: false, oppAlerts: false, notif: false,
     watch: ['BTCUSDT', 'ETHUSDT', 'SOLUSDT', 'BNBUSDT', 'XRPUSDT', 'DOGEUSDT'], scanMode: 'list'
   };
   let set = Object.assign({}, DEFAULTS, store.get('set', {}));
@@ -6413,10 +6413,13 @@ if (typeof module !== 'undefined') module.exports = PerpsBot;
 
   const WHY = { stop: 'Stop touché', tp: 'Objectif atteint', be: 'Sorti à l\'entrée', temps: 'Sorti au temps (40 bougies)', 'inversé': 'Clôturé, signal inverse', perdu: 'Suivi interrompu', 'expiré': 'Ordre limite non rempli', 'annulé': 'Annulé' };
 
+  // Signal et son résultat = opportunité (le trade n'est pas pris) : silencieux sauf si « Opportunités aussi »
   function notifyResolve(e) {
+    if (!set.oppAlerts) return;
     if (e.tr.cancelled) { toast(`${coin(e.sym)} : ordre limite non rempli, annule-le.`); return; }
     const r = e.tr.R;
-    toast(`${coin(e.sym)} ${sideWord(e.tr.dir)} : ${WHY[e.tr.why] || e.tr.why} (${fR(r)})`, r > 0 ? 'long' : r < 0 ? 'short' : '');
+    const msg = `${coin(e.sym)} ${sideWord(e.tr.dir)} : ${WHY[e.tr.why] || e.tr.why} (${fR(r)})`;
+    toast(msg, r > 0 ? 'long' : r < 0 ? 'short' : ''); sysNotify(msg, r < 0 ? 'short' : 'long');
   }
 
   /* ---------- alertes ---------- */
@@ -6443,8 +6446,10 @@ if (typeof module !== 'undefined') module.exports = PerpsBot;
     });
   }
   function alertSignal(e) {
+    if (!set.oppAlerts) return;
     const t = e.tr;
-    toast(`${sideWord(t.dir)} ${coin(e.sym)} · ${t.entryType === 'limit' ? 'ordre limite à ' : 'entrée '}${fp(t.entry)} · stop ${fp(t.stop)}`, t.dir > 0 ? 'long' : 'short');
+    const msg = `${sideWord(t.dir)} ${coin(e.sym)} · ${t.entryType === 'limit' ? 'ordre limite à ' : 'entrée '}${fp(t.entry)} · stop ${fp(t.stop)}`;
+    toast(msg, t.dir > 0 ? 'long' : 'short'); sysNotify(msg, t.dir > 0 ? 'long' : 'short');
     beep(t.dir);
     if (set.vibrate && navigator.vibrate) try { navigator.vibrate(t.dir > 0 ? [120, 60, 120] : [300, 80, 120]); } catch {}
   }
@@ -6453,6 +6458,41 @@ if (typeof module !== 'undefined') module.exports = PerpsBot;
     const el = $('#toast');
     el.textContent = msg; el.className = 'toast ' + cls; el.hidden = false;
     clearTimeout(toastT); toastT = setTimeout(() => { el.hidden = true; }, 5000);
+  }
+
+  /* ---------- notifications du téléphone (écran éteint ou appli en arrière-plan) ----------
+     Android refuse « new Notification » : il faut passer par le service worker (sw.js, version installée). */
+  let swReg = null;
+  const notifPerm = () => { try { return 'Notification' in window ? Notification.permission : 'unsupported'; } catch { return 'unsupported'; } };
+  async function sysNotify(msg, cls, force) {
+    if (!set.notif || notifPerm() !== 'granted') return;
+    if (!force && document.visibilityState === 'visible') return; // appli à l'écran : le bandeau suffit
+    const opt = {
+      body: 'Vigie Scalp · ' + new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
+      tag: 'vigie-' + Date.now(), timestamp: Date.now(), silent: false,
+      vibrate: cls === 'short' ? [300, 80, 300] : [120, 60, 120], data: { url: location.href.split('#')[0] }
+    };
+    try {
+      let reg = swReg;
+      if (!reg && navigator.serviceWorker) reg = await navigator.serviceWorker.getRegistration().catch(() => null);
+      if (reg && reg.showNotification) { await reg.showNotification(msg, opt); return; }
+      new Notification(msg, opt); // ordinateur sans service worker
+    } catch (e) { log('Notification impossible : ' + (e && e.message ? e.message : e)); }
+  }
+
+  function renderNotif() {
+    const box = $('#notifState'); if (!box) return;
+    const nb = $('#aNotif'), p = notifPerm();
+    if (nb) nb.checked = !!set.notif && p === 'granted';
+    let t = '', l = 'bad';
+    if (inFrame) t = 'Ne marche pas dans l\'aperçu Claude : utilise l\'appli installée depuis ton adresse GitHub.';
+    else if (set.notif || p === 'denied') {
+      if (p === 'unsupported') t = 'Ce navigateur ne propose pas les notifications.';
+      else if (p === 'denied') t = 'Notifications bloquées : dans Chrome, ⋮, Paramètres, Paramètres des sites, Notifications, autorise cette adresse.';
+      else if (p === 'granted' && !swReg && /Android/i.test(navigator.userAgent || '')) t = 'Notifications autorisées, mais il manque sw.js à côté de index.html : Android en a besoin.';
+      else if (p === 'granted') { t = 'Notifications autorisées : trades pris, quand Vigie n\'est pas à l\'écran.'; l = 'ok'; }
+    }
+    box.innerHTML = t ? `<p class="note" style="margin:0 0 6px;color:var(${l === 'ok' ? '--long' : '--warn'})">${l === 'ok' ? '✓ ' : ''}${esc(t)}</p>` : '';
   }
 
   /* ---------- rendu : en-tête ---------- */
@@ -6854,7 +6894,7 @@ if (typeof module !== 'undefined') module.exports = PerpsBot;
     if (a.go) $('#posGo').onclick = () => { setPair(p.sym); showTab('signal'); };
     $('#posDot').hidden = a.l !== 'danger';
     $('#posBe').disabled = !fin(px) || (p.side > 0 ? px <= p.entry : px >= p.entry);
-    if (a.l === 'danger' && st.lastDanger !== a.title) { st.lastDanger = a.title; toast(a.title, 'short'); if (set.vibrate && navigator.vibrate) try { navigator.vibrate([400, 100, 400]); } catch {} }
+    if (a.l === 'danger' && st.lastDanger !== a.title) { st.lastDanger = a.title; toast(a.title, 'short'); sysNotify(a.title, 'short'); if (set.vibrate && navigator.vibrate) try { navigator.vibrate([400, 100, 400]); } catch {} }
     if (a.l !== 'danger') st.lastDanger = null;
   }
 
@@ -7005,7 +7045,8 @@ if (typeof module !== 'undefined') module.exports = PerpsBot;
     $$('#exSeg button').forEach(b => b.setAttribute('aria-pressed', b.dataset.ex === set.ex));
     $('#sCap').value = set.capital; $('#sRisk').value = set.risk; $('#sLev').value = set.leverage;
     $('#sFee').value = set.fee; $('#sFeeM').value = set.feeMaker; $('#sMmr').value = set.mmr;
-    $('#aSound').checked = set.sound; $('#aVib').checked = set.vibrate; $('#aWake').checked = set.wake;
+    $('#aSound').checked = set.sound; $('#aVib').checked = set.vibrate; $('#aWake').checked = set.wake; $('#aOpp').checked = !!set.oppAlerts;
+    renderNotif();
   }
   const numIn = (id, keyName, min, max) => $(id).addEventListener('change', e => {
     const v = parseFloat(String(e.target.value).replace(',', '.'));
@@ -7018,6 +7059,18 @@ if (typeof module !== 'undefined') module.exports = PerpsBot;
   $$('#exSeg button').forEach(b => b.onclick = () => { if (set.ex === b.dataset.ex && st.feed === EXCHANGES[set.ex]) return; set.ex = b.dataset.ex; saveSet(); renderSettings(); scanRes = []; start(); });
   $('#aSound').onchange = e => { set.sound = e.target.checked; saveSet(); unlockAudio(); };
   $('#aVib').onchange = e => { set.vibrate = e.target.checked; saveSet(); };
+  $('#aOpp').onchange = e => { set.oppAlerts = e.target.checked; saveSet(); };
+  $('#aNotif').onchange = async e => {
+    const on = e.target.checked;
+    if (on) {
+      let p = notifPerm();
+      if (p === 'unsupported') { set.notif = false; saveSet(); toast('Ce navigateur ne propose pas les notifications.'); renderNotif(); return; }
+      if (p === 'default') { try { p = await Notification.requestPermission(); } catch { p = notifPerm(); } }
+      if (p !== 'granted') { set.notif = false; saveSet(); toast('Notifications refusées : autorise-les dans les paramètres du site, dans Chrome.', 'short'); renderNotif(); return; }
+    }
+    set.notif = on; saveSet(); renderNotif();
+    if (on) sysNotify('Notifications activées : tu verras ici les trades pris', 'long', true);
+  };
   $('#aWake').onchange = e => { set.wake = e.target.checked; saveSet(); applyWake(); };
   $('#aTest').onclick = () => { unlockAudio(); setTimeout(() => { beep(1); if (set.vibrate && navigator.vibrate) try { navigator.vibrate([120, 60, 120]); } catch {} toast('Alerte de test : LONG', 'long'); }, 60); };
 
@@ -7063,13 +7116,13 @@ if (typeof module !== 'undefined') module.exports = PerpsBot;
     tradeHtml: t => (trader ? trader.detailHtml(t) : '') + (bot ? bot.detailHtml(t) : ''),
     onNew: t => { if (newCoins) newCoins.onNew(t); },
     socialHtml: t => (newCoins ? newCoins.socialHtml(t) : ''),
-    alert: msg => { toast('Mème · ' + msg, 'long'); beep(1); if (set.vibrate && navigator.vibrate) try { navigator.vibrate([80, 40, 80, 40, 160]); } catch {} }
+    alert: msg => { if (!set.oppAlerts) return; toast('Mème · ' + msg, 'long'); sysNotify('Mème · ' + msg, 'long'); beep(1); if (set.vibrate && navigator.vibrate) try { navigator.vibrate([80, 40, 80, 40, 160]); } catch {} }
   });
   radar.bindUI();
   trader = WalletTrader({
     $, $$, esc, store, log, toast, capital: () => set.capital, rpcPool,
     solUsd: () => { if (!st.feed || st.feed === Demo || !st.tickers) return null; const x = st.tickers.get('SOLUSDT'); return x ? x.last : null; },
-    alertSell: msg => { toast(msg, 'short'); beep(-1); if (set.vibrate && navigator.vibrate) try { navigator.vibrate([300, 80, 300]); } catch {} }
+    alertSell: msg => { toast(msg, 'short'); sysNotify(msg, 'short'); beep(-1); if (set.vibrate && navigator.vibrate) try { navigator.vibrate([300, 80, 300]); } catch {} }
   }, radar, jup);
   trader.start();
   // temps réel : websocket Solana sur les courbes pump.fun (ton RPC perso d'abord, puis des RPC publics)
@@ -7081,8 +7134,8 @@ if (typeof module !== 'undefined') module.exports = PerpsBot;
   bot = TradeBot({
     $, $$, esc, store, log, toast, inFrame,
     visible: () => curTab === 'meme' && document.visibilityState === 'visible',
-    notify: (msg, cls) => { toast(msg, cls); beep(cls === 'short' ? -1 : 1); buzz(cls === 'short' ? [300, 80, 300] : [120, 60, 120]); },
-    ask: msg => { toast(msg, 'long'); beep(1); buzz([80, 40, 80, 40, 160]); },
+    notify: (msg, cls) => { toast(msg, cls); sysNotify(msg, cls); beep(cls === 'short' ? -1 : 1); buzz(cls === 'short' ? [300, 80, 300] : [120, 60, 120]); },
+    ask: msg => { if (!set.oppAlerts) return; toast(msg, 'long'); sysNotify(msg, 'long'); beep(1); buzz([80, 40, 80, 40, 160]); },
     autoOn: () => !!(newCoins && newCoins.autoOn()),
     live: () => live
   }, radar, jup, trader);
@@ -7092,7 +7145,7 @@ if (typeof module !== 'undefined') module.exports = PerpsBot;
     jup: (p, prio) => jup.get(p, prio),
     solUsd: () => trader.solUsd(),
     visible: tab => curTab === tab && document.visibilityState === 'visible',
-    notify: (msg, cls) => { toast(msg, cls); beep(cls === 'short' ? -1 : 1); buzz(cls === 'short' ? [300, 80, 300] : [120, 60, 120]); },
+    notify: (msg, cls) => { toast(msg, cls); sysNotify(msg, cls); beep(cls === 'short' ? -1 : 1); buzz(cls === 'short' ? [300, 80, 300] : [120, 60, 120]); },
     showBot: () => { showTab('meme'); setTimeout(() => { const el = $('#botCard'); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 60); },
     lab: () => lab
   }, radar, bot);
@@ -7109,7 +7162,7 @@ if (typeof module !== 'undefined') module.exports = PerpsBot;
     $, esc, store, log, toast, inFrame,
     wsUrl: () => 'wss://api.hyperliquid.xyz/ws',
     visible: () => curTab === 'perps' && document.visibilityState === 'visible',
-    notify: (msg, cls) => { toast(msg, cls); beep(cls === 'short' ? -1 : 1); buzz(cls === 'short' ? [300, 80, 300] : [120, 60, 120]); }
+    notify: (msg, cls) => { toast(msg, cls); sysNotify(msg, cls); beep(cls === 'short' ? -1 : 1); buzz(cls === 'short' ? [300, 80, 300] : [120, 60, 120]); }
   });
   perps.bindUI();
   if (!inFrame) perps.start();
@@ -7299,8 +7352,9 @@ if (typeof module !== 'undefined') module.exports = PerpsBot;
   }
 
   if (hasManifest && 'serviceWorker' in navigator && /^https?:$/.test(location.protocol) && !inFrame) {
-    navigator.serviceWorker.register('sw.js').catch(e => log('Installation : service worker refusé (' + e.message + ')'));
+    navigator.serviceWorker.register('sw.js').then(r => { swReg = r; renderNotif(); }).catch(e => log('Installation : service worker refusé (' + e.message + ')'));
   }
+  if ('serviceWorker' in navigator && !inFrame) { try { navigator.serviceWorker.ready.then(r => { swReg = r; renderNotif(); }).catch(() => {}); } catch {} }
 
   // démarrage
   const hash = (location.hash || '').slice(1);
@@ -7311,5 +7365,5 @@ if (typeof module !== 'undefined') module.exports = PerpsBot;
 })();
 
 </script>
-</body>
+
 </html>
