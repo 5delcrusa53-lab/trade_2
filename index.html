@@ -239,6 +239,8 @@ main{padding:12px 16px calc(84px + env(safe-area-inset-bottom,0px));max-width:76
 .cp-tx{font-size:.72rem;color:var(--muted);align-self:center}
 #cpAddr,#cpLabel{text-transform:none;font-family:var(--f-mono)}
 .cp-rank{display:grid;gap:6px}
+#copyBody .pos,#srcBody .pos,#feeBody .pos,#banBody .pos{color:var(--long)}
+#copyBody .neg,#srcBody .neg,#feeBody .neg,#banBody .neg{color:var(--short)}
 .sw-r{display:grid;grid-template-columns:auto minmax(0,1fr);gap:10px;align-items:start;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--panel)}
 .sw-r .cp-rk{padding-top:2px}
 .sw-r .row-btns a{text-decoration:none}
@@ -4439,6 +4441,14 @@ function NewCoins(h, radar, bot) {
     if (r.ok) return `<span class="chip long">X ✓ ${h2}${s.mention ? ' · cite le coin' : ''}</span>`;
     return r.ok === false ? `<span class="chip short">X ✕ ${h2}</span>` : `<span class="chip">X ${h2} ?</span>`;
   }
+  // Détenteurs (toutes sources) et tendance : pour juger d'un coup d'œil si le coin vit encore
+  function holdKpi(fl) {
+    if (!fl || !fin(fl.holders)) return '<span>Détenteurs <b>—</b></span>';
+    const d = fin(fl.dH) && fl.dH !== 0 ? fl.dH : null, dp = d == null && fin(fl.dHp) && Math.abs(fl.dHp) >= 0.5 ? fl.dHp : null;
+    const col = v => `style="color:var(${v > 0 ? '--long' : '--short'});font-weight:600"`;
+    const tr = d != null ? ` <small ${col(d)}>${d > 0 ? '+' : '−'}${Math.abs(d)}</small>` : dp != null ? ` <small ${col(dp)}>${dp > 0 ? '+' : '−'}${Math.abs(Math.round(dp))} %</small>` : '';
+    return `<span>Détenteurs <b>${fl.holders.toLocaleString('fr-FR')}</b>${tr}</span>`;
+  }
   function card(t) {
     const c = t.nc, j = c.j, age = now() - c.t0;
     const fl = radar.flow ? radar.flow(t.mint) : null, bp = bot.S && bot.S.pos && bot.S.pos[t.mint], mine = c.status === 'bought' || !!(bp && bp.state !== 'closed');
@@ -4451,8 +4461,8 @@ function NewCoins(h, radar, bot) {
       <div class="m-head"><span class="m-ava">${esc((t.symbol || '?').slice(0, 2).toUpperCase())}${img ? `<img src="${esc(img)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">` : ''}</span>
         <span class="m-name"><b>${esc(t.symbol || '?')}</b><small>sorti il y a ${ageTxt(age)} · ${esc((t.name || '').slice(0, 24))}</small></span>${st}</div>
       <div class="m-kpis"><span>Cap <b>${usd(mc)}</b></span>${mine
-        ? `<span>Traders <b>${j && fin(j.traders) ? j.traders : '—'}</b></span><span>Prix 5 min <b class="${j && j.ch5 > 0 ? 'pos' : j && j.ch5 < 0 ? 'neg' : ''}">${j && fin(j.ch5) ? (j.ch5 > 0 ? '+' : '') + n1(j.ch5) + ' %' : '—'}</b></span><span>Créateur <b>${fin(t.devBuyPct) ? n1(t.devBuyPct) + ' %' : '—'}</b></span>`
-        : `<span>Détenteurs <b>${fl && fin(fl.holders) ? fl.holders.toLocaleString('fr-FR') : '—'}</b></span><span>Traders <b>${j && fin(j.traders) ? j.traders : '—'}</b></span><span>Achats/ventes <b>${fl && fin(fl.b5) ? fl.b5 + '/' + (fl.s5 || 0) : j && fin(j.buys) ? j.buys + '/' + (j.sells || 0) : '—'}</b></span>`}</div>
+        ? `${holdKpi(fl)}<span>Prix 5 min <b class="${j && j.ch5 > 0 ? 'pos' : j && j.ch5 < 0 ? 'neg' : ''}">${j && fin(j.ch5) ? (j.ch5 > 0 ? '+' : '') + n1(j.ch5) + ' %' : '—'}</b></span><span>Créateur <b>${fin(t.devBuyPct) ? n1(t.devBuyPct) + ' %' : '—'}</b></span>`
+        : `${holdKpi(fl)}<span>Traders <b>${j && fin(j.traders) ? j.traders : '—'}</b></span><span>Achats/ventes <b>${fl && fin(fl.b5) ? fl.b5 + '/' + (fl.s5 || 0) : j && fin(j.buys) ? j.buys + '/' + (j.sells || 0) : '—'}</b></span>`}</div>
       <div class="n-soc">${xChip(t)}${c.social.tg ? '<span class="chip">Telegram</span>' : ''}${c.social.web ? '<span class="chip">site</span>' : ''}${!mine && fin(t.devBuyPct) ? `<span class="chip">créateur ${n1(t.devBuyPct)} %</span>` : ''}</div>
       ${mine && radar.flowHtml ? radar.flowHtml(t.mint) : ''}
       <div class="m-score"><span class="bar"><i style="width:${c.score}%"></i></span><span>score ${c.score}</span></div>
@@ -5198,10 +5208,16 @@ function StrategyLab(h, radar, live, bot) {
     askClose = null; dirty = true; save();
     return true;
   }
-  const simCloseHtml = p => (askClose === p.id
-    ? `<div class="confirm" style="margin:4px 0 0"><span>Clôturer ce trade simulé ?</span><button class="btn sm danger" data-lclose-yes="${p.id}">Clôturer</button><button class="btn sm" data-lclose-no="1">Annuler</button></div>`
-    : p.state === 'exiting' ? '<div class="mono">sortie en cours…</div>'
-    : `<div class="row-btns" style="margin:4px 0 0"><button class="btn sm" data-lclose="${p.id}">Clôturer à la main</button></div>`);
+  // Onglet Nouveaux : pas de confirmation, la clôture part au premier appui (demandé : la confirmation fait perdre du temps)
+  const simCloseHtml = p => (p.state === 'exiting' ? '<div class="mono">sortie en cours…</div>'
+    : `<div class="row-btns" style="margin:4px 0 0"><button class="btn sm danger" data-lclose="${p.id}">Clôturer</button></div>`);
+  // Détenteurs d'un coin et leur tendance (toutes sources : Jupiter, RugCheck, relevés du radar)
+  const holdTxt = mint => {
+    const fl = radar.flow ? radar.flow(mint) : null;
+    if (!fl || !fin(fl.holders)) return 'détenteurs : inconnu';
+    const tr = fin(fl.dH) && fl.dH !== 0 ? ` (${fl.dH > 0 ? '+' : '−'}${Math.abs(fl.dH)} en ${Math.max(1, Math.round(fl.win / 60000))} min)` : fin(fl.dHp) && Math.abs(fl.dHp) >= 0.5 ? ` (${fl.dHp > 0 ? '+' : '−'}${Math.abs(Math.round(fl.dHp))} % sur 5 min)` : '';
+    return `${fl.holders.toLocaleString('fr-FR')} détenteurs${tr}`;
+  };
   function onLive(mint) { for (const p of L.open) if (p.mint === mint && p.state !== 'pending') { if (now() - (p.lastLive || 0) >= 700) { p.lastLive = now(); step(p); } } }
 
   function scan() {
@@ -5333,7 +5349,7 @@ function StrategyLab(h, radar, live, bot) {
         <p class="note">${s.age ? `Âge d'entrée : ${ageTxt(s.age[0])} à ${ageTxt(s.age[1])}. ` : ''}${migrOnly() && !s.manual && !MIGR_IDS.includes(s.id) ? '<b>Option « uniquement après migration » : simulée, mais jamais en argent réel.</b> ' : ''}${s.manual ? '<b>Jamais choisie par le mode auto : l\'argent réel se règle dans l\'onglet Copie.</b> ' : ''}Avec tes réglages : ${exitTxt(cfgFor(s.id, 'toi'))}${s.exits.stallMin ? `, sortie si moins de +${s.exits.stallNeed} % après ${s.exits.stallMin} min` : ''}${s.exits.flowExit ? ', sortie si les vendeurs dominent' : ''}, sortie immédiate si le créateur vend, ${s.exits.maxHold} min maximum.</p>
         <p class="note"><b>Mêmes entrées, autres sorties :</b> ${profStats(s.id).filter(x => !x.mine || autoMode()).map(x => `${esc(x.pr.name)} ${x.st.n ? `${fPct(x.st.avg)} sur ${x.st.n} trades` : 'pas encore de trade'}`).join(' · ')}</p></details>`;
     }).join('');
-    const opened = L.open.filter(p => p.state !== 'pending' && (p.prof || 'toi') === 'toi').slice(0, 6).map(p => `<div class="j-row"><span class="chip">${esc((byId(p.strat) || {}).name || p.strat)}</span><div class="j-mid"><div>${esc(p.sym)} · en cours</div><div class="mono">depuis ${ago(now() - p.t0)}</div>${simCloseHtml(p)}</div><span class="j-r ${p.pnl > 0 ? 'pos' : p.pnl < 0 ? 'neg' : ''}">${fPct(p.pnl)}</span></div>`).join('');
+    const opened = L.open.filter(p => p.state !== 'pending' && (p.prof || 'toi') === 'toi').slice(0, 6).map(p => `<div class="j-row"><span class="chip">${esc((byId(p.strat) || {}).name || p.strat)}</span><div class="j-mid"><div>${esc(p.sym)} · en cours</div><div class="mono">depuis ${ago(now() - p.t0)} · ${esc(holdTxt(p.mint))}</div>${simCloseHtml(p)}</div><span class="j-r ${p.pnl > 0 ? 'pos' : p.pnl < 0 ? 'neg' : ''}">${fPct(p.pnl)}</span></div>`).join('');
     const diagOf = x => { const e = jr && x.jid ? jr.byId(x.jid) : null; return e && e.diag ? e.diag.filter(d => d.lvl !== 'ok' || d.c === 'sortie_justifiee').slice(0, 3) : []; };
     const last = L.closed.filter(x => (x.prof || 'toi') === 'toi').slice(0, 8).map(x => { const dg = diagOf(x); return `<div class="j-row"><span class="chip ${x.gap ? '' : x.net >= 0 ? 'long' : 'short'}">${x.gap ? 'sans prix' : fPct(x.pnl)}</span><div class="j-mid"><div>${esc(x.sym)} · ${esc((byId(x.strat) || {}).name || x.strat)}</div><div class="mono">${ago(now() - x.t1)} · ${esc(x.why)}</div>${dg.length ? `<ul class="l-diag">${dg.map(d => `<li data-l="${d.lvl}">${esc(d.txt)}</li>`).join('')}</ul>` : ''}</div><span class="j-r ${x.net >= 0 ? 'pos' : 'neg'}">${x.gap ? '—' : fSol(x.net)}</span></div>`; }).join('');
     const sg = suggestion();
@@ -5349,7 +5365,7 @@ function StrategyLab(h, radar, live, bot) {
       <p class="note">Chaque trade, simulé ou réel, est enregistré avec la photo complète du coin à l'entrée, le trajet du prix, la sortie, les 15 min qui suivent et ce qui n'allait pas. Plus l'entonnoir : à quelle condition chaque stratégie bloque. ${jr ? jr.entries().length + ' trades enregistrés.' : ''}</p>
       <div class="row-btns"><button class="btn sm pri" id="labExport">Exporter le journal (fichier)</button><button class="btn sm" id="labReset">Remettre le laboratoire à zéro</button></div>`;
     for (const b of box.querySelectorAll('[data-lprof]')) b.onclick = () => applyProfile(b.dataset.lprof);
-    for (const b of box.querySelectorAll('[data-lclose]')) b.onclick = () => { askClose = +b.dataset.lclose; render(); };
+    for (const b of box.querySelectorAll('[data-lclose]')) b.onclick = () => { b.disabled = true; manualClose(+b.dataset.lclose); render(); };
     for (const b of box.querySelectorAll('[data-lclose-no]')) b.onclick = () => { askClose = null; render(); };
     for (const b of box.querySelectorAll('[data-lclose-yes]')) b.onclick = () => { manualClose(+b.dataset.lcloseYes); render(); };
     for (const b of box.querySelectorAll('[data-lnp]')) b.onclick = () => { bot.applyExits({ npMin: +b.dataset.lnp }, `Sortie sans hausse passée à ${b.dataset.lnp} min depuis le laboratoire`); render(); };
