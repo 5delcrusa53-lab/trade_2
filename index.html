@@ -224,8 +224,8 @@ main{padding:12px 16px calc(84px + env(safe-area-inset-bottom,0px));max-width:76
 .confirm{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px;font-size:.86rem}
 
 /* barre d'onglets */
-.tabbar{position:fixed;left:0;right:0;bottom:0;z-index:30;background:var(--panel);border-top:1px solid var(--line);display:grid;grid-template-columns:repeat(10,1fr);padding:6px 2px calc(6px + env(safe-area-inset-bottom,0px))}
-.tabbar button{border:0;background:none;display:grid;justify-items:center;gap:2px;padding:4px 0;font-size:.52rem;min-width:0;overflow:hidden;color:var(--muted);letter-spacing:.02em;position:relative}
+.tabbar{position:fixed;left:0;right:0;bottom:0;z-index:30;background:var(--panel);border-top:1px solid var(--line);display:grid;grid-template-columns:repeat(9,1fr);padding:6px 2px calc(6px + env(safe-area-inset-bottom,0px))}
+.tabbar button{border:0;background:none;display:grid;justify-items:center;gap:2px;padding:4px 0;font-size:.56rem;min-width:0;overflow:hidden;color:var(--muted);letter-spacing:.02em;position:relative}
 .tabbar svg{width:22px;height:22px}
 /* ---------- copie de wallets ---------- */
 .cp-list{display:grid;gap:6px;margin-bottom:4px}
@@ -239,11 +239,8 @@ main{padding:12px 16px calc(84px + env(safe-area-inset-bottom,0px));max-width:76
 .cp-tx{font-size:.72rem;color:var(--muted);align-self:center}
 #cpAddr,#cpLabel{text-transform:none;font-family:var(--f-mono)}
 .cp-rank{display:grid;gap:6px}
-#copyBody .pos,#srcBody .pos,#feeBody .pos,#banBody .pos{color:var(--long)}
-#copyBody .neg,#srcBody .neg,#feeBody .neg,#banBody .neg{color:var(--short)}
-.sw-r{display:grid;grid-template-columns:auto minmax(0,1fr);gap:10px;align-items:start;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--panel)}
-.sw-r .cp-rk{padding-top:2px}
-.sw-r .row-btns a{text-decoration:none}
+#copyBody .pos,#feeBody .pos,#banBody .pos{color:var(--long)}
+#copyBody .neg,#feeBody .neg,#banBody .neg{color:var(--short)}
 .cp-r{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:10px;align-items:center;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--panel)}
 .cp-rk{font-family:var(--f-mono);font-weight:600;color:var(--muted);min-width:1.2em;text-align:center}
 .cp-rm{display:grid;gap:2px;min-width:0}
@@ -700,23 +697,6 @@ a.btn{text-decoration:none;color:inherit;display:inline-block}
     </div>
   </section>
 
-  <!-- ===== WALLETS SOURCES ===== -->
-  <section class="tab" id="tab-src" hidden>
-    <div class="card" id="srcCard">
-      <h2>Wallets sources <span class="sp" id="srcState"></span></h2>
-      <div id="srcBody"><p class="note" style="margin:0">Démarrage…</p></div>
-    </div>
-    <div class="card">
-      <h2>Comment ça marche</h2>
-      <ol class="i-steps">
-        <li><b>Premiers acheteurs.</b> Pour chaque coin qui démarre bien, Vigie remonte jusqu'à son lancement sur la blockchain et note les 15 premières adresses qui ont acheté, dans l'ordre, créateur à part.</li>
-        <li><b>Suiveurs.</b> Pour chacune : combien d'autres wallets ont acheté juste derrière elle, et combien de transactions ont suivi dans les 2 minutes. C'est la vague qu'elle a déclenchée, ou qu'elle a précédée.</li>
-        <li><b>Wallets sources.</b> Une adresse qui revient parmi les 10 premiers sur au moins 2 coins différents. Un seul coin peut être de la chance ; plus elle revient, plus c'est un vrai lanceur de vague.</li>
-      </ol>
-      <p class="note">À savoir : seuls les coins vus pendant que l'appli tournait sont analysés, il n'y a pas d'historique avant. Les premiers acheteurs sont lus après coup sur le réseau : tu les découvres avec du retard, et en copie tu entreras quelques secondes après eux. Certains « premiers acheteurs » sont les propres wallets du créateur, qui revendent sur la vague : regarde ce qu'en dit la simulation avant de copier pour de vrai. Les premiers acheteurs sont aussi ajoutés à l'export du journal.</p>
-    </div>
-  </section>
-
   <!-- ===== STATS ===== -->
   <section class="tab" id="tab-stats" hidden>
     <div class="card" id="feeCard">
@@ -800,7 +780,6 @@ a.btn{text-decoration:none;color:inherit;display:inline-block}
   <button role="tab" data-tab="new" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 2.5l1.9 5.6 5.6 1.9-5.6 1.9L12 17.5l-1.9-5.6L4.5 10l5.6-1.9z"/><path d="M18.5 15.5l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8z"/></svg>Nouveaux<span class="cnt" id="newDot" hidden></span></button>
   <button role="tab" data-tab="perps" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 17l5-5 4 3 8-8"/><path d="M3 21h18"/><path d="M16 7h4v4"/></svg>Futures<span class="dot" id="perpsDot" hidden></span></button>
   <button role="tab" data-tab="copy" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>Copie<span class="dot" id="copyDot" hidden></span></button>
-  <button role="tab" data-tab="src" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="6" cy="12" r="2.5"/><path d="M11 8.5a5 5 0 0 1 0 7"/><path d="M14.5 5.5a9 9 0 0 1 0 13"/><path d="M18 3a12.5 12.5 0 0 1 0 18"/></svg>Sources</button>
   <button role="tab" data-tab="stats" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 20V10M12 20V4M19 20v-7"/></svg>Stats</button>
   <button role="tab" data-tab="set" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg>Réglages</button>
 </nav>
@@ -4853,8 +4832,7 @@ function TradeJournal(h, radar, live, bot, X) {
       radarSignals: (radar.R && radar.R.flags || []).slice(0, 150).map(f => ({ sym: f.sym, t: f.t, score: f.score, max: f.px0 ? r4(f.max / f.px0 - 1) : null, min: f.px0 ? r4(f.min / f.px0 - 1) : null, last: f.px0 ? r4(f.last / f.px0 - 1) : null })),
       pauses: J.pauses,
       trades: J.entries,
-      observations: J.obs,
-      firstBuyers: h.firstBuyers ? h.firstBuyers() : null // premiers acheteurs des coins analysés (onglet Sources)
+      observations: J.obs
     };
   }
   async function exportFile() {
@@ -5766,207 +5744,6 @@ function CopyTrade(h, radar, bot, rpc) {
   return { start, render, bindUI, recentBuy, leaderExit, S, addWallet: (a, l) => { addWallet(a, l); render(); }, has: a => S.wallets.some(w => w.addr === a), _test: { parse, onEvent, poll, addWallet, C, realBuy } };
 }
 if (typeof module !== 'undefined') module.exports = CopyTrade;
-
-/* ================= WALLETS SOURCES (premiers acheteurs) =================
-   Pendant que l'appli tourne, Vigie lit sur la blockchain les premiers acheteurs des coins qui démarrent bien
-   (courbe pump.fun remplie à 30 % ou plus, migration, ou candidat du radar). Pour chaque coin : les 15 premières
-   adresses acheteuses dans l'ordre, et ce qui s'est passé juste après chacune (les « suiveurs »).
-   En croisant les coins, on fait ressortir les adresses qui reviennent parmi les tout premiers : les wallets sources.
-   Rien n'est copié tout seul : le bouton « Copier ce wallet » l'ajoute à l'onglet Copie, en simulation. */
-function SourceWallets(h, radar, rpc) {
-  const fin = Number.isFinite, esc = h.esc, $ = h.$;
-  const now = () => Date.now();
-  const sleep = ms => new Promise(r => setTimeout(r, ms));
-  const MAX_COINS = 150;     // coins gardés en mémoire
-  const FIRST = 15;          // premiers acheteurs gardés par coin
-  const TOP = 10;            // pour compter comme « source », être dans les 10 premiers
-  const MIN_COINS = 2;       // et sur au moins 2 coins différents (un seul coin peut être de la chance)
-  const FETCH = 45;          // premières transactions lues par coin
-  const PAGES = 5;           // 5 × 1000 transactions au plus : au-delà, le coin est trop actif pour remonter au début
-  const WAVE = 120;          // la « vague » : transactions dans les 2 min après l'achat
-  const MAX_AGE = 3 * 3600e3;
-
-  const S = Object.assign({ v: 1, on: true, coins: [], done: {} }, h.store.get('srcw', {}));
-  if (!Array.isArray(S.coins)) S.coins = [];
-  if (!S.done || typeof S.done !== 'object') S.done = {};
-  const save = () => {
-    for (const [m, t] of Object.entries(S.done)) if (now() - t > 3 * 86400e3) delete S.done[m];
-    h.store.set('srcw', { v: 1, on: S.on !== false, coins: S.coins.slice(0, MAX_COINS), done: S.done });
-  };
-  const W = { busy: false, cur: null, err: '', started: false, lastAt: 0 };
-
-  const short = a => (a ? a.slice(0, 4) + '…' + a.slice(-4) : '');
-  const n0 = x => Math.round(x).toLocaleString('fr-FR');
-  const n1 = x => (Math.round(x * 10) / 10).toLocaleString('fr-FR');
-  const progOf = t => { const lc = t.live && t.live.c && !t.live.complete ? t.live.c : null; return lc ? Curve.progress(lc) : (t.m && fin(t.m.progress) ? t.m.progress : null); };
-  const isPump = t => /pump$/.test(t.mint) || t.launchpad === 'pump.fun' || !!(t.live && t.live.c);
-
-  /* ---------- quels coins analyser ---------- */
-  // Les coins qui démarrent bien, vus pendant que l'appli tourne, pas trop vieux (sinon trop de transactions à remonter)
-  function nextCoin() {
-    let best = null, bs = -1;
-    for (const t of radar.R.tokens.values()) {
-      if (!t || !t.mint || S.done[t.mint] || (t.sources && t.sources.has('démo')) || !isPump(t)) continue;
-      if (fin(t.created) && now() - t.created > MAX_AGE) continue;
-      const pr = progOf(t);
-      const good = t.migrated || (fin(pr) && pr >= 0.3) || (t.score || 0) >= 65 || (t.nc && t.nc.status === 'cand');
-      if (!good) continue;
-      const sc = (t.migrated ? 2 : 0) + (fin(pr) ? pr : 0) + (t.score || 0) / 100;
-      if (sc > bs) { bs = sc; best = t; }
-    }
-    return best;
-  }
-
-  /* ---------- lecture d'une transaction : qui a acheté le coin ? ---------- */
-  function buyerOf(tx, mint) {
-    if (!tx || !tx.meta || tx.meta.err) return null;
-    const msg = tx.transaction && tx.transaction.message;
-    if (!msg) return null;
-    const keys = (msg.accountKeys || []).map(k => (typeof k === 'string' ? k : k && k.pubkey));
-    const signer = (msg.accountKeys || []).find(k => k && typeof k === 'object' && k.signer);
-    const payer = (signer && signer.pubkey) || keys[0] || null;
-    const bal = arr => { const M = new Map(); for (const b of arr || []) if (b && b.mint === mint && b.owner && b.uiTokenAmount) { let r; try { r = BigInt(b.uiTokenAmount.amount); } catch { continue; } M.set(b.owner, (M.get(b.owner) || 0n) + r); } return M; };
-    const pre = bal(tx.meta.preTokenBalances), post = bal(tx.meta.postTokenBalances);
-    let best = null;
-    for (const [o, v] of post) {
-      const d = v - (pre.get(o) || 0n);
-      if (d <= 0n) continue;
-      const i = keys.indexOf(o);
-      const sol = i >= 0 && tx.meta.preBalances && tx.meta.postBalances ? (tx.meta.preBalances[i] - tx.meta.postBalances[i]) / 1e9 : null;
-      // un acheteur paie en SOL (le pool, lui, perd des jetons) ; sans SOL connu, on garde celui qui signe
-      if ((fin(sol) && sol > 0.0005) || o === payer) { if (!best || d > best.d) best = { a: o, d, sol: fin(sol) && sol > 0 ? sol : null }; }
-    }
-    return best ? { a: best.a, sol: best.sol, payer } : null;
-  }
-
-  /* ---------- analyse d'un coin ---------- */
-  async function analyze(t) {
-    const mint = t.mint;
-    let all = [], before, complete = false;
-    for (let p = 0; p < PAGES; p++) {
-      const res = await rpc('getSignaturesForAddress', [mint, Object.assign({ limit: 1000, commitment: 'confirmed' }, before ? { before } : {})]);
-      if (!Array.isArray(res)) break;
-      all = all.concat(res);
-      if (res.length < 1000) { complete = true; break; }
-      before = res[res.length - 1].signature;
-      await sleep(500);
-    }
-    S.done[mint] = now();
-    if (!complete || !all.length) { save(); return { skipped: !complete ? 'trop de transactions pour remonter au lancement' : 'aucune transaction' }; }
-    const seq = all.filter(x => !x.err).reverse(); // du plus ancien au plus récent
-    const times = seq.map(x => (x.blockTime || 0) * 1000);
-    const t0 = times[0] || null;
-    const buys = [];
-    let creator = t.creator || (t.live && t.live.creator) || null;
-    for (let i = 0; i < Math.min(FETCH, seq.length); i++) {
-      let tx = null;
-      try { tx = await rpc('getTransaction', [seq[i].signature, { encoding: 'jsonParsed', maxSupportedTransactionVersion: 0, commitment: 'confirmed' }]); } catch { await sleep(300); continue; }
-      const b = buyerOf(tx, mint);
-      if (i === 0 && b && !creator) creator = b.payer || b.a; // la création (et l'achat du créateur) vient en premier
-      if (b) buys.push({ a: b.a, t: times[i], sol: b.sol });
-      await sleep(150);
-    }
-    // premiers acheteurs uniques, créateur à part
-    const seen = new Set(), buyers = [];
-    for (let i = 0; i < buys.length; i++) {
-      const x = buys[i];
-      if (x.a === creator || seen.has(x.a)) continue;
-      seen.add(x.a);
-      const later = new Set(buys.slice(i + 1).filter(y => y.a !== x.a && y.a !== creator && y.t - x.t <= WAVE * 1000).map(y => y.a));
-      const wave = times.filter(tt => tt > x.t && tt - x.t <= WAVE * 1000).length;
-      buyers.push({ a: x.a, r: buyers.length + 1, t: x.t, dt: t0 && x.t ? Math.round((x.t - t0) / 1000) : null, sol: x.sol != null ? Math.round(x.sol * 1e4) / 1e4 : null, fol: later.size, wave });
-      if (buyers.length >= FIRST) break;
-    }
-    const pr = progOf(t);
-    const rec = { mint, sym: t.symbol || short(mint), at: now(), t0, creator, tx: all.length, buyers, mig: !!t.migrated, prog: fin(pr) ? Math.round(pr * 100) / 100 : null };
-    S.coins = [rec, ...S.coins.filter(c => c.mint !== mint)].slice(0, MAX_COINS);
-    save();
-    return { rec };
-  }
-  async function step() {
-    if (W.busy || S.on === false || h.inFrame) return;
-    // les coins déjà analysés qui ont migré depuis : on le note (sert à juger les sources)
-    for (const c of S.coins) { const t = radar.get(c.mint); if (t && t.migrated && !c.mig) { c.mig = true; save(); } }
-    const t = nextCoin();
-    if (!t) return;
-    W.busy = true; W.cur = t.symbol || short(t.mint);
-    try { const r = await analyze(t); W.err = r && r.skipped ? `${W.cur} : ${r.skipped}` : ''; W.lastAt = now(); }
-    catch (e) { W.err = (e && e.message) || String(e); S.done[t.mint] = now() - 2 * 86400e3; save(); } // on réessaiera plus tard
-    finally { W.busy = false; W.cur = null; }
-    if (h.visible && h.visible()) render();
-  }
-
-  /* ---------- croisement : les wallets sources ---------- */
-  function rank() {
-    const A = new Map(), creators = new Set(S.coins.map(c => c.creator).filter(Boolean));
-    for (const c of S.coins) for (const b of c.buyers || []) {
-      if (b.r > TOP) continue;
-      const e = A.get(b.a) || { a: b.a, coins: [], ranks: [], dts: [], fol: 0, wave: 0, mig: 0 };
-      if (e.coins.includes(c.sym + '|' + c.mint)) continue;
-      e.coins.push(c.sym + '|' + c.mint); e.ranks.push(b.r); if (fin(b.dt)) e.dts.push(b.dt);
-      e.fol += b.fol || 0; e.wave += b.wave || 0; if (c.mig) e.mig++;
-      A.set(b.a, e);
-    }
-    return [...A.values()].filter(e => e.coins.length >= MIN_COINS).map(e => Object.assign(e, {
-      n: e.coins.length, avgRank: e.ranks.reduce((x, y) => x + y, 0) / e.ranks.length,
-      avgDt: e.dts.length ? e.dts.reduce((x, y) => x + y, 0) / e.dts.length : null,
-      avgWave: e.wave / e.coins.length, avgFol: e.fol / e.coins.length, creator: creators.has(e.a)
-    })).sort((x, y) => y.wave - x.wave || y.n - x.n);
-  }
-
-  /* ---------- affichage ---------- */
-  const ui = { more: false };
-  function render() {
-    const box = $('#srcBody');
-    if (!box) return;
-    if (h.inFrame) { box.innerHTML = '<p class="note" style="margin:0">L\'analyse des premiers acheteurs ne tourne pas dans l\'aperçu Claude. Utilise la version hébergée de l\'appli.</p>'; return; }
-    const R = rank(), cp = h.copy && h.copy();
-    const st = $('#srcState');
-    if (st) st.innerHTML = S.on === false ? '<span class="chip">en pause</span>' : W.busy ? '<span class="chip long">analyse…</span>' : '<span class="chip">actif</span>';
-    const status = `${S.coins.length} coin${S.coins.length > 1 ? 's' : ''} analysé${S.coins.length > 1 ? 's' : ''}${W.cur ? ` · en cours : ${esc(W.cur)}` : ''}${W.err ? ` · <span class="muted">${esc(W.err)}</span>` : ''}`;
-    const rows = R.slice(0, ui.more ? 60 : 20).map((e, i) => {
-      const copied = cp && cp.has && cp.has(e.a);
-      const coins = e.coins.slice(0, 4).map(x => esc(x.split('|')[0])).join(', ') + (e.coins.length > 4 ? '…' : '');
-      return `<div class="sw-r"><span class="cp-rk">${i + 1}</span><div class="cp-rm"><b class="mono">${esc(short(e.a))}</b>
-        <span>${e.n} coins initiés${e.mig ? ` (${e.mig} ont migré)` : ''} · rang moyen ${n1(e.avgRank)}${e.avgDt != null ? ` · entre ${n0(e.avgDt)} s après le lancement` : ''}</span>
-        <span>Suiveurs : <b>${n1(e.avgFol)}</b> wallet${e.avgFol >= 2 ? 's' : ''} juste derrière lui, ≈ <b>${n0(e.avgWave)}</b> transactions dans les 2 min (moyennes par coin)</span>
-        <span>${coins}${e.creator ? ' · <b class="neg">a aussi créé des coins</b>' : ''}</span>
-        <div class="row-btns" style="margin:4px 0 0">${copied ? '<button class="btn sm" disabled>Déjà copié</button>' : `<button class="btn sm pri" data-sw-copy="${esc(e.a)}">Copier ce wallet</button>`}<a class="btn sm" href="https://solscan.io/account/${esc(e.a)}" target="_blank" rel="noopener">Solscan</a></div></div></div>`;
-    }).join('');
-    box.innerHTML = `<label class="toggle" style="padding-top:0"><span>Analyser les premiers acheteurs<small>Coins qui démarrent bien : courbe remplie à 30 % ou plus, migration ou candidat du radar. Une analyse à la fois, pour ménager le réseau</small></span><input type="checkbox" id="swOn"${S.on !== false ? ' checked' : ''}></label>
-      <p class="note">${status}</p>
-      <h3 class="w-h">Wallets sources, du plus suivi au moins suivi</h3>
-      ${rows ? `<div class="cp-rank">${rows}</div>${R.length > 20 ? `<div class="row-btns"><button class="btn sm" data-sw-more="1">${ui.more ? 'Voir moins' : `Voir les ${R.length}`}</button></div>` : ''}`
-        : `<p class="note">Pas encore de wallet source : il faut qu'une même adresse soit parmi les ${TOP} premiers acheteurs d'au moins ${MIN_COINS} coins analysés. La liste se remplit au fil des coins (${S.coins.length} pour l'instant).</p>`}
-      <p class="note">« Copier ce wallet » l'ajoute à l'onglet Copie, en simulation. Rien n'est ajouté tout seul, et rien ne passe en réel sans toi.</p>
-      ${S.coins.length ? `<details class="w-oth"><summary>Derniers coins analysés</summary><div class="journal">${S.coins.slice(0, 12).map(c => `<div class="j-row"><span class="chip${c.mig ? ' long' : ''}">${c.mig ? 'migré' : fin(c.prog) ? Math.round(c.prog * 100) + ' %' : '—'}</span><div class="j-mid"><div>${esc(c.sym)}</div><div class="mono">${c.buyers.length} premiers acheteurs · ${n0(c.tx)} transactions lues</div></div><span></span></div>`).join('')}</div></details>` : ''}`;
-  }
-  function bindUI() {
-    const box = $('#srcBody');
-    if (!box) return;
-    box.addEventListener('click', e => {
-      const b = e.target.closest('button'); if (!b) return;
-      if (b.dataset.swCopy) {
-        const cp = h.copy && h.copy();
-        try { if (!cp || !cp.addWallet) throw new Error('onglet Copie indisponible'); cp.addWallet(b.dataset.swCopy, 'Source ' + b.dataset.swCopy.slice(0, 4)); h.toast && h.toast('Wallet ajouté à l\'onglet Copie, en simulation', 'long'); }
-        catch (err) { h.toast && h.toast(err.message, 'short'); }
-        render(); return;
-      }
-      if (b.dataset.swMore) { ui.more = !ui.more; render(); }
-    });
-    box.addEventListener('change', e => { if (e.target && e.target.id === 'swOn') { S.on = e.target.checked; save(); render(); } });
-  }
-  function start() {
-    if (W.started || h.inFrame) return;
-    W.started = true;
-    const loop = async () => { try { await step(); } catch {} setTimeout(loop, 15000); };
-    setTimeout(loop, 20000);
-  }
-  // Pour l'export du journal : premiers acheteurs de chaque coin analysé
-  const exportData = () => S.coins.map(c => ({ mint: c.mint, sym: c.sym, at: new Date(c.at).toISOString(), launch: c.t0 ? new Date(c.t0).toISOString() : null, creator: c.creator, txRead: c.tx, migrated: c.mig, curve: c.prog, firstBuyers: c.buyers.map(b => ({ addr: b.a, rank: b.r, secAfterLaunch: b.dt, sol: b.sol, followers: b.fol, txIn2min: b.wave })) }));
-  return { start, render, bindUI, rank, exportData, S, _test: { analyze, buyerOf, nextCoin, step, W } };
-}
-if (typeof module !== 'undefined') module.exports = SourceWallets;
 
 /* ================= HYPERLIQUID : protocole (lecture, signature, ordres) =================
    Futures perpétuels de Phantom (Perps). Le compte, c'est ton adresse EVM de Phantom.
@@ -8057,10 +7834,9 @@ if (typeof module !== 'undefined') module.exports = PerpsBot;
   /* ---------- navigation ---------- */
   function showTab(t) {
     curTab = t;
-    document.body.classList.toggle('meme', t === 'meme' || t === 'new' || t === 'perps' || t === 'copy' || t === 'src');
-    { const mt = $('#memeTitle'); if (mt) mt.textContent = t === 'new' ? 'Nouveaux coins' : t === 'perps' ? 'Futures auto' : t === 'copy' ? 'Copie de wallets' : t === 'src' ? 'Wallets sources' : 'Radar mèmes'; }
-    { const a = $('#memeNet'), b = $('#memeSub'); if (a) a.textContent = t === 'perps' ? 'Hyperliquid' : 'Solana'; if (b) b.textContent = t === 'perps' ? 'via Phantom' : t === 'copy' ? 'suivi de wallets' : t === 'src' ? 'premiers acheteurs' : 'temps réel'; }
-    if (t === 'src') setTimeout(() => sources && sources.render(), 0);
+    document.body.classList.toggle('meme', t === 'meme' || t === 'new' || t === 'perps' || t === 'copy');
+    { const mt = $('#memeTitle'); if (mt) mt.textContent = t === 'new' ? 'Nouveaux coins' : t === 'perps' ? 'Futures auto' : t === 'copy' ? 'Copie de wallets' : 'Radar mèmes'; }
+    { const a = $('#memeNet'), b = $('#memeSub'); if (a) a.textContent = t === 'perps' ? 'Hyperliquid' : 'Solana'; if (b) b.textContent = t === 'perps' ? 'via Phantom' : t === 'copy' ? 'suivi de wallets' : 'temps réel'; }
     if (t === 'copy') setTimeout(() => copy && copy.render(), 0);
     if (t === 'perps') setTimeout(() => perps && perps.render(), 0);
     if (t === 'new') setTimeout(() => newCoins && newCoins.render(), 0);
@@ -8077,7 +7853,7 @@ if (typeof module !== 'undefined') module.exports = PerpsBot;
   $$('.tabbar button').forEach(b => b.onclick = () => showTab(b.dataset.tab));
 
   // radar mèmes + trading via wallet + bot autonome
-  let trader = null, bot = null, newCoins = null, live = null, lab = null, perps = null, copy = null, sources = null;
+  let trader = null, bot = null, newCoins = null, live = null, lab = null, perps = null, copy = null;
   const inFrame = (() => { try { return window.top !== window.self; } catch { return true; } })();
   const buzz = p => { if (set.vibrate && navigator.vibrate) try { navigator.vibrate(p); } catch {} };
   const jup = JupClient(() => (trader ? trader.jupKey() : ''));
@@ -8128,8 +7904,7 @@ if (typeof module !== 'undefined') module.exports = PerpsBot;
     requireX: () => newCoins.requireX(),
     xOk: t => newCoins.xOk(t),
     copy: () => copy,
-    banned: isBanned,
-    firstBuyers: () => (sources ? sources.exportData() : null)
+    banned: isBanned
   }, radar, live, bot);
   newCoins.start();
   if (!inFrame) lab.start();
@@ -8151,13 +7926,6 @@ if (typeof module !== 'undefined') module.exports = PerpsBot;
   }, radar, bot, (m, p) => rpcPool.call(m, p));
   copy.bindUI();
   if (!inFrame) copy.start();
-  // wallets sources : premiers acheteurs des coins qui démarrent bien, croisés entre coins
-  sources = SourceWallets({
-    $, esc, store, toast, inFrame, copy: () => copy,
-    visible: () => curTab === 'src' && document.visibilityState === 'visible'
-  }, radar, (m, p) => rpcPool.call(m, p));
-  sources.bindUI();
-  if (!inFrame) sources.start();
   let wTick = 0, pTick = 0, cTick = 0;
   setInterval(() => {
     if (curTab === 'meme' && $('#memeSheet').hidden && $('#tradeSheet').hidden) radar.render();
@@ -8165,7 +7933,6 @@ if (typeof module !== 'undefined') module.exports = PerpsBot;
     if (curTab === 'new' && document.visibilityState === 'visible') { const ae = document.activeElement; if (!(ae && ae.closest && ae.closest('#labCard'))) lab.render(); }
     if (curTab === 'perps' && document.visibilityState === 'visible' && ++pTick % 2 === 0) perps.render();
     if (curTab === 'copy' && document.visibilityState === 'visible' && ++cTick % 2 === 0) copy.render();
-    if (curTab === 'src' && document.visibilityState === 'visible' && cTick++ % 5 === 0) sources.render();
     { const cd = $('#copyDot'); if (cd) cd.hidden = !copy.S.real; }
     { const pd = $('#perpsDot'); if (pd) pd.hidden = !Object.keys(perps.S.real.pos).length; }
     const n = radar.badge(), d = $('#memeDot');
@@ -8364,7 +8131,7 @@ if (typeof module !== 'undefined') module.exports = PerpsBot;
   applyWake();
   start();
   radar.start();
-  showTab(hash.startsWith('perps') ? 'perps' : ['signal', 'pos', 'scan', 'meme', 'new', 'copy', 'src', 'stats', 'set'].includes(hash) ? hash : 'signal');
+  showTab(hash.startsWith('perps') ? 'perps' : ['signal', 'pos', 'scan', 'meme', 'new', 'copy', 'stats', 'set'].includes(hash) ? hash : 'signal');
 })();
 
 </script>
