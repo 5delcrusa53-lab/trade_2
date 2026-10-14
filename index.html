@@ -26,6 +26,8 @@
   --accent:#9ba7ff; --accent-ink:#0a0f15; --accent-soft:#9ba7ff1f;
   --long:#33cf95; --long-soft:#33cf9521; --short:#ff5d6e; --short-soft:#ff5d6e21; --warn:#f2b84b; --warn-soft:#f2b84b22;
   --ema9:#9ba7ff; --ema21:#d39af0; --vwapc:#c9b27a; color-scheme:dark } }
+:root[data-text="lg"]{font-size:18px}
+:root[data-text="lg"] body{font-size:16.5px}
 :root[data-theme="dark"]{
   --bg:#0a0f15; --panel:#111820; --panel2:#17202b; --line:#233041; --fg:#e3e9f1; --muted:#8592a4;
   --accent:#9ba7ff; --accent-ink:#0a0f15; --accent-soft:#9ba7ff1f;
@@ -222,8 +224,8 @@ main{padding:12px 16px calc(84px + env(safe-area-inset-bottom,0px));max-width:76
 .confirm{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px;font-size:.86rem}
 
 /* barre d'onglets */
-.tabbar{position:fixed;left:0;right:0;bottom:0;z-index:30;background:var(--panel);border-top:1px solid var(--line);display:grid;grid-template-columns:repeat(9,1fr);padding:6px 2px calc(6px + env(safe-area-inset-bottom,0px))}
-.tabbar button{border:0;background:none;display:grid;justify-items:center;gap:2px;padding:4px 0;font-size:.56rem;min-width:0;overflow:hidden;color:var(--muted);letter-spacing:.02em;position:relative}
+.tabbar{position:fixed;left:0;right:0;bottom:0;z-index:30;background:var(--panel);border-top:1px solid var(--line);display:grid;grid-template-columns:repeat(10,1fr);padding:6px 2px calc(6px + env(safe-area-inset-bottom,0px))}
+.tabbar button{border:0;background:none;display:grid;justify-items:center;gap:2px;padding:4px 0;font-size:.52rem;min-width:0;overflow:hidden;color:var(--muted);letter-spacing:.02em;position:relative}
 .tabbar svg{width:22px;height:22px}
 /* ---------- copie de wallets ---------- */
 .cp-list{display:grid;gap:6px;margin-bottom:4px}
@@ -236,6 +238,15 @@ main{padding:12px 16px calc(84px + env(safe-area-inset-bottom,0px));max-width:76
 .cp-seg button{flex:1;font-size:.86rem;padding:8px 11px}
 .cp-tx{font-size:.72rem;color:var(--muted);align-self:center}
 #cpAddr,#cpLabel{text-transform:none;font-family:var(--f-mono)}
+.cp-rank{display:grid;gap:6px}
+.sw-r{display:grid;grid-template-columns:auto minmax(0,1fr);gap:10px;align-items:start;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--panel)}
+.sw-r .cp-rk{padding-top:2px}
+.sw-r .row-btns a{text-decoration:none}
+.cp-r{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:10px;align-items:center;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--panel)}
+.cp-rk{font-family:var(--f-mono);font-weight:600;color:var(--muted);min-width:1.2em;text-align:center}
+.cp-rm{display:grid;gap:2px;min-width:0}
+.cp-rm b{font-family:var(--f-display);font-size:1rem;overflow-wrap:anywhere}
+.cp-rm span{font-size:.78rem;color:var(--muted)}
 .tabbar button[aria-selected="true"]{color:var(--accent)}
 .tabbar .dot{position:absolute;top:2px;left:calc(50% + 8px);width:8px;height:8px;border-radius:50%;background:var(--short)}
 
@@ -687,8 +698,29 @@ a.btn{text-decoration:none;color:inherit;display:inline-block}
     </div>
   </section>
 
+  <!-- ===== WALLETS SOURCES ===== -->
+  <section class="tab" id="tab-src" hidden>
+    <div class="card" id="srcCard">
+      <h2>Wallets sources <span class="sp" id="srcState"></span></h2>
+      <div id="srcBody"><p class="note" style="margin:0">Démarrage…</p></div>
+    </div>
+    <div class="card">
+      <h2>Comment ça marche</h2>
+      <ol class="i-steps">
+        <li><b>Premiers acheteurs.</b> Pour chaque coin qui démarre bien, Vigie remonte jusqu'à son lancement sur la blockchain et note les 15 premières adresses qui ont acheté, dans l'ordre, créateur à part.</li>
+        <li><b>Suiveurs.</b> Pour chacune : combien d'autres wallets ont acheté juste derrière elle, et combien de transactions ont suivi dans les 2 minutes. C'est la vague qu'elle a déclenchée, ou qu'elle a précédée.</li>
+        <li><b>Wallets sources.</b> Une adresse qui revient parmi les 10 premiers sur au moins 2 coins différents. Un seul coin peut être de la chance ; plus elle revient, plus c'est un vrai lanceur de vague.</li>
+      </ol>
+      <p class="note">À savoir : seuls les coins vus pendant que l'appli tournait sont analysés, il n'y a pas d'historique avant. Les premiers acheteurs sont lus après coup sur le réseau : tu les découvres avec du retard, et en copie tu entreras quelques secondes après eux. Certains « premiers acheteurs » sont les propres wallets du créateur, qui revendent sur la vague : regarde ce qu'en dit la simulation avant de copier pour de vrai. Les premiers acheteurs sont aussi ajoutés à l'export du journal.</p>
+    </div>
+  </section>
+
   <!-- ===== STATS ===== -->
   <section class="tab" id="tab-stats" hidden>
+    <div class="card" id="feeCard">
+      <h2>Bilan des frais <span class="sp">bot mèmes</span></h2>
+      <div id="feeBody"></div>
+    </div>
     <div class="card">
       <h2>Calibration <span class="sp" id="calInfo"></span></h2>
       <p class="note" style="margin:0 0 12px">L'appli teste 4 setups de scalping sur les 3000 dernières bougies de la paire, frais compris. Elle choisit les réglages sur les 60 % les plus anciens, puis les vérifie sur les 40 % récents. Seuls les setups qui gagnent aussi sur cette période de contrôle donnent des signaux.</p>
@@ -738,6 +770,18 @@ a.btn{text-decoration:none;color:inherit;display:inline-block}
       <label class="toggle"><span>Garder l'écran allumé</span><input type="checkbox" id="aWake"></label>
       <div class="row-btns"><button class="btn sm" id="aTest">Tester l'alerte</button></div>
     </div>
+    <div class="card" id="lookCard">
+      <h2>Apparence</h2>
+      <div class="q-set">
+        <div class="q-row"><span class="q-lab">Thème</span><div class="seg" id="lookTheme"><button data-look-theme="auto">Auto</button><button data-look-theme="light">Clair</button><button data-look-theme="dark">Sombre</button></div></div>
+        <div class="q-row"><span class="q-lab">Taille du texte</span><div class="seg" id="lookText"><button data-look-text="md">Normal</button><button data-look-text="lg">Grand</button></div></div>
+      </div>
+      <p class="note">Auto suit le réglage clair ou sombre du téléphone.</p>
+    </div>
+    <div class="card" id="banCard">
+      <h2>Liste noire</h2>
+      <div id="banBody"></div>
+    </div>
     <div class="card">
       <h2>Diagnostic de connexion</h2>
       <div class="journal" id="diag"></div>
@@ -754,6 +798,7 @@ a.btn{text-decoration:none;color:inherit;display:inline-block}
   <button role="tab" data-tab="new" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 2.5l1.9 5.6 5.6 1.9-5.6 1.9L12 17.5l-1.9-5.6L4.5 10l5.6-1.9z"/><path d="M18.5 15.5l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8z"/></svg>Nouveaux<span class="cnt" id="newDot" hidden></span></button>
   <button role="tab" data-tab="perps" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 17l5-5 4 3 8-8"/><path d="M3 21h18"/><path d="M16 7h4v4"/></svg>Futures<span class="dot" id="perpsDot" hidden></span></button>
   <button role="tab" data-tab="copy" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>Copie<span class="dot" id="copyDot" hidden></span></button>
+  <button role="tab" data-tab="src" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="6" cy="12" r="2.5"/><path d="M11 8.5a5 5 0 0 1 0 7"/><path d="M14.5 5.5a9 9 0 0 1 0 13"/><path d="M18 3a12.5 12.5 0 0 1 0 18"/></svg>Sources</button>
   <button role="tab" data-tab="stats" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 20V10M12 20V4M19 20v-7"/></svg>Stats</button>
   <button role="tab" data-tab="set" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg>Réglages</button>
 </nav>
@@ -3372,6 +3417,7 @@ function TradeBot(h, radar, jup, tr) {
     if (day().pnl <= -c.dayLoss) throw stop(`Perte du jour atteinte (${fSol(day().pnl)}) : pas de nouveau trade avant demain`);
     if (t && t.sources && t.sources.has('démo')) throw stop('Jeton fictif (démo)');
     if (t && t.verdict === 'reject') throw stop('Jeton écarté : ' + ((t.fails && t.fails[0]) || ''));
+    if (opt.auto && h.banned && h.banned(t || { mint })) throw stop('Coin ou créateur sur ta liste noire');
     let known = true;
     try { await refresh(); } catch (e) { known = false; log(`Solde du bot illisible (${e.message}) : Jupiter vérifiera les fonds`, 'warn'); }
     const had = known && B.hold.has(mint);
@@ -3396,7 +3442,7 @@ function TradeBot(h, radar, jup, tr) {
     const res = await execOrder(o);
     const qty = +res.totalOutputAmount;
     const p = S.pos[mint] = {
-      mint, sym, dec, t0: Date.now(), state: 'open', why: why || 'Choisi par toi', strat: opt.strat || null, prof: opt.prof || null, profName: opt.profName || null, exits: opt.exits || null, auto: !!opt.auto,
+      mint, sym, dec, t0: Date.now(), state: 'open', why: why || 'Choisi par toi', strat: opt.strat || null, src: opt.src || null, prof: opt.prof || null, profName: opt.profName || null, exits: opt.exits || null, auto: !!opt.auto,
       cost: +res.totalInputAmount / 1e9 + NET_FEE, rent: had ? 0 : RENT, costReal: false,
       qtyRaw: String(res.totalOutputAmount), realized: 0, tp1Done: false, peakTot: null, hist: [], sigs: [res.signature], rt,
       px0: px > 0 ? px : null, pxPeak: px > 0 ? px : null, events: [{ t: Date.now(), side: 'buy', px: px > 0 ? px : null }]
@@ -3462,7 +3508,7 @@ function TradeBot(h, radar, jup, tr) {
   function decide(p) { return decideCore(p, cfgFor(p), curV(p)); }
   function decideCore(p, c, V) {
     const now = Date.now();
-    if (p.closeReq) return { pct: 100, urgent: true, why: 'Fermeture demandée par toi' };
+    if (p.closeReq) return { pct: 100, urgent: true, why: 'Vendu à la main' };
     if (p.exitReq) return { pct: 100, urgent: true, why: p.exitReq }; // ex. : le wallet copié a revendu
     const t = radar.get(p.mint), lv = live();
     if (t && t.verdict === 'reject' && (t.fails || []).some(f => /geler|imprimer|rug|retirable|suspect|initiés|arnaque/i.test(f)))
@@ -3503,6 +3549,19 @@ function TradeBot(h, radar, jup, tr) {
   }
 
   /* ---------- sortie ---------- */
+  // Vente à la main d'une position : la même vente d'urgence que le bot. Ne coupe ni le mode auto ni la copie ;
+  // comme après toute sortie, le bot ne reprend pas ce coin dans les 24 h.
+  function manualSell(mint) {
+    const p = S.pos[mint];
+    if (!p || p.state === 'closed') return 'none';
+    if (p.frozen) return 'frozen';
+    if (p.state === 'selling' || p.busy) return 'selling';
+    p.closeReq = true; B.ui.sellAsk = null; save();
+    log(`Vente à la main demandée sur ${p.sym}`, 'warn');
+    if (!kp) return 'locked'; // la vente partira dès que le bot est déverrouillé (il faut le code pour signer)
+    sell(p, { pct: 100, urgent: true, why: 'Vendu à la main' });
+    return 'ok';
+  }
   async function sell(p, d) {
     if (p.busy) return;
     p.busy = true; p.state = 'selling'; render();
@@ -3571,7 +3630,7 @@ function TradeBot(h, radar, jup, tr) {
     p.state = 'closed'; p.closedAt = Date.now(); p.exitWhy = why;
     const net = p.realized - p.cost;
     day().pnl += net;
-    S.hist.unshift({ mint: p.mint, sym: p.sym, t0: p.t0, t1: p.closedAt, cost: p.cost, back: p.realized, net, pnl: net / p.cost, why, sigs: p.sigs.slice(-4), strat: p.strat || null, prof: p.prof || null, auto: !!p.auto });
+    S.hist.unshift({ mint: p.mint, sym: p.sym, t0: p.t0, t1: p.closedAt, cost: p.cost, back: p.realized, net, pnl: net / p.cost, why, sigs: p.sigs.slice(-4), strat: p.strat || null, src: p.src || null, rt: fin(p.rt) ? p.rt : null, prof: p.prof || null, auto: !!p.auto });
     if (live()) live().unwatch(p.mint, 'bot');
     S.hist = S.hist.slice(0, 60);
     delete S.pos[p.mint];
@@ -3616,7 +3675,7 @@ function TradeBot(h, radar, jup, tr) {
     const now = Date.now();
     B.props = B.props.filter(x => { const t = radar.get(x.mint); return t && t.verdict === 'buy' && now - x.t < 4 * 60000 && !S.pos[x.mint]; });
     for (const t of radar.R.tokens.values()) {
-      if (t.verdict !== 'buy' || S.pos[t.mint] || (S.ignored[t.mint] && now - S.ignored[t.mint] < 2 * 3600e3) || (S.done && S.done[t.mint] && now - S.done[t.mint] < DONE_MS) || B.props.some(x => x.mint === t.mint) || (t.sources && t.sources.has('démo'))) continue;
+      if (t.verdict !== 'buy' || (h.banned && h.banned(t)) || S.pos[t.mint] || (S.ignored[t.mint] && now - S.ignored[t.mint] < 2 * 3600e3) || (S.done && S.done[t.mint] && now - S.done[t.mint] < DONE_MS) || B.props.some(x => x.mint === t.mint) || (t.sources && t.sources.has('démo'))) continue;
       if (t.flaggedAt && now - t.flaggedAt > 4 * 60000) continue;
       B.props.unshift({ mint: t.mint, sym: t.symbol || short(t.mint), score: t.score, t: now });
       radar.life(t.mint).catch(() => {});
@@ -3695,7 +3754,7 @@ function TradeBot(h, radar, jup, tr) {
     }
     if (!kp) {
       const P = openPos();
-      box.innerHTML = `${P.length ? `<div class="advice" data-l="danger" style="margin:0 0 10px"><h3>${P.length} position${P.length > 1 ? 's' : ''} sans surveillance</h3><p>Déverrouille le bot pour qu'il puisse vendre : ${P.map(p => esc(p.sym)).join(', ')}.</p></div>` : ''}
+      box.innerHTML = `${P.length ? `<div class="advice" data-l="danger" style="margin:0 0 10px"><h3>${P.length} position${P.length > 1 ? 's' : ''} sans surveillance</h3><p>Déverrouille le bot pour qu'il puisse vendre, seul ou à la main (le code sert à signer la vente) : ${P.map(p => esc(p.sym)).join(', ')}.</p></div>` : ''}
         <div class="add" style="margin:0"><input id="bPin" type="password" autocomplete="current-password" placeholder="Code du bot"><button class="btn pri" data-b="unlock">Déverrouiller</button></div>
         <p class="note">Wallet du bot : <span class="mono">${esc(short(S.pub))}</span></p>`;
       restore(); return;
@@ -3705,6 +3764,12 @@ function TradeBot(h, radar, jup, tr) {
     const props = B.props.map(x => { const t = radar.get(x.mint); const mc = t && t.pair ? (t.pair.marketCap || t.pair.fdv) : null; return `<div class="p-card" data-l="ok"><div class="p-head"><button class="p-sym" data-open="${esc(x.mint)}">${esc(x.sym)}</button><span class="muted small">score ${x.score}${mc ? ' · cap ' + MemeChart.fmtUsd(mc) + ' $' : ''}</span><span></span></div>
       <p class="p-life">${esc(radar.lifeText(t))}</p>
       <div class="row-btns" style="margin:0"><button class="btn sm pri" data-bjoin="${esc(x.mint)}">Rejoindre avec ${fSol(c.size)}</button><button class="btn sm" data-bign="${esc(x.mint)}">Ignorer</button></div></div>`; }).join('');
+    // Sortie à la main : visible sur chaque position, y compris celles du mode auto et des copies
+    const sellBtn = p => p.frozen ? '<p class="note" style="margin:0">Compte gelé par le créateur : vente impossible.</p>'
+      : p.state === 'selling' || p.busy ? '<div class="row-btns" style="margin:0"><button class="btn sm" disabled>Vente en cours…</button></div>'
+      : p.closeReq ? '<div class="row-btns" style="margin:0"><button class="btn sm" disabled>Vente demandée…</button></div>'
+      : B.ui.sellAsk === p.mint ? `<div class="confirm" style="margin:0"><span>Vendre ${esc(p.sym)} au prix du marché ?</span><button class="btn sm danger" data-bclose="${esc(p.mint)}">Confirmer la vente</button><button class="btn sm" data-b="sell-no">Annuler</button></div>`
+      : `<div class="row-btns" style="margin:0;align-items:center"><button class="btn sm danger" data-bsell="${esc(p.mint)}">Vendre maintenant</button><span class="muted small">ne ferme que cette position${p.strat === 'copy' ? ', la copie continue' : p.auto ? ', le mode auto continue' : ''}</span></div>`;
     const pos = P.map(p => {
       const V = fin(p.vEst) && p.estAt > p.vAt ? p.vEst : p.v, tot = fin(V) ? V + p.realized : NaN, pnl = fin(tot) ? tot / p.cost - 1 : NaN;
       const pc = cfgFor(p), st = p.state === 'selling' ? 'vente en cours…' : p.frozen ? 'compte gelé' : p.tp1Done ? `gain visé pris · suiveur −${pc.trail} %` : `${p.profName ? p.profName + ' · ' : ''}perte max −${pc.sl} % · gain visé +${pc.tp1} %`;
@@ -3714,7 +3779,7 @@ function TradeBot(h, radar, jup, tr) {
         <p class="p-life">${esc(radar.lifeText(radar.get(p.mint)))}</p>
         ${radar.flowHtml ? radar.flowHtml(p.mint) : ''}
         <canvas class="b-chart" data-mint="${esc(p.mint)}" aria-label="Graphique de ${esc(p.sym)}"></canvas>
-        <div class="row-btns" style="margin:0"><button class="btn sm danger" data-bclose="${esc(p.mint)}" ${p.state === 'selling' ? 'disabled' : ''}>Fermer maintenant</button></div></div>`;
+        ${sellBtn(p)}</div>`;
     }).join('');
     const chip = (k, v, label, cur) => `<button class="btn sm ${cur ? 'pri' : ''}" data-bq="${k}" data-v="${v}" aria-pressed="${cur}">${label}</button>`;
     const slList = [10, 15, 20, 25, 30, 50], tpList = [20, 30, 40, 60, 100, 200];
@@ -3787,7 +3852,7 @@ function TradeBot(h, radar, jup, tr) {
     if (h.inFrame || !S.pub || (t.sources && t.sources.has('démo'))) return '';
     if (!kp) return '<div class="t-box bot"><b>Bot</b><p class="note" style="margin:4px 0 0">Déverrouille le bot en haut de l\'onglet pour lui confier ce trade.</p></div>';
     const p = S.pos[t.mint], c = S.cfg;
-    if (p && p.state !== 'closed') return `<div class="t-box bot"><b>Le bot gère ce trade</b><p class="note" style="margin:4px 0 8px">${fin(p.pnl) ? fPct(p.pnl) + ' net de frais. ' : ''}Perte acceptée −${c.sl} %, gain visé +${c.tp1} %, vente d'urgence si −${c.drop} % en 1 min.</p><button class="btn sm danger" data-bclose="${esc(t.mint)}">Fermer maintenant</button></div>`;
+    if (p && p.state !== 'closed') return `<div class="t-box bot"><b>Le bot gère ce trade</b><p class="note" style="margin:4px 0 8px">${fin(p.pnl) ? fPct(p.pnl) + ' net de frais. ' : ''}Perte acceptée −${c.sl} %, gain visé +${c.tp1} %, vente d'urgence si −${c.drop} % en 1 min.</p><button class="btn sm danger" data-bsell="${esc(t.mint)}">Vendre maintenant</button></div>`;
     if (t.verdict === 'reject') return '';
     return `<div class="t-box bot"><b>Confier au bot</b><p class="note" style="margin:4px 0 8px">Il achète ${fSol(c.size)} tout de suite, sans validation, puis revend seul : ${c.tp1Part < 100 ? 'moitié' : 'tout'} à +${c.tp1} % net, perte acceptée −${c.sl} %, vente d'urgence si chute rapide. Réglages dans la carte du bot.</p><button class="btn sm pri" data-bjoin="${esc(t.mint)}">Rejoindre avec ${fSol(c.size)}</button></div>`;
   }
@@ -3810,11 +3875,22 @@ function TradeBot(h, radar, jup, tr) {
       return;
     }
     if (b.dataset.bign) { S.ignored[b.dataset.bign] = Date.now(); B.props = B.props.filter(x => x.mint !== b.dataset.bign); save(); render(); return; }
+    // « Vendre maintenant » : un premier appui demande confirmation, le second vend
+    if (b.dataset.bsell) {
+      const mint = b.dataset.bsell;
+      if (b.closest('#botBody')) { B.ui.sellAsk = mint; render(); return; }
+      // ailleurs (fiche du coin) : le bouton se change lui-même en confirmation pendant 6 s
+      b.textContent = 'Confirmer la vente'; delete b.dataset.bsell; b.dataset.bclose = mint;
+      setTimeout(() => { if (b.isConnected && b.dataset.bclose) { b.textContent = 'Vendre maintenant'; delete b.dataset.bclose; b.dataset.bsell = mint; } }, 6000);
+      return;
+    }
     if (b.dataset.bclose) {
-      const p = S.pos[b.dataset.bclose];
-      if (p) { p.closeReq = true; log(`Fermeture immédiate demandée sur ${p.sym}`, 'warn'); save(); if (!p.busy) sell(p, { pct: 100, urgent: true, why: 'Fermeture demandée par toi' }); }
+      const r = manualSell(b.dataset.bclose);
+      if (r === 'locked') h.toast('Bot verrouillé : la vente partira dès que tu entres ton code', 'short');
+      else if (r === 'frozen') h.toast('Compte gelé par le créateur : vente impossible', 'short');
       render(); return;
     }
+    if (b.dataset.b === 'sell-no') { B.ui.sellAsk = null; render(); return; }
     if (b.dataset.bq) { setQuick(b.dataset.bq, +b.dataset.v); return; }
     const a = b.dataset.b;
     if (a === 'qapply') {
@@ -3919,6 +3995,7 @@ function TradeBot(h, radar, jup, tr) {
   return { start, render, detailHtml, unlocked: () => !!kp, openCount: () => openPos().length, S,
     autoJoin, dayLossHit: () => day().pnl <= -S.cfg.dayLoss,
     // Sortie demandée de l'extérieur (copie de wallets) : appliquée au prochain passage de la boucle, comme une sortie urgente
+    manualSell,
     requestExit: (mint, why) => { const p = S.pos[mint]; if (!p || p.state === 'closed' || p.exitReq) return false; p.exitReq = why; save(); return true; }, lastClosed: () => S.hist[0] || null, cfg: () => S.cfg, hasWallet: () => !!S.pub,
     traded: mint => !!(S.pos[mint] && S.pos[mint].state !== 'closed') || !!(S.ignored[mint] && Date.now() - S.ignored[mint] < 2 * 3600e3) || !!(S.done && S.done[mint] && Date.now() - S.done[mint] < DONE_MS), logMsg: (m, l) => log(m, l), applyExits, decideCore, NET_FEE, onLive, _test: { decide, curV, pushHist, b58enc, b58dec } };
 }
@@ -4766,7 +4843,8 @@ function TradeJournal(h, radar, live, bot, X) {
       radarSignals: (radar.R && radar.R.flags || []).slice(0, 150).map(f => ({ sym: f.sym, t: f.t, score: f.score, max: f.px0 ? r4(f.max / f.px0 - 1) : null, min: f.px0 ? r4(f.min / f.px0 - 1) : null, last: f.px0 ? r4(f.last / f.px0 - 1) : null })),
       pauses: J.pauses,
       trades: J.entries,
-      observations: J.obs
+      observations: J.obs,
+      firstBuyers: h.firstBuyers ? h.firstBuyers() : null // premiers acheteurs des coins analysés (onglet Sources)
     };
   }
   async function exportFile() {
@@ -4914,6 +4992,8 @@ function StrategyLab(h, radar, live, bot) {
     (t, f) => (fin(f.tx5) && fin(f.traders) && f.traders > 0
       ? `${t.symbol || (t.mint || '').slice(0, 6)} : ${(Math.round(f.tx5 / f.traders * 10) / 10).toString().replace('.', ',')} tx par trader (${f.tx5} tx, ${f.traders} traders), organique ${fin(f.organic) ? Math.round(f.organic) : f.orgLabel || '?'}`
       : null));
+  // Liste noire manuelle (coins et créateurs que tu as bannis toi-même)
+  const BAN = C('coin et créateur pas sur ta liste noire', t => !(h.banned && h.banned(t)), t => (h.banned && h.banned(t) ? 'banni par toi' : null));
   const byId = id => STRATS.find(s => s.id === id);
   // Réglages de sortie testés en parallèle sur chaque entrée : les tiens, et deux autres pour comparer
   const EXIT_KEYS = ['sl', 'tp1', 'tp1Part', 'trail', 'tp2', 'beAt', 'beFloor', 'drop', 'npMin', 'npNeed'];
@@ -4977,7 +5057,7 @@ function StrategyLab(h, radar, live, bot) {
   const xNeeded = () => !!(h.requireX && h.requireX());
   // Toutes les conditions d'une stratégie, dans l'ordre : renvoie le rang de la première qui échoue (-1 si tout passe)
   function check(s, t, f) {
-    const list = [...SAFE, ...(s.age ? [C('âge dans la fenêtre de la stratégie', (tt, ff) => ff.age != null && ff.age >= s.age[0] && ff.age <= s.age[1], (tt, ff) => (ff.age != null ? Math.round(ff.age) : null))] : []), ...s.conds, MOMO, BOTS];
+    const list = [...SAFE, BAN, ...(s.age ? [C('âge dans la fenêtre de la stratégie', (tt, ff) => ff.age != null && ff.age >= s.age[0] && ff.age <= s.age[1], (tt, ff) => (ff.age != null ? Math.round(ff.age) : null))] : []), ...s.conds, MOMO, BOTS];
     if (xNeeded() && !s.manual) list.push(C('lien X vérifié (réglage du mode auto)', tt => !!(h.xOk && h.xOk(tt))));
     for (let i = 0; i < list.length; i++) {
       let ok = false;
@@ -5042,12 +5122,14 @@ function StrategyLab(h, radar, live, bot) {
   /* ---------- moteur ---------- */
   function open(s, t, f) {
     const size = bot.cfg().size, grp = ++L.seq, keys = new Set();
+    // copie : on retient quel wallet a déclenché le trade, pour classer les wallets ensuite
+    const src = s.id === 'copy' && h.copy && h.copy() ? ((h.copy().recentBuy(t.mint) || {}).w || null) : null;
     let primary = null;
     for (const pr of PROFILES) {
       const cfg = cfgFor(s.id, pr.id), key = keyOf(cfg);
       if (keys.has(key)) continue;
       keys.add(key);
-      const p = { id: ++L.seq, grp, strat: s.id, prof: pr.id, key, cfg, mint: t.mint, sym: t.symbol || t.mint.slice(0, 4), t0: now(), state: 'pending', fillAt: now() + 4000,
+      const p = { id: ++L.seq, grp, strat: s.id, src, prof: pr.id, key, cfg, mint: t.mint, sym: t.symbol || t.mint.slice(0, 4), t0: now(), state: 'pending', fillAt: now() + 4000,
         cost: size + NETF, size, q: 0, realized: 0, hist: [], peakTot: null, tp1Done: false, pnl: 0 };
       if (jr) {
         if (!primary) { p.jid = jr.open('s' + p.id + '-' + p.strat, 'sim', s.id, t, f || feat(t), { prof: pr.id, key }).id; primary = p; }
@@ -5063,7 +5145,7 @@ function StrategyLab(h, radar, live, bot) {
     p.state = 'closed';
     const net = p.realized - p.cost;
     if (p.paused && !gap) { gap = 'pause'; why = 'interrompu : appli en pause pendant le trade (pas compté) · ' + why; }
-    L.closed.unshift({ id: p.id, grp: p.grp, jid: p.jid || null, strat: p.strat, prof: p.prof || 'toi', key: p.key || null, mint: p.mint, sym: p.sym, t0: p.t0, t1: now(), cost: p.cost, net, pnl: net / p.cost, why, gap: !!gap, peak: p.peakTot ? p.peakTot / p.cost - 1 : null });
+    L.closed.unshift({ id: p.id, grp: p.grp, jid: p.jid || null, strat: p.strat, src: p.src || null, rt: fin(p.rt0) ? Math.round(p.rt0 * 1e4) / 1e4 : null, prof: p.prof || 'toi', key: p.key || null, mint: p.mint, sym: p.sym, t0: p.t0, t1: now(), cost: p.cost, net, pnl: net / p.cost, why, gap: !!gap, peak: p.peakTot ? p.peakTot / p.cost - 1 : null });
     if (jr && p.jid) jr.close(jr.byId(p.jid), why, gap ? NaN : net / p.cost, gap ? NaN : net, gap ? { gap: gap === 'pause' ? 'pause' : true } : null);
     if (jr && p.jparent) jr.alt(jr.byId(p.jparent), { prof: p.prof, key: p.key, pnl: gap ? null : Math.round(net / p.cost * 1e4) / 1e4, why, holdS: p.tOpen ? Math.round((now() - p.tOpen) / 1000) : null, peak: p.peakTot ? Math.round((p.peakTot / p.cost - 1) * 1e4) / 1e4 : null });
     if (L.closed.length > 400) L.closed.length = 400;
@@ -5077,7 +5159,7 @@ function StrategyLab(h, radar, live, bot) {
     if (p.state === 'pending') {
       if (now() < p.fillAt) return;
       const q = buyQty(t, p.size);
-      if (fin(q) && q > 0) { p.q = q; p.state = 'open'; p.tOpen = now(); p.t0 = now(); const v0 = value(t, q); pushHist(p, v0); if (jr && p.jid) jr.fill(jr.byId(p.jid), pxSol(t), p.cost, v0); dirty = true; }
+      if (fin(q) && q > 0) { p.q = q; p.state = 'open'; p.tOpen = now(); p.t0 = now(); const v0 = value(t, q); if (fin(v0) && p.cost > 0) p.rt0 = 1 - v0 / p.cost; pushHist(p, v0); if (jr && p.jid) jr.fill(jr.byId(p.jid), pxSol(t), p.cost, v0); dirty = true; }
       else if (now() - p.fillAt > 30000) { p.realized = p.cost; finish(p, 'annulé : pas de prix au moment de l\'achat'); }
       return;
     }
@@ -5101,6 +5183,25 @@ function StrategyLab(h, radar, live, bot) {
       else { p.state = 'open'; dirty = true; }
     }
   }
+  // Clôture à la main d'un trade simulé : toutes ses variantes (autres réglages de sortie testés) sortent au même moment,
+  // comme une vente d'urgence ; le journal note « Clôturé à la main ». Aucun wallet n'est utilisé.
+  let askClose = null;
+  function manualClose(id) {
+    const p0 = L.open.find(x => x.id === id);
+    if (!p0) return false;
+    const g = p0.grp || p0.id;
+    for (const q of L.open.filter(x => (x.grp || x.id) === g)) {
+      if (q.state === 'pending') { q.realized = q.cost; finish(q, 'annulé à la main avant l\'achat'); continue; }
+      if (q.state === 'open') { const d = { pct: 100, urgent: true, why: 'Clôturé à la main' }; q.state = 'exiting'; q.exitAt = now(); q.exitD = d; if (jr && q.jid) jr.exitDecision(jr.byId(q.jid), d, q.pnl); }
+    }
+    for (const q of L.open.slice()) if ((q.grp || q.id) === g && q.state === 'exiting') { try { step(q); } catch {} }
+    askClose = null; dirty = true; save();
+    return true;
+  }
+  const simCloseHtml = p => (askClose === p.id
+    ? `<div class="confirm" style="margin:4px 0 0"><span>Clôturer ce trade simulé ?</span><button class="btn sm danger" data-lclose-yes="${p.id}">Clôturer</button><button class="btn sm" data-lclose-no="1">Annuler</button></div>`
+    : p.state === 'exiting' ? '<div class="mono">sortie en cours…</div>'
+    : `<div class="row-btns" style="margin:4px 0 0"><button class="btn sm" data-lclose="${p.id}">Clôturer à la main</button></div>`);
   function onLive(mint) { for (const p of L.open) if (p.mint === mint && p.state !== 'pending') { if (now() - (p.lastLive || 0) >= 700) { p.lastLive = now(); step(p); } } }
 
   function scan() {
@@ -5232,7 +5333,7 @@ function StrategyLab(h, radar, live, bot) {
         <p class="note">${s.age ? `Âge d'entrée : ${ageTxt(s.age[0])} à ${ageTxt(s.age[1])}. ` : ''}${migrOnly() && !s.manual && !MIGR_IDS.includes(s.id) ? '<b>Option « uniquement après migration » : simulée, mais jamais en argent réel.</b> ' : ''}${s.manual ? '<b>Jamais choisie par le mode auto : l\'argent réel se règle dans l\'onglet Copie.</b> ' : ''}Avec tes réglages : ${exitTxt(cfgFor(s.id, 'toi'))}${s.exits.stallMin ? `, sortie si moins de +${s.exits.stallNeed} % après ${s.exits.stallMin} min` : ''}${s.exits.flowExit ? ', sortie si les vendeurs dominent' : ''}, sortie immédiate si le créateur vend, ${s.exits.maxHold} min maximum.</p>
         <p class="note"><b>Mêmes entrées, autres sorties :</b> ${profStats(s.id).filter(x => !x.mine || autoMode()).map(x => `${esc(x.pr.name)} ${x.st.n ? `${fPct(x.st.avg)} sur ${x.st.n} trades` : 'pas encore de trade'}`).join(' · ')}</p></details>`;
     }).join('');
-    const opened = L.open.filter(p => p.state !== 'pending' && (p.prof || 'toi') === 'toi').slice(0, 6).map(p => `<div class="j-row"><span class="chip">${esc((byId(p.strat) || {}).name || p.strat)}</span><div class="j-mid"><div>${esc(p.sym)} · en cours</div><div class="mono">depuis ${ago(now() - p.t0)}</div></div><span class="j-r ${p.pnl > 0 ? 'pos' : p.pnl < 0 ? 'neg' : ''}">${fPct(p.pnl)}</span></div>`).join('');
+    const opened = L.open.filter(p => p.state !== 'pending' && (p.prof || 'toi') === 'toi').slice(0, 6).map(p => `<div class="j-row"><span class="chip">${esc((byId(p.strat) || {}).name || p.strat)}</span><div class="j-mid"><div>${esc(p.sym)} · en cours</div><div class="mono">depuis ${ago(now() - p.t0)}</div>${simCloseHtml(p)}</div><span class="j-r ${p.pnl > 0 ? 'pos' : p.pnl < 0 ? 'neg' : ''}">${fPct(p.pnl)}</span></div>`).join('');
     const diagOf = x => { const e = jr && x.jid ? jr.byId(x.jid) : null; return e && e.diag ? e.diag.filter(d => d.lvl !== 'ok' || d.c === 'sortie_justifiee').slice(0, 3) : []; };
     const last = L.closed.filter(x => (x.prof || 'toi') === 'toi').slice(0, 8).map(x => { const dg = diagOf(x); return `<div class="j-row"><span class="chip ${x.gap ? '' : x.net >= 0 ? 'long' : 'short'}">${x.gap ? 'sans prix' : fPct(x.pnl)}</span><div class="j-mid"><div>${esc(x.sym)} · ${esc((byId(x.strat) || {}).name || x.strat)}</div><div class="mono">${ago(now() - x.t1)} · ${esc(x.why)}</div>${dg.length ? `<ul class="l-diag">${dg.map(d => `<li data-l="${d.lvl}">${esc(d.txt)}</li>`).join('')}</ul>` : ''}</div><span class="j-r ${x.net >= 0 ? 'pos' : 'neg'}">${x.gap ? '—' : fSol(x.net)}</span></div>`; }).join('');
     const sg = suggestion();
@@ -5248,6 +5349,9 @@ function StrategyLab(h, radar, live, bot) {
       <p class="note">Chaque trade, simulé ou réel, est enregistré avec la photo complète du coin à l'entrée, le trajet du prix, la sortie, les 15 min qui suivent et ce qui n'allait pas. Plus l'entonnoir : à quelle condition chaque stratégie bloque. ${jr ? jr.entries().length + ' trades enregistrés.' : ''}</p>
       <div class="row-btns"><button class="btn sm pri" id="labExport">Exporter le journal (fichier)</button><button class="btn sm" id="labReset">Remettre le laboratoire à zéro</button></div>`;
     for (const b of box.querySelectorAll('[data-lprof]')) b.onclick = () => applyProfile(b.dataset.lprof);
+    for (const b of box.querySelectorAll('[data-lclose]')) b.onclick = () => { askClose = +b.dataset.lclose; render(); };
+    for (const b of box.querySelectorAll('[data-lclose-no]')) b.onclick = () => { askClose = null; render(); };
+    for (const b of box.querySelectorAll('[data-lclose-yes]')) b.onclick = () => { manualClose(+b.dataset.lcloseYes); render(); };
     for (const b of box.querySelectorAll('[data-lnp]')) b.onclick = () => { bot.applyExits({ npMin: +b.dataset.lnp }, `Sortie sans hausse passée à ${b.dataset.lnp} min depuis le laboratoire`); render(); };
     const eb = $('#labExport');
     if (eb && jr) eb.onclick = async () => { eb.disabled = true; try { const r = await jr.exportFile(); if (r.ok && h.toast) h.toast(`Journal exporté (${r.how}) : ${r.name}, ${Math.round(r.size / 1024)} ko`, 'long'); } catch (e) { if (h.toast) h.toast('Export impossible : ' + e.message, 'short'); } eb.disabled = false; };
@@ -5284,7 +5388,19 @@ function StrategyLab(h, radar, live, bot) {
   const describe = () => STRATS.map(s => ({ id: s.id, name: s.name, age: s.age, exits: s.exits, profiles: profStats(s.id).map(x => ({ id: x.pr.id, key: x.key, mine: x.mine, cfg: Object.fromEntries(EXIT_KEYS.map(k => [k, x.cfg[k]])), stats: x.st })), conditions: [...SAFE.map(c => c.l), 'âge dans la fenêtre', ...s.conds.map(c => c.l), ...(xNeeded() ? ['lien X vérifié'] : [])] }));
   const allStats = () => Object.fromEntries(STRATS.map(s => [s.id, Object.assign({ name: s.name }, stats(s.id), { closed: L.closed.filter(x => x.strat === s.id).length })]));
   if (typeof TradeJournal === 'function') jr = TradeJournal(h, radar, live, bot, { pxSol, feat, exitsOf: id => (byId(id) || {}).exits, describe, allStats });
-  return { start, render, pick, candidates, stats, STRATS, byId, L, journal: () => jr, PROFILES, profStats, suggestion, pairs, cfgFor, MIGR_IDS,
+  function copyRank() {
+    const lim = Math.max(now() - DAY, L.resetAt || 0), k = userKey('copy'), M = new Map();
+    for (const x of L.closed) {
+      if (x.strat !== 'copy' || !x.src || x.t1 < lim || x.gap || /^annulé|^données manquantes|^interrompu/.test(x.why)) continue;
+      if (!(x.key ? x.key === k : (x.prof || 'toi') === 'toi')) continue;
+      const e = M.get(x.src) || { n: 0, wins: 0, sum: 0, net: 0, open: 0 };
+      e.n++; if (x.pnl > 0) e.wins++; e.sum += x.pnl; e.net += x.net; M.set(x.src, e);
+    }
+    for (const p of L.open) if (p.strat === 'copy' && p.src && (p.prof || 'toi') === 'toi') { const e = M.get(p.src) || { n: 0, wins: 0, sum: 0, net: 0, open: 0 }; e.open++; M.set(p.src, e); }
+    for (const e of M.values()) e.avg = e.n ? e.sum / e.n : 0;
+    return M;
+  }
+  return { start, render, pick, candidates, stats, STRATS, byId, L, journal: () => jr, PROFILES, profStats, suggestion, pairs, cfgFor, MIGR_IDS, manualClose, copyRank, NETF,
     copyCheck: t => { const s0 = byId('copy'), f = feat(t), r = check(s0, t, f); if (r.i < 0) return null; let v = null; try { v = r.c.v ? r.c.v(t, f) : null; } catch {} return { why: r.c.l, v }; }, _test: { feat, safe, passes, check, step, open, scan, value, buyQty, qualifies, finish, pxSol, tick } };
 }
 if (typeof module !== 'undefined') module.exports = StrategyLab;
@@ -5310,13 +5426,15 @@ function CopyTrade(h, radar, bot, rpc) {
   const MAX_W = 5;
   const lab = () => (h.lab ? h.lab() : null);
 
-  const BLANK = { v: 1, wallets: [], view: 'sim', real: false, ev: [], seen: [] };
+  const BLANK = { v: 1, wallets: [], view: 'sim', real: false, ev: [], seen: [], alerts: true, alerted: {} };
+  const JUDGE = 6; // en dessous de 6 copies terminées, pas de pourcentage : ce serait du hasard
   const S = Object.assign({}, BLANK, h.store.get('copy', {}));
   if (!Array.isArray(S.wallets)) S.wallets = [];
   if (!Array.isArray(S.ev)) S.ev = [];
   if (!Array.isArray(S.seen)) S.seen = [];
+  if (!S.alerted || typeof S.alerted !== 'object') S.alerted = {};
   const seen = new Set(S.seen);
-  const save = () => h.store.set('copy', { v: 1, wallets: S.wallets, view: S.view, real: !!S.real, ev: S.ev.slice(0, 120), seen: [...seen].slice(-500) });
+  const save = () => h.store.set('copy', { v: 1, wallets: S.wallets, view: S.view, real: !!S.real, ev: S.ev.slice(0, 120), seen: [...seen].slice(-500), alerts: S.alerts !== false, alerted: S.alerted });
   const C = { buys: new Map(), sells: new Map(), busy: false, lastOk: 0, err: '', confirm: false, started: false };
 
   /* ---------- formats ---------- */
@@ -5416,6 +5534,7 @@ function CopyTrade(h, radar, bot, rpc) {
       else {
         C.buys.set(e.mint, { t: now(), w: w.addr, sol: e.sol, sig });
         radar.pin(e.mint, 'copy', {});
+        buyAlert(w, e);
         ev.act = 'sim'; ev.why = 'trade simulé dans le laboratoire, si les contrôles passent';
         if (S.real) realBuy(w, e.mint, ev);
       }
@@ -5433,6 +5552,16 @@ function CopyTrade(h, radar, bot, rpc) {
     S.ev.unshift(ev);
     if (S.ev.length > 120) S.ev.length = 120;
   }
+  // Alerte « X vient d'acheter Y » : demandée pour les wallets suivis (à part de la règle « seulement les trades pris »)
+  function buyAlert(w, e) {
+    if (S.alerts === false || !h.alert) return;
+    const k = w.addr + '|' + e.mint;
+    for (const [kk, t] of Object.entries(S.alerted)) if (now() - t > 24 * 3600e3) delete S.alerted[kk];
+    if (S.alerted[k]) return;
+    S.alerted[k] = now(); save();
+    // quelques secondes pour que le radar trouve le nom du coin
+    setTimeout(() => { try { h.alert(`${nameOf(w.addr)} vient d'acheter ${symOf(e.mint)}${fin(e.sol) ? ' pour ' + fSol(e.sol) : ''}`); } catch {} }, 4000);
+  }
   // Achat réel : le wallet du bot mèmes entre si le coin passe les mêmes contrôles que la simulation
   async function realBuy(w, mint, ev) {
     try {
@@ -5446,7 +5575,7 @@ function CopyTrade(h, radar, bot, rpc) {
       if (!t) throw new Error('coin introuvable');
       const L = lab(), chk = L && L.copyCheck ? L.copyCheck(t) : null;
       if (chk) throw new Error(`écarté par les contrôles (${chk.why}${chk.v != null && chk.v !== '' ? ' : ' + chk.v : ''})`);
-      await bot.autoJoin(mint, null, `Copie de ${nameOf(w.addr)}`, { strat: 'copy' });
+      await bot.autoJoin(mint, null, `Copie de ${nameOf(w.addr)}`, { strat: 'copy', src: w.addr });
       ev.act = 'real'; ev.why = 'acheté pour de vrai par le wallet du bot (et simulé)';
     } catch (e) {
       ev.why = 'simulé seulement · réel : ' + e.message; // la simulation, elle, suit son cours
@@ -5467,12 +5596,41 @@ function CopyTrade(h, radar, bot, rpc) {
     const what = ev.side === 'buy' ? `achète ${esc(sym)}${fin(ev.sol) ? ' pour ' + fSol(ev.sol) : fin(ev.usd) ? ' pour ' + n(ev.usd, 0) + ' $' : ''}` : `${ev.side === 'sell' ? 'vend' : 'sort'} ${esc(sym)}${fin(ev.frac) ? ' (' + Math.round(ev.frac * 100) + ' %)' : ''}`;
     return `<div class="j-row"><span class="chip ${cls}">${lab0}</span><div class="j-mid"><div>${esc(nameOf(ev.w))} ${what}</div><div class="mono">il y a ${ago(now() - ev.tx)} · ${esc(ev.why)}</div></div><a class="cp-tx" href="https://solscan.io/tx/${esc(ev.sig)}" target="_blank" rel="noopener">tx</a></div>`;
   }
+  // Classement des wallets suivis : copies simulées terminées sur 24 h, du meilleur au pire
+  function rankHtml() {
+    const L = lab();
+    if (!S.wallets.length || !L || !L.copyRank) return '';
+    const M = L.copyRank();
+    const real = new Map();
+    for (const x of ((bot.S && bot.S.hist) || [])) if (x.strat === 'copy' && x.src && now() - x.t1 < 24 * 3600e3) { const e = real.get(x.src) || { n: 0, net: 0 }; e.n++; e.net += x.net; real.set(x.src, e); }
+    const rows = S.wallets.map(w => ({ w, e: M.get(w.addr) || { n: 0, wins: 0, avg: 0, net: 0, open: 0 }, r: real.get(w.addr) }));
+    const judged = rows.filter(x => x.e.n >= JUDGE).sort((a, b) => b.e.avg - a.e.avg);
+    const wait = rows.filter(x => x.e.n < JUDGE).sort((a, b) => b.e.n - a.e.n);
+    const line = (x, i) => {
+      const e = x.e, ok = e.n >= JUDGE;
+      const res = ok ? `${e.n} copies · ${Math.round(e.wins / e.n * 100)} % gagnantes · moyenne <b class="${e.avg > 0 ? 'pos' : 'neg'}">${fPct(e.avg)}</b> · total <b class="${e.net >= 0 ? 'pos' : 'neg'}">${e.net > 0 ? '+' : e.net < 0 ? '−' : ''}${fSol(Math.abs(e.net))}</b>`
+        : `encore trop peu de trades pour juger (${e.n}/${JUDGE})`;
+      const chip = ok ? (e.avg > 0 ? '<span class="chip long">à copier</span>' : '<span class="chip short">fait perdre</span>') : '<span class="chip">en test</span>';
+      return `<div class="cp-r"><span class="cp-rk">${ok ? i + 1 : '–'}</span><div class="cp-rm"><b>${esc(x.w.label || short(x.w.addr))}</b><span>${res}${e.open ? ` · ${e.open} en cours` : ''}${x.r ? ` · réel : ${x.r.n} trade${x.r.n > 1 ? 's' : ''}, ${fSol(x.r.net)}` : ''}</span></div>${chip}</div>`;
+    };
+    return `<h3 class="w-h" style="margin-top:0">Classement des wallets (simulation, 24 h)</h3>
+      <div class="cp-rank">${[...judged.map(line), ...wait.map(x => line(x, 0))].join('')}</div>
+      <p class="note" style="margin:6px 0 12px">Copies simulées avec ta mise et tes réglages de sortie, frais compris. Il faut au moins ${JUDGE} copies terminées avant de juger un wallet.</p>`;
+  }
   function statsHtml(st) {
     return `<div class="w-top">
       <div class="kv"><div class="k">Trades (24 h)</div><div class="v">${st.n}${st.open ? ` <small>+ ${st.open} en cours</small>` : ''}</div></div>
       <div class="kv"><div class="k">Gagnants</div><div class="v">${st.n ? Math.round(st.wins / st.n * 100) + ' %' : '—'}</div></div>
       <div class="kv"><div class="k">Moyenne nette</div><div class="v ${st.avg > 0 ? 'pos' : st.avg < 0 ? 'neg' : ''}">${st.n ? fPct(st.avg) : '—'}</div></div>
     </div>`;
+  }
+  // Vente à la main d'une copie réelle : même vente d'urgence que le bot (un appui, puis confirmation)
+  function realSellHtml(p) {
+    if (p.frozen) return '<div class="mono neg">compte gelé par le créateur : vente impossible</div>';
+    if (p.state === 'selling' || p.busy) return '<div class="row-btns" style="margin:4px 0 0"><button class="btn sm" disabled>Vente en cours…</button></div>';
+    if (p.closeReq) return `<div class="mono">${bot.unlocked() ? 'vente demandée…' : 'vente demandée : elle partira dès que tu entres ton code (onglet Mèmes)'}</div>`;
+    if (C.ask === 'r:' + p.mint) return `<div class="confirm" style="margin:4px 0 0"><span>Vendre ${esc(p.sym)} au prix du marché ?</span><button class="btn sm danger" data-cask-yes="r:${esc(p.mint)}">Confirmer la vente</button><button class="btn sm" data-cask-no="1">Annuler</button></div>`;
+    return `<div class="row-btns" style="margin:4px 0 0"><button class="btn sm danger" data-cask="r:${esc(p.mint)}">Vendre maintenant</button></div>`;
   }
   function render() {
     const box = $('#copyBody');
@@ -5496,7 +5654,7 @@ function CopyTrade(h, radar, bot, rpc) {
       const cl = L ? L.L.closed.filter(x => x.strat === 'copy' && (x.prof || 'toi') === 'toi').slice(0, 8) : [];
       body = `<p class="note" style="margin:0 0 8px">Chaque achat du wallet copié ouvre un trade simulé, sans argent : mise de ${fSol(bot.cfg().size)}, mêmes contrôles et mêmes sorties que le bot, plus une sortie quand le wallet revend. Résultats des 24 dernières heures.</p>
         ${statsHtml(st)}
-        ${op.length ? `<h3 class="w-h">Copies simulées en cours</h3><div class="journal">${op.map(p => `<div class="j-row"><span class="chip">en cours</span><div class="j-mid"><div>${esc(p.sym)}</div><div class="mono">depuis ${ago(now() - p.t0)}</div></div><span class="j-r ${p.pnl > 0 ? 'pos' : p.pnl < 0 ? 'neg' : ''}">${fPct(p.pnl)}</span></div>`).join('')}</div>` : ''}
+        ${op.length ? `<h3 class="w-h">Copies simulées en cours</h3><div class="journal">${op.map(p => `<div class="j-row"><span class="chip">en cours</span><div class="j-mid"><div>${esc(p.sym)}</div><div class="mono">depuis ${ago(now() - p.t0)}</div>${p.state === 'exiting' ? '<div class="mono">sortie en cours…</div>' : C.ask === 's:' + p.id ? `<div class="confirm" style="margin:4px 0 0"><span>Clôturer cette copie simulée ?</span><button class="btn sm danger" data-cask-yes="s:${p.id}">Clôturer</button><button class="btn sm" data-cask-no="1">Annuler</button></div>` : `<div class="row-btns" style="margin:4px 0 0"><button class="btn sm" data-cask="s:${p.id}">Clôturer à la main</button></div>`}</div><span class="j-r ${p.pnl > 0 ? 'pos' : p.pnl < 0 ? 'neg' : ''}">${fPct(p.pnl)}</span></div>`).join('')}</div>` : ''}
         ${cl.length ? `<h3 class="w-h">Dernières copies simulées</h3><div class="journal">${cl.map(x => `<div class="j-row"><span class="chip ${x.gap ? '' : x.net >= 0 ? 'long' : 'short'}">${x.gap ? 'sans prix' : fPct(x.pnl)}</span><div class="j-mid"><div>${esc(x.sym)}</div><div class="mono">il y a ${ago(now() - x.t1)} · ${esc(x.why)}</div></div><span class="j-r ${x.net >= 0 ? 'pos' : 'neg'}">${x.gap ? '—' : fSol(x.net)}</span></div>`).join('')}</div>` : ''}`;
     } else {
       const pub = bot.S && bot.S.pub;
@@ -5512,12 +5670,15 @@ function CopyTrade(h, radar, bot, rpc) {
           <div class="row-btns">${S.real ? '<button class="btn danger" data-c="off">Couper la copie réelle</button>' : '<button class="btn pri" data-c="arm">Copier pour de vrai</button>'}</div>
           ${C.confirm && !S.real ? `<div class="confirm"><span>Le bot achètera seul, avec de l'argent réel, chaque coin acheté par ${on.length > 1 ? 'les wallets suivis' : 'le wallet suivi'}, dans la limite de ${bot.cfg().maxPos} positions et de sa perte maximale du jour. Tu entres quelques secondes après lui, souvent à un prix moins bon.</span><button class="btn sm danger" data-c="arm-yes">Oui, copier</button><button class="btn sm" data-c="arm-no">Annuler</button></div>` : ''}</div>
         ${statsHtml(st)}
-        ${pos.length ? `<h3 class="w-h">Copies réelles en cours</h3><div class="journal">${pos.map(p => `<div class="j-row"><span class="chip long">réel</span><div class="j-mid"><div>${esc(p.sym)}</div><div class="mono">depuis ${ago(now() - p.t0)}${p.exitReq ? ' · sortie demandée' : ''}</div></div><span class="j-r"></span></div>`).join('')}</div>` : ''}
+        ${pos.length ? `<h3 class="w-h">Copies réelles en cours</h3><div class="journal">${pos.map(p => `<div class="j-row"><span class="chip long">réel</span><div class="j-mid"><div>${esc(p.sym)}</div><div class="mono">depuis ${ago(now() - p.t0)}${p.exitReq && !p.closeReq ? ' · sortie demandée (le wallet copié a revendu)' : ''}</div>${realSellHtml(p)}</div><span class="j-r ${p.pnl > 0 ? 'pos' : p.pnl < 0 ? 'neg' : ''}">${fin(p.pnl) ? fPct(p.pnl) : ''}</span></div>`).join('')}</div>
+          <p class="note">« Vendre maintenant » ne ferme que cette position : la copie réelle continue pour les prochains achats.</p>` : ''}
         ${hist.length ? `<h3 class="w-h">Dernières copies réelles</h3><div class="journal">${hist.map(x => `<div class="j-row"><span class="chip ${x.net >= 0 ? 'long' : 'short'}">${fPct(x.pnl)}</span><div class="j-mid"><div>${esc(x.sym)}</div><div class="mono">il y a ${ago(now() - x.t1)} · ${esc(x.why || '')}</div></div><span class="j-r ${x.net >= 0 ? 'pos' : 'neg'}">${fSol(x.net)}</span></div>`).join('')}</div>` : ''}`;
     }
-    box.innerHTML = `<h3 class="w-h" style="margin-top:0">Wallets suivis</h3>
+    const rk = rankHtml();
+    box.innerHTML = `${rk}<h3 class="w-h"${rk ? '' : ' style="margin-top:0"'}>Wallets suivis</h3>
       ${wl ? `<div class="cp-list">${wl}</div>` : '<p class="note" style="margin:0">Aucun wallet suivi. Colle l\'adresse d\'un wallet Solana dont tu veux reproduire les trades.</p>'}
       ${addHtml}
+      ${S.wallets.length ? `<label class="toggle" style="margin-top:6px"><span>Alerte quand un wallet suivi achète<small>« Baleine vient d'acheter X », une fois par wallet et par coin. Sur l'écran verrouillé seulement si « Notifications sur le téléphone » est activé (Réglages), et tant qu'Android laisse tourner Vigie</small></span><input type="checkbox" id="cpAlert"${S.alerts !== false ? ' checked' : ''}></label>` : ''}
       ${on.length && C.err && !C.lastOk ? `<p class="note neg">${esc(C.err)}</p>` : ''}
       <div style="margin:14px 0 8px">${seg}</div>
       ${body}
@@ -5545,6 +5706,17 @@ function CopyTrade(h, radar, bot, rpc) {
       if (!b) return;
       try {
         if (b.dataset.cv) { S.view = b.dataset.cv; save(); }
+        else if (b.dataset.cask) C.ask = b.dataset.cask;
+        else if (b.dataset.caskNo) C.ask = null;
+        else if (b.dataset.caskYes) {
+          const k = b.dataset.caskYes; C.ask = null;
+          if (k.startsWith('s:')) { const L = lab(); if (L && L.manualClose) L.manualClose(+k.slice(2)); }
+          else {
+            const r = bot.manualSell ? bot.manualSell(k.slice(2)) : 'none';
+            if (r === 'locked') h.toast && h.toast('Bot verrouillé : la vente partira dès que tu entres ton code dans l\'onglet Mèmes', 'short');
+            else if (r === 'frozen') h.toast && h.toast('Compte gelé par le créateur : vente impossible', 'short');
+          }
+        }
         else if (b.dataset.cwDel) { const a = b.dataset.cwDel; S.wallets = S.wallets.filter(w => w.addr !== a); save(); }
         else if (b.dataset.c === 'add') { const a = $('#cpAddr'), l = $('#cpLabel'); addWallet(a && a.value, l && l.value); h.toast && h.toast('Wallet ajouté : ses opérations seront copiées en simulation à partir de maintenant', 'long'); }
         else if (b.dataset.c === 'arm') C.confirm = true;
@@ -5557,6 +5729,7 @@ function CopyTrade(h, radar, bot, rpc) {
     });
     box.addEventListener('change', e => {
       const el = e.target;
+      if (el && el.id === 'cpAlert') { S.alerts = el.checked; save(); el.blur(); render(); return; }
       if (!el.dataset || !el.dataset.cwOn) return;
       const w = S.wallets.find(x => x.addr === el.dataset.cwOn);
       if (w) { w.on = el.checked; if (w.on) { w.base = false; if (C.started) setTimeout(() => poll().catch(() => {}), 300); } save(); }
@@ -5574,9 +5747,210 @@ function CopyTrade(h, radar, bot, rpc) {
     C.started = true;
     loop();
   }
-  return { start, render, bindUI, recentBuy, leaderExit, S, _test: { parse, onEvent, poll, addWallet, C, realBuy } };
+  return { start, render, bindUI, recentBuy, leaderExit, S, addWallet: (a, l) => { addWallet(a, l); render(); }, has: a => S.wallets.some(w => w.addr === a), _test: { parse, onEvent, poll, addWallet, C, realBuy } };
 }
 if (typeof module !== 'undefined') module.exports = CopyTrade;
+
+/* ================= WALLETS SOURCES (premiers acheteurs) =================
+   Pendant que l'appli tourne, Vigie lit sur la blockchain les premiers acheteurs des coins qui démarrent bien
+   (courbe pump.fun remplie à 30 % ou plus, migration, ou candidat du radar). Pour chaque coin : les 15 premières
+   adresses acheteuses dans l'ordre, et ce qui s'est passé juste après chacune (les « suiveurs »).
+   En croisant les coins, on fait ressortir les adresses qui reviennent parmi les tout premiers : les wallets sources.
+   Rien n'est copié tout seul : le bouton « Copier ce wallet » l'ajoute à l'onglet Copie, en simulation. */
+function SourceWallets(h, radar, rpc) {
+  const fin = Number.isFinite, esc = h.esc, $ = h.$;
+  const now = () => Date.now();
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  const MAX_COINS = 150;     // coins gardés en mémoire
+  const FIRST = 15;          // premiers acheteurs gardés par coin
+  const TOP = 10;            // pour compter comme « source », être dans les 10 premiers
+  const MIN_COINS = 2;       // et sur au moins 2 coins différents (un seul coin peut être de la chance)
+  const FETCH = 45;          // premières transactions lues par coin
+  const PAGES = 5;           // 5 × 1000 transactions au plus : au-delà, le coin est trop actif pour remonter au début
+  const WAVE = 120;          // la « vague » : transactions dans les 2 min après l'achat
+  const MAX_AGE = 3 * 3600e3;
+
+  const S = Object.assign({ v: 1, on: true, coins: [], done: {} }, h.store.get('srcw', {}));
+  if (!Array.isArray(S.coins)) S.coins = [];
+  if (!S.done || typeof S.done !== 'object') S.done = {};
+  const save = () => {
+    for (const [m, t] of Object.entries(S.done)) if (now() - t > 3 * 86400e3) delete S.done[m];
+    h.store.set('srcw', { v: 1, on: S.on !== false, coins: S.coins.slice(0, MAX_COINS), done: S.done });
+  };
+  const W = { busy: false, cur: null, err: '', started: false, lastAt: 0 };
+
+  const short = a => (a ? a.slice(0, 4) + '…' + a.slice(-4) : '');
+  const n0 = x => Math.round(x).toLocaleString('fr-FR');
+  const n1 = x => (Math.round(x * 10) / 10).toLocaleString('fr-FR');
+  const progOf = t => { const lc = t.live && t.live.c && !t.live.complete ? t.live.c : null; return lc ? Curve.progress(lc) : (t.m && fin(t.m.progress) ? t.m.progress : null); };
+  const isPump = t => /pump$/.test(t.mint) || t.launchpad === 'pump.fun' || !!(t.live && t.live.c);
+
+  /* ---------- quels coins analyser ---------- */
+  // Les coins qui démarrent bien, vus pendant que l'appli tourne, pas trop vieux (sinon trop de transactions à remonter)
+  function nextCoin() {
+    let best = null, bs = -1;
+    for (const t of radar.R.tokens.values()) {
+      if (!t || !t.mint || S.done[t.mint] || (t.sources && t.sources.has('démo')) || !isPump(t)) continue;
+      if (fin(t.created) && now() - t.created > MAX_AGE) continue;
+      const pr = progOf(t);
+      const good = t.migrated || (fin(pr) && pr >= 0.3) || (t.score || 0) >= 65 || (t.nc && t.nc.status === 'cand');
+      if (!good) continue;
+      const sc = (t.migrated ? 2 : 0) + (fin(pr) ? pr : 0) + (t.score || 0) / 100;
+      if (sc > bs) { bs = sc; best = t; }
+    }
+    return best;
+  }
+
+  /* ---------- lecture d'une transaction : qui a acheté le coin ? ---------- */
+  function buyerOf(tx, mint) {
+    if (!tx || !tx.meta || tx.meta.err) return null;
+    const msg = tx.transaction && tx.transaction.message;
+    if (!msg) return null;
+    const keys = (msg.accountKeys || []).map(k => (typeof k === 'string' ? k : k && k.pubkey));
+    const signer = (msg.accountKeys || []).find(k => k && typeof k === 'object' && k.signer);
+    const payer = (signer && signer.pubkey) || keys[0] || null;
+    const bal = arr => { const M = new Map(); for (const b of arr || []) if (b && b.mint === mint && b.owner && b.uiTokenAmount) { let r; try { r = BigInt(b.uiTokenAmount.amount); } catch { continue; } M.set(b.owner, (M.get(b.owner) || 0n) + r); } return M; };
+    const pre = bal(tx.meta.preTokenBalances), post = bal(tx.meta.postTokenBalances);
+    let best = null;
+    for (const [o, v] of post) {
+      const d = v - (pre.get(o) || 0n);
+      if (d <= 0n) continue;
+      const i = keys.indexOf(o);
+      const sol = i >= 0 && tx.meta.preBalances && tx.meta.postBalances ? (tx.meta.preBalances[i] - tx.meta.postBalances[i]) / 1e9 : null;
+      // un acheteur paie en SOL (le pool, lui, perd des jetons) ; sans SOL connu, on garde celui qui signe
+      if ((fin(sol) && sol > 0.0005) || o === payer) { if (!best || d > best.d) best = { a: o, d, sol: fin(sol) && sol > 0 ? sol : null }; }
+    }
+    return best ? { a: best.a, sol: best.sol, payer } : null;
+  }
+
+  /* ---------- analyse d'un coin ---------- */
+  async function analyze(t) {
+    const mint = t.mint;
+    let all = [], before, complete = false;
+    for (let p = 0; p < PAGES; p++) {
+      const res = await rpc('getSignaturesForAddress', [mint, Object.assign({ limit: 1000, commitment: 'confirmed' }, before ? { before } : {})]);
+      if (!Array.isArray(res)) break;
+      all = all.concat(res);
+      if (res.length < 1000) { complete = true; break; }
+      before = res[res.length - 1].signature;
+      await sleep(500);
+    }
+    S.done[mint] = now();
+    if (!complete || !all.length) { save(); return { skipped: !complete ? 'trop de transactions pour remonter au lancement' : 'aucune transaction' }; }
+    const seq = all.filter(x => !x.err).reverse(); // du plus ancien au plus récent
+    const times = seq.map(x => (x.blockTime || 0) * 1000);
+    const t0 = times[0] || null;
+    const buys = [];
+    let creator = t.creator || (t.live && t.live.creator) || null;
+    for (let i = 0; i < Math.min(FETCH, seq.length); i++) {
+      let tx = null;
+      try { tx = await rpc('getTransaction', [seq[i].signature, { encoding: 'jsonParsed', maxSupportedTransactionVersion: 0, commitment: 'confirmed' }]); } catch { await sleep(300); continue; }
+      const b = buyerOf(tx, mint);
+      if (i === 0 && b && !creator) creator = b.payer || b.a; // la création (et l'achat du créateur) vient en premier
+      if (b) buys.push({ a: b.a, t: times[i], sol: b.sol });
+      await sleep(150);
+    }
+    // premiers acheteurs uniques, créateur à part
+    const seen = new Set(), buyers = [];
+    for (let i = 0; i < buys.length; i++) {
+      const x = buys[i];
+      if (x.a === creator || seen.has(x.a)) continue;
+      seen.add(x.a);
+      const later = new Set(buys.slice(i + 1).filter(y => y.a !== x.a && y.a !== creator && y.t - x.t <= WAVE * 1000).map(y => y.a));
+      const wave = times.filter(tt => tt > x.t && tt - x.t <= WAVE * 1000).length;
+      buyers.push({ a: x.a, r: buyers.length + 1, t: x.t, dt: t0 && x.t ? Math.round((x.t - t0) / 1000) : null, sol: x.sol != null ? Math.round(x.sol * 1e4) / 1e4 : null, fol: later.size, wave });
+      if (buyers.length >= FIRST) break;
+    }
+    const pr = progOf(t);
+    const rec = { mint, sym: t.symbol || short(mint), at: now(), t0, creator, tx: all.length, buyers, mig: !!t.migrated, prog: fin(pr) ? Math.round(pr * 100) / 100 : null };
+    S.coins = [rec, ...S.coins.filter(c => c.mint !== mint)].slice(0, MAX_COINS);
+    save();
+    return { rec };
+  }
+  async function step() {
+    if (W.busy || S.on === false || h.inFrame) return;
+    // les coins déjà analysés qui ont migré depuis : on le note (sert à juger les sources)
+    for (const c of S.coins) { const t = radar.get(c.mint); if (t && t.migrated && !c.mig) { c.mig = true; save(); } }
+    const t = nextCoin();
+    if (!t) return;
+    W.busy = true; W.cur = t.symbol || short(t.mint);
+    try { const r = await analyze(t); W.err = r && r.skipped ? `${W.cur} : ${r.skipped}` : ''; W.lastAt = now(); }
+    catch (e) { W.err = (e && e.message) || String(e); S.done[t.mint] = now() - 2 * 86400e3; save(); } // on réessaiera plus tard
+    finally { W.busy = false; W.cur = null; }
+    if (h.visible && h.visible()) render();
+  }
+
+  /* ---------- croisement : les wallets sources ---------- */
+  function rank() {
+    const A = new Map(), creators = new Set(S.coins.map(c => c.creator).filter(Boolean));
+    for (const c of S.coins) for (const b of c.buyers || []) {
+      if (b.r > TOP) continue;
+      const e = A.get(b.a) || { a: b.a, coins: [], ranks: [], dts: [], fol: 0, wave: 0, mig: 0 };
+      if (e.coins.includes(c.sym + '|' + c.mint)) continue;
+      e.coins.push(c.sym + '|' + c.mint); e.ranks.push(b.r); if (fin(b.dt)) e.dts.push(b.dt);
+      e.fol += b.fol || 0; e.wave += b.wave || 0; if (c.mig) e.mig++;
+      A.set(b.a, e);
+    }
+    return [...A.values()].filter(e => e.coins.length >= MIN_COINS).map(e => Object.assign(e, {
+      n: e.coins.length, avgRank: e.ranks.reduce((x, y) => x + y, 0) / e.ranks.length,
+      avgDt: e.dts.length ? e.dts.reduce((x, y) => x + y, 0) / e.dts.length : null,
+      avgWave: e.wave / e.coins.length, avgFol: e.fol / e.coins.length, creator: creators.has(e.a)
+    })).sort((x, y) => y.wave - x.wave || y.n - x.n);
+  }
+
+  /* ---------- affichage ---------- */
+  const ui = { more: false };
+  function render() {
+    const box = $('#srcBody');
+    if (!box) return;
+    if (h.inFrame) { box.innerHTML = '<p class="note" style="margin:0">L\'analyse des premiers acheteurs ne tourne pas dans l\'aperçu Claude. Utilise la version hébergée de l\'appli.</p>'; return; }
+    const R = rank(), cp = h.copy && h.copy();
+    const st = $('#srcState');
+    if (st) st.innerHTML = S.on === false ? '<span class="chip">en pause</span>' : W.busy ? '<span class="chip long">analyse…</span>' : '<span class="chip">actif</span>';
+    const status = `${S.coins.length} coin${S.coins.length > 1 ? 's' : ''} analysé${S.coins.length > 1 ? 's' : ''}${W.cur ? ` · en cours : ${esc(W.cur)}` : ''}${W.err ? ` · <span class="muted">${esc(W.err)}</span>` : ''}`;
+    const rows = R.slice(0, ui.more ? 60 : 20).map((e, i) => {
+      const copied = cp && cp.has && cp.has(e.a);
+      const coins = e.coins.slice(0, 4).map(x => esc(x.split('|')[0])).join(', ') + (e.coins.length > 4 ? '…' : '');
+      return `<div class="sw-r"><span class="cp-rk">${i + 1}</span><div class="cp-rm"><b class="mono">${esc(short(e.a))}</b>
+        <span>${e.n} coins initiés${e.mig ? ` (${e.mig} ont migré)` : ''} · rang moyen ${n1(e.avgRank)}${e.avgDt != null ? ` · entre ${n0(e.avgDt)} s après le lancement` : ''}</span>
+        <span>Suiveurs : <b>${n1(e.avgFol)}</b> wallet${e.avgFol >= 2 ? 's' : ''} juste derrière lui, ≈ <b>${n0(e.avgWave)}</b> transactions dans les 2 min (moyennes par coin)</span>
+        <span>${coins}${e.creator ? ' · <b class="neg">a aussi créé des coins</b>' : ''}</span>
+        <div class="row-btns" style="margin:4px 0 0">${copied ? '<button class="btn sm" disabled>Déjà copié</button>' : `<button class="btn sm pri" data-sw-copy="${esc(e.a)}">Copier ce wallet</button>`}<a class="btn sm" href="https://solscan.io/account/${esc(e.a)}" target="_blank" rel="noopener">Solscan</a></div></div></div>`;
+    }).join('');
+    box.innerHTML = `<label class="toggle" style="padding-top:0"><span>Analyser les premiers acheteurs<small>Coins qui démarrent bien : courbe remplie à 30 % ou plus, migration ou candidat du radar. Une analyse à la fois, pour ménager le réseau</small></span><input type="checkbox" id="swOn"${S.on !== false ? ' checked' : ''}></label>
+      <p class="note">${status}</p>
+      <h3 class="w-h">Wallets sources, du plus suivi au moins suivi</h3>
+      ${rows ? `<div class="cp-rank">${rows}</div>${R.length > 20 ? `<div class="row-btns"><button class="btn sm" data-sw-more="1">${ui.more ? 'Voir moins' : `Voir les ${R.length}`}</button></div>` : ''}`
+        : `<p class="note">Pas encore de wallet source : il faut qu'une même adresse soit parmi les ${TOP} premiers acheteurs d'au moins ${MIN_COINS} coins analysés. La liste se remplit au fil des coins (${S.coins.length} pour l'instant).</p>`}
+      <p class="note">« Copier ce wallet » l'ajoute à l'onglet Copie, en simulation. Rien n'est ajouté tout seul, et rien ne passe en réel sans toi.</p>
+      ${S.coins.length ? `<details class="w-oth"><summary>Derniers coins analysés</summary><div class="journal">${S.coins.slice(0, 12).map(c => `<div class="j-row"><span class="chip${c.mig ? ' long' : ''}">${c.mig ? 'migré' : fin(c.prog) ? Math.round(c.prog * 100) + ' %' : '—'}</span><div class="j-mid"><div>${esc(c.sym)}</div><div class="mono">${c.buyers.length} premiers acheteurs · ${n0(c.tx)} transactions lues</div></div><span></span></div>`).join('')}</div></details>` : ''}`;
+  }
+  function bindUI() {
+    const box = $('#srcBody');
+    if (!box) return;
+    box.addEventListener('click', e => {
+      const b = e.target.closest('button'); if (!b) return;
+      if (b.dataset.swCopy) {
+        const cp = h.copy && h.copy();
+        try { if (!cp || !cp.addWallet) throw new Error('onglet Copie indisponible'); cp.addWallet(b.dataset.swCopy, 'Source ' + b.dataset.swCopy.slice(0, 4)); h.toast && h.toast('Wallet ajouté à l\'onglet Copie, en simulation', 'long'); }
+        catch (err) { h.toast && h.toast(err.message, 'short'); }
+        render(); return;
+      }
+      if (b.dataset.swMore) { ui.more = !ui.more; render(); }
+    });
+    box.addEventListener('change', e => { if (e.target && e.target.id === 'swOn') { S.on = e.target.checked; save(); render(); } });
+  }
+  function start() {
+    if (W.started || h.inFrame) return;
+    W.started = true;
+    const loop = async () => { try { await step(); } catch {} setTimeout(loop, 15000); };
+    setTimeout(loop, 20000);
+  }
+  // Pour l'export du journal : premiers acheteurs de chaque coin analysé
+  const exportData = () => S.coins.map(c => ({ mint: c.mint, sym: c.sym, at: new Date(c.at).toISOString(), launch: c.t0 ? new Date(c.t0).toISOString() : null, creator: c.creator, txRead: c.tx, migrated: c.mig, curve: c.prog, firstBuyers: c.buyers.map(b => ({ addr: b.a, rank: b.r, secAfterLaunch: b.dt, sol: b.sol, followers: b.fol, txIn2min: b.wave })) }));
+  return { start, render, bindUI, rank, exportData, S, _test: { analyze, buyerOf, nextCoin, step, W } };
+}
+if (typeof module !== 'undefined') module.exports = SourceWallets;
 
 /* ================= HYPERLIQUID : protocole (lecture, signature, ordres) =================
    Futures perpétuels de Phantom (Perps). Le compte, c'est ton adresse EVM de Phantom.
@@ -7580,12 +7954,97 @@ if (typeof module !== 'undefined') module.exports = PerpsBot;
     } catch { wl = null; }
   }
 
+  /* ---------- liste noire manuelle (coins et créateurs bannis par toi) ---------- */
+  const ban = Object.assign({ mints: {}, devs: {} }, store.get('ban', {}));
+  const saveBan = () => store.set('ban', ban);
+  const creatorOf = t => (t && (t.creator || (t.live && t.live.creator))) || null;
+  const isBanned = t => !!(t && ((t.mint && ban.mints[t.mint]) || (creatorOf(t) && ban.devs[creatorOf(t)])));
+  const shortA = a => (a ? a.slice(0, 4) + '…' + a.slice(-4) : '');
+  function banHtml(t) {
+    if (!t || !t.mint || (t.sources && t.sources.has('démo'))) return '';
+    const cr = creatorOf(t), bm = !!ban.mints[t.mint], bd = !!(cr && ban.devs[cr]);
+    const txt = bm || bd ? `<b class="neg">${bm ? 'Ce coin' : 'Son créateur'} est sur ta liste noire</b> : le bot n'y entre plus (mode auto, laboratoire, copie).`
+      : `Le bot n'entrera plus sur ce coin (mode auto, laboratoire, copie).${cr ? ' Bannir le créateur écarte aussi tous ses autres coins.' : ' Créateur inconnu pour ce coin : seul le coin peut être banni.'}`;
+    return `<div class="t-box" data-banbox="${esc(t.mint)}"><b>Liste noire</b><p class="note" style="margin:4px 0 8px">${txt}</p><div class="row-btns" style="margin:0">
+      ${bm ? `<button class="btn sm" data-unban-mint="${esc(t.mint)}">Retirer ce coin de la liste</button>` : `<button class="btn sm danger" data-ban-mint="${esc(t.mint)}">Ne plus jamais proposer</button>`}
+      ${cr ? (bd ? `<button class="btn sm" data-unban-dev="${esc(cr)}">Retirer son créateur</button>` : `<button class="btn sm danger" data-ban-dev="${esc(cr)}" data-ban-mintref="${esc(t.mint)}">Bannir son créateur</button>`) : ''}</div></div>`;
+  }
+  function renderBan() {
+    const box = $('#banBody'); if (!box) return;
+    const M = Object.entries(ban.mints).sort((a, b) => b[1].at - a[1].at), D = Object.entries(ban.devs).sort((a, b) => b[1].at - a[1].at);
+    const row = (kind, k, v) => `<div class="j-row"><span class="chip short">${kind === 'm' ? 'coin' : 'créateur'}</span><div class="j-mid"><div>${esc(kind === 'm' ? (v.sym || shortA(k)) : shortA(k))}</div><div class="mono">${kind === 'm' ? esc(shortA(k)) : 'créateur de ' + esc(v.sym || '?')} · banni le ${new Date(v.at).toLocaleDateString('fr-FR')}</div></div><button class="btn sm" data-unban-${kind === 'm' ? 'mint' : 'dev'}="${esc(k)}">Retirer</button></div>`;
+    box.innerHTML = (M.length || D.length) ? `<div class="journal">${[...M.map(([k, v]) => row('m', k, v)), ...D.map(([k, v]) => row('d', k, v))].join('')}</div><p class="note">Ces coins et ces créateurs sont écartés de toutes les entrées du bot : mode auto, laboratoire, copie de wallets.</p>`
+      : '<p class="note" style="margin:0">Liste vide. Pour bannir un coin ou son créateur, ouvre sa fiche (onglets Mèmes ou Nouveaux) et touche « Ne plus jamais proposer ».</p>';
+  }
+  function banClick(e) {
+    const b = e.target.closest('button'); if (!b) return;
+    const d = b.dataset, t0 = Date.now();
+    let mint = null;
+    if (d.banMint) { const t = radar.get(d.banMint); ban.mints[d.banMint] = { sym: (t && t.symbol) || '', at: t0 }; mint = d.banMint; toast('Coin ajouté à ta liste noire', 'short'); }
+    else if (d.banDev) { const t = radar.get(d.banMintref); ban.devs[d.banDev] = { sym: (t && t.symbol) || '', at: t0 }; mint = d.banMintref; toast('Créateur ajouté à ta liste noire : tous ses coins sont écartés', 'short'); }
+    else if (d.unbanMint) { delete ban.mints[d.unbanMint]; mint = d.unbanMint; toast('Coin retiré de la liste noire'); }
+    else if (d.unbanDev) { delete ban.devs[d.unbanDev]; mint = (b.closest('[data-banbox]') || { dataset: {} }).dataset.banbox; toast('Créateur retiré de la liste noire'); }
+    else return;
+    saveBan(); renderBan();
+    const box = b.closest('[data-banbox]');
+    if (box && mint) { const t = radar.get(mint); if (t) box.outerHTML = banHtml(t); }
+  }
+  { const md = $('#memeDetail'); if (md) md.addEventListener('click', banClick); const bb = $('#banBody'); if (bb) bb.addEventListener('click', banClick); }
+
+  /* ---------- apparence ---------- */
+  const look = Object.assign({ theme: 'auto', text: 'md' }, store.get('look', {}));
+  function applyLook() {
+    const r = document.documentElement;
+    if (look.theme === 'light' || look.theme === 'dark') r.dataset.theme = look.theme; else delete r.dataset.theme;
+    if (look.text === 'lg') r.dataset.text = 'lg'; else delete r.dataset.text;
+    $$('#lookTheme button').forEach(b => b.setAttribute('aria-pressed', b.dataset.lookTheme === look.theme));
+    $$('#lookText button').forEach(b => b.setAttribute('aria-pressed', b.dataset.lookText === look.text));
+  }
+  $$('#lookTheme button').forEach(b => b.onclick = () => { look.theme = b.dataset.lookTheme; store.set('look', look); applyLook(); if (curTab === 'signal') requestAnimationFrame(drawChart); });
+  $$('#lookText button').forEach(b => b.onclick = () => { look.text = b.dataset.lookText; store.set('look', look); applyLook(); });
+  applyLook();
+
+  /* ---------- bilan des frais ----------
+     Coût d'un aller-retour mesuré à l'entrée de chaque trade (cotation achat puis revente) : frais du pool ou de la courbe,
+     impact sur le prix et frais réseau. La part réseau est fixe par trade, le reste est proportionnel à la mise. */
+  function feeGroup(list, netFix) {
+    const L = list.filter(x => fin(x.cost) && x.cost > 0 && fin(x.net) && fin(x.rt));
+    if (!L.length) return null;
+    let fees = 0, netw = 0, cost = 0, net = 0;
+    for (const x of L) { const f = Math.max(0, x.rt) * x.cost; fees += f; netw += Math.min(f, netFix); cost += x.cost; net += x.net; }
+    return { n: L.length, fees, netw, pool: fees - netw, cost, net, gross: net + fees, avgPct: fees / cost, netwPct: netw / cost, poolPct: (fees - netw) / cost, stake: cost / L.length };
+  }
+  function renderFees() {
+    const box = $('#feeBody'); if (!box || !bot || !lab) return;
+    const n4 = x => (Math.abs(x) >= 0.1 ? x.toFixed(3) : x.toFixed(4)).replace('.', ',') + ' SOL';
+    const pc = x => (x * 100).toFixed(1).replace('.', ',') + ' %';
+    const netR = 2 * (bot.NET_FEE || 0.0001), netS = 2.5 * (lab.NETF || 0.0002);
+    const real = feeGroup(((bot.S && bot.S.hist) || []).slice(0, 30), netR);
+    const sim = feeGroup(lab.L.closed.filter(x => (x.prof || 'toi') === 'toi' && !x.gap && !/^annulé|^données manquantes|^interrompu/.test(x.why)).slice(0, 60), netS);
+    const grp = (title, g) => !g ? '' : `<h3 class="w-h">${title} · ${g.n} trade${g.n > 1 ? 's' : ''}</h3>
+      <div class="w-top">
+        <div class="kv"><div class="k">Frais payés</div><div class="v">${n4(g.fees)}</div></div>
+        <div class="kv"><div class="k">Par trade</div><div class="v">${pc(g.avgPct)} <small>de la mise</small></div></div>
+        <div class="kv"><div class="k">Résultat net</div><div class="v ${g.net >= 0 ? 'pos' : 'neg'}">${n4(g.net)}</div></div>
+      </div>
+      <p class="note">Réseau Solana ${pc(g.netwPct)} (fixe : ${n4(g.netw / g.n)} par trade) · plateforme, pool et impact ${pc(g.poolPct)}. Sans frais, le résultat aurait été <b class="${g.gross >= 0 ? 'pos' : 'neg'}">${n4(g.gross)}</b>${g.net < 0 && g.gross > 0 ? ' : <b>les frais transforment un gain en perte</b>' : g.net < 0 ? `, dont ${pc(Math.min(1, g.fees / -g.net))} de la perte venant des frais` : ''}.</p>`;
+    const size = bot.cfg().size, fix = real ? real.netw / real.n : netS, poolP = (real || sim) ? (real || sim).poolPct : null;
+    const minFor = r => fix / r;
+    box.innerHTML = (real || sim) ? `${grp('Trades réels', real)}${grp('Trades simulés du laboratoire', sim)}
+      <div class="advice" data-l="${fix / size > 0.02 ? 'warn' : 'ok'}" style="margin:12px 0 0"><h3>Ta mise : ${n4(size)}</h3>
+        <p>Les frais réseau fixes (${n4(fix)} par aller-retour) font ${pc(fix / size)} de cette mise. Ils passent sous 2 % à partir de ${n4(minFor(0.02))}, et sous 1 % à partir de ${n4(minFor(0.01))}.${poolP != null ? ` Les frais de plateforme et l'impact (${pc(poolP)} ici) sont proportionnels : ils ne baissent pas avec une plus grosse mise, et l'impact monte même sur les petits pools.` : ''}</p>
+        <p style="margin-top:6px">Augmente la mise seulement quand une stratégie gagne dans le laboratoire : une plus grosse mise sur une stratégie perdante perd plus vite.</p></div>
+      <p class="note">Estimation : coût d'un achat puis d'une revente immédiate, mesuré à l'entrée de chaque trade (${real ? '30' : '60'} derniers au plus). Les ventes d'urgence peuvent coûter un peu plus.</p>`
+      : '<p class="note" style="margin:0">Pas encore de trade avec des frais mesurés. Le bilan se remplit avec les trades du bot et ceux du laboratoire.</p>';
+  }
+
   /* ---------- navigation ---------- */
   function showTab(t) {
     curTab = t;
-    document.body.classList.toggle('meme', t === 'meme' || t === 'new' || t === 'perps' || t === 'copy');
-    { const mt = $('#memeTitle'); if (mt) mt.textContent = t === 'new' ? 'Nouveaux coins' : t === 'perps' ? 'Futures auto' : t === 'copy' ? 'Copie de wallets' : 'Radar mèmes'; }
-    { const a = $('#memeNet'), b = $('#memeSub'); if (a) a.textContent = t === 'perps' ? 'Hyperliquid' : 'Solana'; if (b) b.textContent = t === 'perps' ? 'via Phantom' : t === 'copy' ? 'suivi de wallets' : 'temps réel'; }
+    document.body.classList.toggle('meme', t === 'meme' || t === 'new' || t === 'perps' || t === 'copy' || t === 'src');
+    { const mt = $('#memeTitle'); if (mt) mt.textContent = t === 'new' ? 'Nouveaux coins' : t === 'perps' ? 'Futures auto' : t === 'copy' ? 'Copie de wallets' : t === 'src' ? 'Wallets sources' : 'Radar mèmes'; }
+    { const a = $('#memeNet'), b = $('#memeSub'); if (a) a.textContent = t === 'perps' ? 'Hyperliquid' : 'Solana'; if (b) b.textContent = t === 'perps' ? 'via Phantom' : t === 'copy' ? 'suivi de wallets' : t === 'src' ? 'premiers acheteurs' : 'temps réel'; }
+    if (t === 'src') setTimeout(() => sources && sources.render(), 0);
     if (t === 'copy') setTimeout(() => copy && copy.render(), 0);
     if (t === 'perps') setTimeout(() => perps && perps.render(), 0);
     if (t === 'new') setTimeout(() => newCoins && newCoins.render(), 0);
@@ -7594,15 +8053,15 @@ if (typeof module !== 'undefined') module.exports = PerpsBot;
     $$('.tabbar button').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === t));
     if (t === 'signal') requestAnimationFrame(drawChart);
     if (t === 'scan') { renderScan(!!st.scanAt); if (!st.scanAt || Date.now() - st.scanAt > 30000) scan(); }
-    if (t === 'stats') { renderCalib(); renderJournal(); }
+    if (t === 'stats') { renderCalib(); renderJournal(); renderFees(); }
     if (t === 'pos') { if (!pos) fillForm(null); renderPos(); }
-    if (t === 'set') { renderSettings(); renderDiag(); renderApp(); appDiag(); }
+    if (t === 'set') { renderSettings(); renderDiag(); renderApp(); appDiag(); renderBan(); applyLook(); }
     window.scrollTo(0, 0);
   }
   $$('.tabbar button').forEach(b => b.onclick = () => showTab(b.dataset.tab));
 
   // radar mèmes + trading via wallet + bot autonome
-  let trader = null, bot = null, newCoins = null, live = null, lab = null, perps = null, copy = null;
+  let trader = null, bot = null, newCoins = null, live = null, lab = null, perps = null, copy = null, sources = null;
   const inFrame = (() => { try { return window.top !== window.self; } catch { return true; } })();
   const buzz = p => { if (set.vibrate && navigator.vibrate) try { navigator.vibrate(p); } catch {} };
   const jup = JupClient(() => (trader ? trader.jupKey() : ''));
@@ -7611,7 +8070,7 @@ if (typeof module !== 'undefined') module.exports = PerpsBot;
     $, $$, esc, store, log, toast, capital: () => set.capital,
     jup: (p, prio) => jup.get(p, prio),
     rpc: (m, p) => rpcPool.call(m, p),
-    tradeHtml: t => (trader ? trader.detailHtml(t) : '') + (bot ? bot.detailHtml(t) : ''),
+    tradeHtml: t => (trader ? trader.detailHtml(t) : '') + (bot ? bot.detailHtml(t) : '') + banHtml(t),
     onNew: t => { if (newCoins) newCoins.onNew(t); },
     socialHtml: t => (newCoins ? newCoins.socialHtml(t) : ''),
     alert: msg => { if (!set.oppAlerts) return; toast('Mème · ' + msg, 'long'); sysNotify('Mème · ' + msg, 'long'); beep(1); if (set.vibrate && navigator.vibrate) try { navigator.vibrate([80, 40, 80, 40, 160]); } catch {} }
@@ -7630,7 +8089,7 @@ if (typeof module !== 'undefined') module.exports = PerpsBot;
     wsUrls: () => { const c = (trader.rpcUrl() || '').trim(); const L = []; if (/^https:\/\//.test(c)) L.push(c.replace(/^https:/, 'wss:')); return L.concat(['wss://solana-rpc.publicnode.com', 'wss://api.mainnet-beta.solana.com']); }
   }, radar);
   bot = TradeBot({
-    $, $$, esc, store, log, toast, inFrame,
+    $, $$, esc, store, log, toast, inFrame, banned: isBanned,
     visible: () => curTab === 'meme' && document.visibilityState === 'visible',
     notify: (msg, cls) => { toast(msg, cls); sysNotify(msg, cls); beep(cls === 'short' ? -1 : 1); buzz(cls === 'short' ? [300, 80, 300] : [120, 60, 120]); },
     ask: msg => { if (!set.oppAlerts) return; toast(msg, 'long'); sysNotify(msg, 'long'); beep(1); buzz([80, 40, 80, 40, 160]); },
@@ -7652,7 +8111,9 @@ if (typeof module !== 'undefined') module.exports = PerpsBot;
     solUsd: () => trader.solUsd(),
     requireX: () => newCoins.requireX(),
     xOk: t => newCoins.xOk(t),
-    copy: () => copy
+    copy: () => copy,
+    banned: isBanned,
+    firstBuyers: () => (sources ? sources.exportData() : null)
   }, radar, live, bot);
   newCoins.start();
   if (!inFrame) lab.start();
@@ -7668,11 +8129,19 @@ if (typeof module !== 'undefined') module.exports = PerpsBot;
   // copie de wallets : le wallet copié est seulement lu ; les achats réels passent par le wallet du bot mèmes
   copy = CopyTrade({
     $, esc, store, log, toast, inFrame, lab: () => lab,
+    alert: msg => { toast(msg, 'long'); sysNotify(msg, 'long'); },
     visible: () => curTab === 'copy' && document.visibilityState === 'visible',
     showBot: () => { showTab('meme'); setTimeout(() => { const el = $('#botCard'); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 60); }
   }, radar, bot, (m, p) => rpcPool.call(m, p));
   copy.bindUI();
   if (!inFrame) copy.start();
+  // wallets sources : premiers acheteurs des coins qui démarrent bien, croisés entre coins
+  sources = SourceWallets({
+    $, esc, store, toast, inFrame, copy: () => copy,
+    visible: () => curTab === 'src' && document.visibilityState === 'visible'
+  }, radar, (m, p) => rpcPool.call(m, p));
+  sources.bindUI();
+  if (!inFrame) sources.start();
   let wTick = 0, pTick = 0, cTick = 0;
   setInterval(() => {
     if (curTab === 'meme' && $('#memeSheet').hidden && $('#tradeSheet').hidden) radar.render();
@@ -7680,6 +8149,7 @@ if (typeof module !== 'undefined') module.exports = PerpsBot;
     if (curTab === 'new' && document.visibilityState === 'visible') { const ae = document.activeElement; if (!(ae && ae.closest && ae.closest('#labCard'))) lab.render(); }
     if (curTab === 'perps' && document.visibilityState === 'visible' && ++pTick % 2 === 0) perps.render();
     if (curTab === 'copy' && document.visibilityState === 'visible' && ++cTick % 2 === 0) copy.render();
+    if (curTab === 'src' && document.visibilityState === 'visible' && cTick++ % 5 === 0) sources.render();
     { const cd = $('#copyDot'); if (cd) cd.hidden = !copy.S.real; }
     { const pd = $('#perpsDot'); if (pd) pd.hidden = !Object.keys(perps.S.real.pos).length; }
     const n = radar.badge(), d = $('#memeDot');
@@ -7878,7 +8348,7 @@ if (typeof module !== 'undefined') module.exports = PerpsBot;
   applyWake();
   start();
   radar.start();
-  showTab(hash.startsWith('perps') ? 'perps' : ['signal', 'pos', 'scan', 'meme', 'new', 'copy', 'stats', 'set'].includes(hash) ? hash : 'signal');
+  showTab(hash.startsWith('perps') ? 'perps' : ['signal', 'pos', 'scan', 'meme', 'new', 'copy', 'src', 'stats', 'set'].includes(hash) ? hash : 'signal');
 })();
 
 </script>
