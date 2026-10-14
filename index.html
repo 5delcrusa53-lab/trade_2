@@ -222,9 +222,20 @@ main{padding:12px 16px calc(84px + env(safe-area-inset-bottom,0px));max-width:76
 .confirm{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px;font-size:.86rem}
 
 /* barre d'onglets */
-.tabbar{position:fixed;left:0;right:0;bottom:0;z-index:30;background:var(--panel);border-top:1px solid var(--line);display:grid;grid-template-columns:repeat(8,1fr);padding:6px 2px calc(6px + env(safe-area-inset-bottom,0px))}
+.tabbar{position:fixed;left:0;right:0;bottom:0;z-index:30;background:var(--panel);border-top:1px solid var(--line);display:grid;grid-template-columns:repeat(9,1fr);padding:6px 2px calc(6px + env(safe-area-inset-bottom,0px))}
 .tabbar button{border:0;background:none;display:grid;justify-items:center;gap:2px;padding:4px 0;font-size:.56rem;min-width:0;overflow:hidden;color:var(--muted);letter-spacing:.02em;position:relative}
 .tabbar svg{width:22px;height:22px}
+/* ---------- copie de wallets ---------- */
+.cp-list{display:grid;gap:6px;margin-bottom:4px}
+.cp-w{display:flex;align-items:center;gap:8px 10px;flex-wrap:wrap;border:1px solid var(--line);border-radius:10px;padding:8px 10px;background:var(--panel)}
+.cp-w.off{opacity:.6}
+.cp-wm{flex:1 1 160px;min-width:0;display:grid;gap:2px}
+.cp-wm b{font-family:var(--f-display);font-size:1rem;overflow-wrap:anywhere}
+.cp-wm .mono{font-size:.72rem;color:var(--muted);overflow-wrap:anywhere}
+.cp-seg{display:flex;width:100%}
+.cp-seg button{flex:1;font-size:.86rem;padding:8px 11px}
+.cp-tx{font-size:.72rem;color:var(--muted);align-self:center}
+#cpAddr,#cpLabel{text-transform:none;font-family:var(--f-mono)}
 .tabbar button[aria-selected="true"]{color:var(--accent)}
 .tabbar .dot{position:absolute;top:2px;left:calc(50% + 8px);width:8px;height:8px;border-radius:50%;background:var(--short)}
 
@@ -624,7 +635,8 @@ a.btn{text-decoration:none;color:inherit;display:inline-block}
         <div class="field"><label for="aHour">Entrées maximum par heure</label><input id="aHour" type="number" inputmode="numeric" step="1"></div>
         <div class="field"><label for="aCool">Pause après une perte (min)</label><input id="aCool" type="number" inputmode="numeric" step="1"></div>
       </div>
-      <label class="toggle"><span>Argent réel seulement avec une stratégie rentable<small>Recommandé. Le laboratoire doit montrer au moins 12 trades simulés et +3 % net en moyenne ; sinon le bot attend</small></span><input type="checkbox" id="aLab"></label>
+      <label class="toggle"><span>Argent réel seulement avec une stratégie rentable<small>Recommandé. Le laboratoire doit montrer au moins 12 trades simulés, +3 % net en moyenne, et un résultat qui ne tient pas à un ou deux coups de chance ; sinon le bot attend</small></span><input type="checkbox" id="aLab"></label>
+      <label class="toggle"><span>Uniquement les coins juste après migration<small>Le bot ne prend que les coins qui viennent de quitter la courbe pump.fun pour un vrai pool (« Migration fraîche » : moins de 5 min, puis « Après migration »). Ta fenêtre d'âge ne s'applique plus ; tous les autres contrôles, oui</small></span><input type="checkbox" id="aMigr"></label>
       <label class="toggle"><span>Exiger un lien X vérifié<small>Tweet ou compte existant, pas copié d'un autre coin</small></span><input type="checkbox" id="aReqX"></label>
       <label class="toggle"><span>Entrer sur les nouveaux coins<small>Coins sortis il y a moins de 20 min (sans effet quand le laboratoire choisit)</small></span><input type="checkbox" id="aNew"></label>
       <label class="toggle"><span>Entrer aussi sur les « intéressants » du radar<small>Seulement s'ils respectent la fenêtre d'âge</small></span><input type="checkbox" id="aRadar"></label>
@@ -655,6 +667,23 @@ a.btn{text-decoration:none;color:inherit;display:inline-block}
         </ul>
         <p class="note">Le passé ne garantit rien : une période sans grande tendance donne une série de petites pertes.</p>
       </details>
+    </div>
+  </section>
+
+  <!-- ===== COPIE DE WALLETS ===== -->
+  <section class="tab" id="tab-copy" hidden>
+    <div class="card" id="copyCard">
+      <h2>Copie de wallets <span class="sp" id="copyState"></span></h2>
+      <div id="copyBody"><p class="note" style="margin:0">Démarrage…</p></div>
+    </div>
+    <div class="card">
+      <h2>Comment ça marche</h2>
+      <ol class="i-steps">
+        <li><b>Tu colles l'adresse d'un wallet Solana.</b> Vigie relit ses transactions toutes les 4 s environ, tant que l'appli est ouverte. Ce wallet est seulement observé : rien n'est jamais signé avec lui.</li>
+        <li><b>Quand il achète un jeton</b> (0,05 SOL ou plus), la simulation entre aussitôt avec la mise du bot. Mêmes contrôles que le bot (sécurité, prix pas en baisse, anti-bots), mêmes sorties, plus une sortie dès qu'il revend la moitié de ses jetons ou plus.</li>
+        <li><b>En réel</b>, seulement si tu l'actives : le wallet du bot mèmes achète et revend de la même façon. Les limites du bot s'appliquent : nombre de positions en même temps, perte maximale du jour.</li>
+      </ol>
+      <p class="note">À savoir : tu entres quelques secondes après le wallet copié, donc souvent un peu plus cher. Un wallet qui gagne en achetant dans les toutes premières secondes est très difficile à copier avec profit. Regarde la simulation sur plusieurs jours avant de passer en réel.</p>
     </div>
   </section>
 
@@ -724,6 +753,7 @@ a.btn{text-decoration:none;color:inherit;display:inline-block}
   <button role="tab" data-tab="meme" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3c1 3.5 5 5.5 5 10a5 5 0 0 1-10 0c0-2.2 1-3.6 2.2-4.8.3 1.6 1.1 2.6 2.3 3 .2-3 .5-5.2.5-8.2z"/></svg>Mèmes<span class="cnt" id="memeDot" hidden></span></button>
   <button role="tab" data-tab="new" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 2.5l1.9 5.6 5.6 1.9-5.6 1.9L12 17.5l-1.9-5.6L4.5 10l5.6-1.9z"/><path d="M18.5 15.5l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8z"/></svg>Nouveaux<span class="cnt" id="newDot" hidden></span></button>
   <button role="tab" data-tab="perps" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 17l5-5 4 3 8-8"/><path d="M3 21h18"/><path d="M16 7h4v4"/></svg>Futures<span class="dot" id="perpsDot" hidden></span></button>
+  <button role="tab" data-tab="copy" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>Copie<span class="dot" id="copyDot" hidden></span></button>
   <button role="tab" data-tab="stats" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 20V10M12 20V4M19 20v-7"/></svg>Stats</button>
   <button role="tab" data-tab="set" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg>Réglages</button>
 </nav>
@@ -3433,6 +3463,7 @@ function TradeBot(h, radar, jup, tr) {
   function decideCore(p, c, V) {
     const now = Date.now();
     if (p.closeReq) return { pct: 100, urgent: true, why: 'Fermeture demandée par toi' };
+    if (p.exitReq) return { pct: 100, urgent: true, why: p.exitReq }; // ex. : le wallet copié a revendu
     const t = radar.get(p.mint), lv = live();
     if (t && t.verdict === 'reject' && (t.fails || []).some(f => /geler|imprimer|rug|retirable|suspect|initiés|arnaque/i.test(f)))
       return { pct: 100, urgent: true, why: 'Alerte sécurité : ' + t.fails[0] };
@@ -3886,7 +3917,9 @@ function TradeBot(h, radar, jup, tr) {
     catch (e) { log(`Entrée auto refusée sur ${symOf(mint)} : ${e.message}`, 'warn'); throw e; }
   }
   return { start, render, detailHtml, unlocked: () => !!kp, openCount: () => openPos().length, S,
-    autoJoin, dayLossHit: () => day().pnl <= -S.cfg.dayLoss, lastClosed: () => S.hist[0] || null, cfg: () => S.cfg, hasWallet: () => !!S.pub,
+    autoJoin, dayLossHit: () => day().pnl <= -S.cfg.dayLoss,
+    // Sortie demandée de l'extérieur (copie de wallets) : appliquée au prochain passage de la boucle, comme une sortie urgente
+    requestExit: (mint, why) => { const p = S.pos[mint]; if (!p || p.state === 'closed' || p.exitReq) return false; p.exitReq = why; save(); return true; }, lastClosed: () => S.hist[0] || null, cfg: () => S.cfg, hasWallet: () => !!S.pub,
     traded: mint => !!(S.pos[mint] && S.pos[mint].state !== 'closed') || !!(S.ignored[mint] && Date.now() - S.ignored[mint] < 2 * 3600e3) || !!(S.done && S.done[mint] && Date.now() - S.done[mint] < DONE_MS), logMsg: (m, l) => log(m, l), applyExits, decideCore, NET_FEE, onLive, _test: { decide, curV, pushHist, b58enc, b58dec } };
 }
 if (typeof module !== 'undefined') module.exports = TradeBot;
@@ -3976,7 +4009,7 @@ function NewCoins(h, radar, bot) {
   const usd = x => !fin(x) ? '—' : MemeChart.fmtUsd(x) + ' $';
   const pct = x => !fin(x) ? '—' : (x > 0 ? '+' : x < 0 ? '−' : '') + Math.abs(x).toFixed(0) + ' %';
   const ageTxt = ms => { const s = Math.max(0, Math.round(ms / 1000)); return s < 60 ? s + ' s' : s < 3600 ? Math.floor(s / 60) + ' min ' + String(s % 60).padStart(2, '0') : Math.floor(s / 3600) + ' h ' + String(Math.floor(s / 60) % 60).padStart(2, '0'); };
-  const DEF = { on: false, useNew: true, useRadar: true, minScore: 65, requireX: true, maxAgeMin: 10, minAgeSec: 30, perHour: 4, cooldown: 3, needLab: true };
+  const DEF = { on: false, useNew: true, useRadar: true, minScore: 65, requireX: true, maxAgeMin: 10, minAgeSec: 30, perHour: 4, cooldown: 3, needLab: true, migrOnly: false };
   const lab = () => (h.lab ? h.lab() : null);
   let A = Object.assign({ cfg: {}, entries: [] }, h.store.get('auto', {}));
   A.cfg = Object.assign({}, DEF, A.cfg);
@@ -4233,8 +4266,8 @@ function NewCoins(h, radar, bot) {
         const pk = L.pick();
         N.pick = pk;
         if (!pk.ok) { N.status = pk.reason; return; }
-        const list = L.candidates(pk.s.id).filter(t => ageOk(t) && !t.autoTried && !bot.traded(t.mint));
-        if (!list.length) { N.status = `Stratégie « ${pk.s.name} » en service (${pk.txt}) : en attente d'un coin qui remplit ses conditions${overlap(pk.s) ? '' : ' — mais ta fenêtre d\'âge ne croise pas la sienne'}`; return; }
+        const list = L.candidates(pk.s.id).filter(t => (c.migrOnly || ageOk(t)) && !t.autoTried && !bot.traded(t.mint));
+        if (!list.length) { N.status = `Stratégie « ${pk.s.name} » en service (${pk.txt}) : en attente d'un coin qui remplit ses conditions${c.migrOnly || overlap(pk.s) ? '' : ' — mais ta fenêtre d\'âge ne croise pas la sienne'}`; return; }
         const t = list[0];
         t.autoTried = true; if (t.nc) t.nc.autoTried = true;
         N.busy = true; N.status = `Entrée en cours sur ${t.symbol || '?'}…`;
@@ -4250,6 +4283,25 @@ function NewCoins(h, radar, bot) {
       }
       N.pick = null;
       const cands = [];
+      if (c.migrOnly) {
+        const Lb = lab();
+        for (const id of (Lb ? Lb.MIGR_IDS : [])) for (const t of Lb.candidates(id)) {
+          if (t.autoTried || bot.traded(t.mint) || cands.some(x => x.t === t)) continue;
+          cands.push({ t, score: id === 'migrf' ? 1000 + (t.score || 0) : (t.score || 0), src: id === 'migrf' ? 'migration fraîche' : 'après migration' });
+        }
+        if (!cands.length) { N.status = 'En veille : aucun coin juste après migration ne passe les contrôles'; return; }
+        cands.sort((a, b) => b.score - a.score);
+        const pick = cands[0], t = pick.t;
+        t.autoTried = true; if (t.nc) t.nc.autoTried = true;
+        N.busy = true; N.status = `Entrée en cours sur ${t.symbol || '?'}…`;
+        try {
+          const mAgo = fin(t.migratedAt) ? Math.round((now() - t.migratedAt) / 1000) : null;
+          await bot.autoJoin(t.mint, null, `Mode auto (${pick.src}${mAgo != null ? `, migré il y a ${mAgo < 120 ? mAgo + ' s' : Math.round(mAgo / 60) + ' min'}` : ''})`);
+          A.entries.push(now()); save();
+          h.notify(`Mode auto : achat ${t.symbol || ''} (${pick.src})`, 'long');
+        } catch (e) {} finally { N.busy = false; }
+        return;
+      }
       // Fenêtre d'âge appliquée à TOUTES les entrées auto (nouveaux coins et radar).
       // L'âge vient de la date de création réelle du coin ; sans date connue, pas d'entrée.
       if (c.useNew) for (const t of N.list) {
@@ -4340,17 +4392,17 @@ function NewCoins(h, radar, bot) {
     const logs = (bot.S.log || []).slice(0, 6).map(x => `<div class="b-log" data-l="${x.lvl}"><span class="mono">${new Date(x.t).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</span><span>${esc(x.msg)}</span></div>`).join('');
     const L = lab(), pk = c.needLab && L ? L.pick() : null;
     const realMoney = !c.needLab || (pk && pk.ok);
-    const win = pk && pk.ok && !overlap(pk.s) ? `<div class="advice" data-l="warn" style="margin:0 0 10px"><h3>Ta fenêtre d'âge bloque la stratégie rentable</h3><p>« ${esc(pk.s.name)} » entre sur des coins de ${secTxt(pk.s.age[0])} à ${secTxt(pk.s.age[1])}. Ta fenêtre (${windowTxt()}) ne croise pas la sienne : le bot n'entrera pas.</p><div class="row-btns"><button class="btn sm pri" data-a="adopt">Prendre sa fenêtre</button></div></div>` : '';
+    const win = pk && pk.ok && !c.migrOnly && !overlap(pk.s) ? `<div class="advice" data-l="warn" style="margin:0 0 10px"><h3>Ta fenêtre d'âge bloque la stratégie rentable</h3><p>« ${esc(pk.s.name)} » entre sur des coins de ${secTxt(pk.s.age[0])} à ${secTxt(pk.s.age[1])}. Ta fenêtre (${windowTxt()}) ne croise pas la sienne : le bot n'entrera pas.</p><div class="row-btns"><button class="btn sm pri" data-a="adopt">Prendre sa fenêtre</button></div></div>` : '';
     box.innerHTML = `${c.on ? `<div class="advice" data-l="${realMoney ? 'ok' : 'warn'}" style="margin:0 0 10px"><h3>${realMoney ? 'Le bot entre et sort seul' : 'Mode auto actif, sans argent engagé'}</h3><p>${esc(N.status)}</p></div>` : ''}${win}
       <div class="w-top">
         <div class="kv"><div class="k">Mise par trade</div><div class="v">${String(bc.size).replace('.', ',')} SOL</div></div>
         <div class="kv"><div class="k">Perte / gain</div><div class="v">${bc.autoExits !== false ? (pk && pk.ok && pk.prof ? esc(pk.prof.name) + ' (labo)' : 'choisis par le labo') : `−${bc.sl} % / +${bc.tp1} %`}</div></div>
         <div class="kv"><div class="k">Entrées cette heure</div><div class="v">${inHour} / ${c.perHour}</div></div>
-        <div class="kv"><div class="k">Âge du coin à l'entrée</div><div class="v">${windowTxt()}</div></div>
+        <div class="kv"><div class="k">${c.migrOnly ? 'Entrées' : 'Âge du coin à l\'entrée'}</div><div class="v">${c.migrOnly ? 'juste après migration' : windowTxt()}</div></div>
       </div>
       <p class="note">Positions ${bot.openCount()} / ${bc.maxPos} · arrêt automatique après ${String(bc.dayLoss).replace('.', ',')} SOL de perte dans la journée. Mise, perte et gain se règlent dans la carte du bot (onglet Mèmes).${bot.unlocked() ? '' : ' <strong>Bot verrouillé : rien ne peut se passer.</strong>'}</p>
       <div class="row-btns">${c.on ? '<button class="btn danger" data-a="off">Couper le mode auto</button>' : '<button class="btn pri" data-a="arm">Activer le mode auto</button>'}<button class="btn" data-a="bot">Voir le bot</button></div>
-      ${N.confirm && !c.on ? `<div class="advice" data-l="warn" style="margin-top:10px"><h3>Le bot va décider seul</h3><p>Il achètera sans te demander les coins qui passent tous les contrôles (score ≥ ${c.minScore}${c.requireX ? ', lien X vérifié' : ''}, sortis il y a ${windowTxt()}), jusqu'à ${c.perHour} fois par heure, avec ${String(bc.size).replace('.', ',')} SOL par trade, et revendra seul. Les nouveaux coins sont les plus risqués : la plupart perdent tout en quelques minutes.</p>
+      ${N.confirm && !c.on ? `<div class="advice" data-l="warn" style="margin-top:10px"><h3>Le bot va décider seul</h3><p>Il achètera sans te demander les coins qui passent tous les contrôles (${c.migrOnly ? 'uniquement juste après leur migration' : `score ≥ ${c.minScore}${c.requireX ? ', lien X vérifié' : ''}, sortis il y a ${windowTxt()}`}), jusqu'à ${c.perHour} fois par heure, avec ${String(bc.size).replace('.', ',')} SOL par trade, et revendra seul. Les nouveaux coins sont les plus risqués : la plupart perdent tout en quelques minutes.</p>
         ${c.needLab ? '<p>Il n\'engage de l\'argent qu\'avec une stratégie rentable dans le laboratoire (ci-dessous) ; sinon il attend.</p>' : ''}
         <div class="row-btns"><button class="btn pri" data-a="arm-yes">Oui, mode auto</button><button class="btn" data-a="arm-no">Annuler</button></div></div>` : ''}
       ${logs ? `<h3 class="w-h">Dernières actions du bot</h3><div class="b-logs">${logs}</div>` : ''}`;
@@ -4387,7 +4439,7 @@ function NewCoins(h, radar, bot) {
       el.value = A.cfg[k];
       el.addEventListener('change', () => { const v = parseFloat(String(el.value).replace(',', '.')); if (fin(v) && v >= mn && v <= mx) { A.cfg[k] = v; save(); N.list.forEach(evaluate); render(); } else { el.value = A.cfg[k]; h.toast(`Valeur hors limites (${mn} à ${mx}).`); } });
     }
-    for (const [id, k] of [['#aReqX', 'requireX'], ['#aNew', 'useNew'], ['#aRadar', 'useRadar'], ['#aLab', 'needLab']]) {
+    for (const [id, k] of [['#aReqX', 'requireX'], ['#aNew', 'useNew'], ['#aRadar', 'useRadar'], ['#aLab', 'needLab'], ['#aMigr', 'migrOnly']]) {
       const el = $(id); if (!el) continue;
       el.checked = !!A.cfg[k];
       el.addEventListener('change', () => { A.cfg[k] = el.checked; save(); N.list.forEach(evaluate); render(); });
@@ -4791,7 +4843,15 @@ function StrategyLab(h, radar, live, bot) {
         C('prix en hausse sur 5 min (+5 % ou plus)', (t, f) => f.ch5 >= 5, (t, f) => f.ch5),
         C('compte ou tweet X vérifié', t => !!(h.xOk && h.xOk(t)))],
       exits: { flowExit: false, maxHold: 30 } },
-    { id: 'migr', name: 'Après migration', age: [600, 6 * 3600],
+    // âge du coin à partir de 1 min (avant : 10 min, ce qui excluait les coins qui migrent vite, justement ceux qui pompent)
+    { id: 'migrf', name: 'Migration fraîche', age: [60, 6 * 3600],
+      desc: 'Entre dans les 5 minutes qui suivent la migration (le coin quitte la courbe pump.fun pour un vrai pool), là où ça monte souvent vite. Juste après la migration, les données manquent encore : on demande seulement que les détenteurs et les acheteurs soient là quand ils sont connus.',
+      conds: [
+        C('migré il y a moins de 5 min', t => !!(t.migrated && fin(t.migratedAt) && now() - t.migratedAt <= 5 * 60000), t => (t.migratedAt ? Math.round((now() - t.migratedAt) / 1000) : null)),
+        C('au moins 100 détenteurs (si connu)', (t, f) => f.holders == null || f.holders >= 100, (t, f) => f.holders),
+        C('acheteurs majoritaires sur 5 min (si connu)', (t, f) => f.share == null || f.share >= 0.5, (t, f) => f.share)],
+      exits: { stallMin: 5, stallNeed: 5, flowExit: true, maxHold: 30 } },
+    { id: 'migr', name: 'Après migration', age: [60, 6 * 3600],
       desc: 'Coins qui viennent de quitter la courbe pump.fun pour un vrai pool (moins de 45 min) : liquidité en place, acheteurs majoritaires, au moins 200 détenteurs.',
       conds: [
         C('migré il y a moins de 45 min', t => !!(t.migrated && fin(t.migratedAt) && now() - t.migratedAt <= 45 * 60000), t => (t.migratedAt ? Math.round((now() - t.migratedAt) / 60000) : null)),
@@ -4816,8 +4876,15 @@ function StrategyLab(h, radar, live, bot) {
     { id: 'radar', name: 'Radar « intéressant »', age: [60, 24 * 3600],
       desc: 'Les jetons que le radar marque « intéressants ». Sert aussi à mesurer le radar lui-même.',
       conds: [C('marqué « intéressant » par le radar il y a moins de 4 min', t => t.verdict === 'buy' && (!t.flaggedAt || now() - t.flaggedAt < 4 * 60000), t => t.verdict)],
-      exits: { maxHold: 45 } }
+      exits: { maxHold: 45 } },
+    // Copie de wallets : jamais choisie par le mode auto (manual) ; l'argent réel se règle dans l'onglet Copie
+    { id: 'copy', name: 'Copie de wallets', age: null, manual: true,
+      desc: 'Les achats des wallets que tu copies (onglet Copie). Mêmes contrôles de sécurité, mêmes sorties que le bot, plus une sortie dès que le wallet copié revend la moitié ou plus.',
+      conds: [C('acheté par un wallet copié il y a moins de 90 s', t => !!(h.copy && h.copy() && h.copy().recentBuy(t.mint)), t => { const r = h.copy && h.copy() && h.copy().recentBuy(t.mint); return r ? Math.round((now() - r.t) / 1000) + ' s' : null; })],
+      exits: { maxHold: 60 } }
   ];
+  const MIGR_IDS = ['migrf', 'migr'];
+  const migrOnly = () => !!(h.autoCfg && h.autoCfg() && h.autoCfg().migrOnly);
   // Conditions communes à toutes les stratégies (sécurité)
   const SAFE = [
     C('coin ni rejeté ni mort', t => !(t.verdict === 'reject' || t.verdict === 'dead' || (t.nc && t.nc.status === 'reject')), t => (t.nc && t.nc.status === 'reject' ? 'rejeté (Nouveaux) : ' + ((t.nc.fails || [])[0] || '') : t.verdict === 'reject' ? 'rejeté (radar) : ' + ((t.fails || [])[0] || '') : t.verdict)),
@@ -4826,6 +4893,27 @@ function StrategyLab(h, radar, live, bot) {
     C('gros portefeuilles à 35 % maximum', (t, f) => !(fin(f.top) && f.top > 35), (t, f) => f.top),
     C('créateur avec moins de 10 coins lancés', (t, f) => !(fin(f.devMints) && f.devMints >= 10), (t, f) => f.devMints)
   ];
+  // Condition commune ajoutée après analyse du journal du 13-14/10 (106 trades simulés) :
+  // les entrées sur un prix en baisse faisaient −17 % en moyenne (3 gagnants sur 24), les autres −2 %.
+  const MOMO = C('prix pas en baisse à l\'entrée (dernière minute, sinon 5 min)',
+    (t, f) => (f.px60 != null ? f.px60 >= 0 : !(fin(f.ch5) && f.ch5 <= 0)),
+    (t, f) => (f.px60 != null ? Math.round(f.px60 * 1000) / 10 + ' % sur 1 min' : fin(f.ch5) ? f.ch5 + ' % sur 5 min' : null));
+  // Filtre anti-bots (demandé le 14/10) : beaucoup de transactions pour peu de traders = activité gonflée par des bots.
+  // Calé sur le journal du 13-14/10 : les coins à 4 transactions par trader ou plus (et au moins 30 transactions sur 5 min,
+  // score organique bas) chutaient de −25 % avant de monter de +30 % dans 41 % des cas, contre 18 % pour les autres.
+  // Aucune mémoire de créateur ni de compte X : seul le coin du moment est jugé. Données manquantes : on laisse passer.
+  // Chaque coin écarté est noté dans l'entonnoir du laboratoire (nom et mesures), exporté avec le journal.
+  const BOT_RATIO = 4, BOT_TX = 30;
+  const botLike = f => {
+    if (!(fin(f.tx5) && fin(f.traders) && f.traders > 0)) return false;
+    const human = (fin(f.organic) && f.organic >= 20) || f.orgLabel === 'medium' || f.orgLabel === 'high';
+    return f.tx5 >= BOT_TX && f.tx5 / f.traders >= BOT_RATIO && !human;
+  };
+  const BOTS = C(`activité pas gonflée par des bots (moins de ${BOT_RATIO} transactions par trader sur 5 min)`,
+    (t, f) => !botLike(f),
+    (t, f) => (fin(f.tx5) && fin(f.traders) && f.traders > 0
+      ? `${t.symbol || (t.mint || '').slice(0, 6)} : ${(Math.round(f.tx5 / f.traders * 10) / 10).toString().replace('.', ',')} tx par trader (${f.tx5} tx, ${f.traders} traders), organique ${fin(f.organic) ? Math.round(f.organic) : f.orgLabel || '?'}`
+      : null));
   const byId = id => STRATS.find(s => s.id === id);
   // Réglages de sortie testés en parallèle sur chaque entrée : les tiens, et deux autres pour comparer
   const EXIT_KEYS = ['sl', 'tp1', 'tp1Part', 'trail', 'tp2', 'beAt', 'beFloor', 'drop', 'npMin', 'npNeed'];
@@ -4881,14 +4969,16 @@ function StrategyLab(h, radar, live, bot) {
       hUp: (fin(fl.dH) && fl.dH > 0) || (fin(fl.dHp) && fl.dHp > 0), hDown: (fin(fl.dH) && fl.dH < 0) || (fin(fl.dHp) && fl.dHp < -2),
       liq: pick(m.liq), fromHi: t.life && fin(t.life.fromHi) ? t.life.fromHi : null,
       liveOk: !lf || lf.n < 3 || lf.buy >= lf.sell, // si le flux temps réel est là : pas plus de ventes que d'achats sur 1 min
+      px60: live && live.fresh(t) ? live.pxChange(t, 60000) : null, // variation du prix sur la dernière minute (temps réel)
+      organic: pick(J.organic, j.organic), orgLabel: J.label || j.label || null, // score « organique » (activité de vrais humains)
       top: pick(J.top, j.top), dev: pick(J.dev, j.dev), devMints: pick(J.devMints, j.devMints), mintOff: J.mintOff != null ? J.mintOff : j.mintOff, freezeOff: J.freezeOff != null ? J.freezeOff : j.freezeOff
     };
   }
   const xNeeded = () => !!(h.requireX && h.requireX());
   // Toutes les conditions d'une stratégie, dans l'ordre : renvoie le rang de la première qui échoue (-1 si tout passe)
   function check(s, t, f) {
-    const list = [...SAFE, C('âge dans la fenêtre de la stratégie', (tt, ff) => ff.age != null && ff.age >= s.age[0] && ff.age <= s.age[1], (tt, ff) => (ff.age != null ? Math.round(ff.age) : null)), ...s.conds];
-    if (xNeeded()) list.push(C('lien X vérifié (réglage du mode auto)', tt => !!(h.xOk && h.xOk(tt))));
+    const list = [...SAFE, ...(s.age ? [C('âge dans la fenêtre de la stratégie', (tt, ff) => ff.age != null && ff.age >= s.age[0] && ff.age <= s.age[1], (tt, ff) => (ff.age != null ? Math.round(ff.age) : null))] : []), ...s.conds, MOMO, BOTS];
+    if (xNeeded() && !s.manual) list.push(C('lien X vérifié (réglage du mode auto)', tt => !!(h.xOk && h.xOk(tt))));
     for (let i = 0; i < list.length; i++) {
       let ok = false;
       try { ok = !!list[i].ok(t, f); } catch {}
@@ -4997,7 +5087,9 @@ function StrategyLab(h, radar, live, bot) {
     if (jr && p.jid) jr.sample(jr.byId(p.jid), t);
     if (p.state === 'open') {
       pushHist(p, V);
-      const d = bot.decideCore(p, cfgOf(p), V);
+      const d0 = bot.decideCore(p, cfgOf(p), V);
+      const lx = p.strat === 'copy' && h.copy && h.copy() ? h.copy().leaderExit(p.mint, p.t0) : null;
+      const d = d0 && d0.urgent ? d0 : (lx || d0);
       if (d) { p.state = 'exiting'; p.exitAt = now() + (d.urgent ? 3000 : 5000); p.exitD = d; if (jr && p.jid) jr.exitDecision(jr.byId(p.jid), d, p.pnl); }
     } else if (p.state === 'exiting' && now() >= p.exitAt) {
       const d = p.exitD, part = clamp(d.pct / 100, 0, 1);
@@ -5087,12 +5179,14 @@ function StrategyLab(h, radar, live, bot) {
     return PROFILES.map(pr => { const c = cfgFor(id, pr.id), key = keyOf(c); return { pr, cfg: c, key, st: stats(id, 0, key), mine: key === userKey(id) }; })
       .filter((x, i, a) => a.findIndex(y => y.key === x.key) === i);
   }
-  const good = st => st.n >= MIN_N && st.avg >= MIN_AVG && st.pf >= MIN_PF && st.last8 > 0;
+  // lcb = moyenne moins une erreur-type : avec des gains très inégaux (quelques +150 % au milieu de petites pertes),
+  // un seul gros gagnant suffisait à faire passer une stratégie. Il faut désormais que la moyenne reste positive sans cette chance.
+  const good = st => st.n >= MIN_N && st.avg >= MIN_AVG && st.pf >= MIN_PF && st.last8 > 0 && st.lcb > 0;
   // Un autre réglage gagne là où les tiens perdent : on le propose (tu décides)
   function suggestion() {
     let best = null;
     for (const s of STRATS) for (const x of profStats(s.id)) {
-      if (x.mine || x.st.n < 8) continue;
+      if (s.manual || x.mine || x.st.n < 8) continue;
       if (autoMode() && !x.pr.test) continue; // les réglages auto, le labo les choisit déjà seul
       const me = autoMode() ? STRATS.length && pairs(s).reduce((b, q) => (q.st.n && (!b || q.st.avg > b.avg) ? q.st : b), null) || stats(s.id) : stats(s.id);
       if (x.st.avg > Math.max(0.02, me.avg + 0.05) && x.st.pf >= 1.2 && (!best || x.st.lcb > best.st.lcb)) best = Object.assign({ s, me }, x);
@@ -5106,7 +5200,7 @@ function StrategyLab(h, radar, live, bot) {
     render();
   }
   function pick() {
-    const Q = STRATS.flatMap(pairs);
+    const Q = STRATS.filter(s => !s.manual && (!migrOnly() || MIGR_IDS.includes(s.id))).flatMap(pairs);
     const ok = Q.filter(x => x.ok).sort((a, b) => b.st.lcb - a.st.lcb);
     if (ok.length) { const w = ok[0], pid = autoMode() ? w.prof.id : 'toi'; return { ok: true, s: w.s, st: w.st, prof: w.prof, exits: autoMode() ? exitsFor(w.s.id, pid) : w.s.exits, txt: resTxt(w.st) + (autoMode() ? `, réglages « ${w.prof.name} »` : '') }; }
     const tried = Q.filter(x => x.st.n > 0).sort((a, b) => b.st.avg - a.st.avg);
@@ -5114,10 +5208,10 @@ function StrategyLab(h, radar, live, bot) {
     let reason;
     const held = Q.find(x => x.hold);
     if (held) reason = `Pas d'argent engagé : les vrais trades de « ${held.s.name} » sont repassés dans le rouge, retour en simulation (${held.st.n}/${held.need} nouveaux trades simulés, il faut qu'ils soient gagnants au total)`;
-    else if (!best) reason = 'Pas d\'argent engagé : le laboratoire commence ses essais (il faut au moins ' + MIN_N + ' trades simulés et une moyenne de +3 % net)';
+    else if (!best) reason = 'Pas d\'argent engagé : le laboratoire commence ses essais' + (migrOnly() ? ' sur les coins juste après migration' : '') + ' (il faut au moins ' + MIN_N + ' trades simulés et une moyenne de +3 % net)';
     else if (best.st.avg <= 0) reason = `Pas d'argent engagé : aucune stratégie n'est rentable${autoMode() ? ', quels que soient les réglages de sortie testés' : ' avec tes réglages'} (la moins mauvaise : « ${best.s.name} »${autoMode() ? ` en « ${best.prof.name} »` : ''}, ${fPct(best.st.avg)} sur ${best.st.n} trades)`;
     else if (best.st.n < MIN_N) reason = `Pas d'argent engagé : meilleure piste « ${best.s.name} »${autoMode() ? ` en « ${best.prof.name} »` : ''}, ${best.st.n}/${MIN_N} trades simulés (moyenne ${fPct(best.st.avg)})`;
-    else reason = `Pas d'argent engagé : « ${best.s.name} » gagne (${fPct(best.st.avg)}) mais pas encore assez régulièrement (il faut +3 % de moyenne, des gains 1,3 fois plus gros que les pertes et les 8 derniers trades positifs)`;
+    else reason = `Pas d'argent engagé : « ${best.s.name} » gagne (${fPct(best.st.avg)}) mais pas encore assez régulièrement (il faut +3 % de moyenne, des gains 1,3 fois plus gros que les pertes, les 8 derniers trades positifs, et une moyenne qui reste positive sans les coups de chance)`;
     return { ok: false, reason, best: best && best.s };
   }
 
@@ -5135,7 +5229,7 @@ function StrategyLab(h, radar, live, bot) {
       return `<details class="l-row" data-id="${s.id}"${inUse ? ' data-use="1"' : ''}${opened0.has(s.id) ? ' open' : ''}><summary><span class="l-name"><b>${esc(s.name)}</b><small>${autoMode() && q.prof && st.n ? `${esc(q.prof.name)} · ` : ''}${st.n ? `${st.n} trades · ${Math.round(st.wins / st.n * 100)} % gagnants · moyenne <span class="${st.avg > 0 ? 'pos' : st.avg < 0 ? 'neg' : ''}">${fPct(st.avg)}</span> · ${fSol(st.sum)}` : 'aucun trade terminé'}${st.open ? ` · ${st.open} en cours` : ''}</small></span>${chip}</summary>
         <p class="note">${esc(s.desc)}</p>
         ${blockHtml(s)}
-        <p class="note">Âge d'entrée : ${ageTxt(s.age[0])} à ${ageTxt(s.age[1])}. Avec tes réglages : ${exitTxt(cfgFor(s.id, 'toi'))}${s.exits.stallMin ? `, sortie si moins de +${s.exits.stallNeed} % après ${s.exits.stallMin} min` : ''}${s.exits.flowExit ? ', sortie si les vendeurs dominent' : ''}, sortie immédiate si le créateur vend, ${s.exits.maxHold} min maximum.</p>
+        <p class="note">${s.age ? `Âge d'entrée : ${ageTxt(s.age[0])} à ${ageTxt(s.age[1])}. ` : ''}${migrOnly() && !s.manual && !MIGR_IDS.includes(s.id) ? '<b>Option « uniquement après migration » : simulée, mais jamais en argent réel.</b> ' : ''}${s.manual ? '<b>Jamais choisie par le mode auto : l\'argent réel se règle dans l\'onglet Copie.</b> ' : ''}Avec tes réglages : ${exitTxt(cfgFor(s.id, 'toi'))}${s.exits.stallMin ? `, sortie si moins de +${s.exits.stallNeed} % après ${s.exits.stallMin} min` : ''}${s.exits.flowExit ? ', sortie si les vendeurs dominent' : ''}, sortie immédiate si le créateur vend, ${s.exits.maxHold} min maximum.</p>
         <p class="note"><b>Mêmes entrées, autres sorties :</b> ${profStats(s.id).filter(x => !x.mine || autoMode()).map(x => `${esc(x.pr.name)} ${x.st.n ? `${fPct(x.st.avg)} sur ${x.st.n} trades` : 'pas encore de trade'}`).join(' · ')}</p></details>`;
     }).join('');
     const opened = L.open.filter(p => p.state !== 'pending' && (p.prof || 'toi') === 'toi').slice(0, 6).map(p => `<div class="j-row"><span class="chip">${esc((byId(p.strat) || {}).name || p.strat)}</span><div class="j-mid"><div>${esc(p.sym)} · en cours</div><div class="mono">depuis ${ago(now() - p.t0)}</div></div><span class="j-r ${p.pnl > 0 ? 'pos' : p.pnl < 0 ? 'neg' : ''}">${fPct(p.pnl)}</span></div>`).join('');
@@ -5190,9 +5284,299 @@ function StrategyLab(h, radar, live, bot) {
   const describe = () => STRATS.map(s => ({ id: s.id, name: s.name, age: s.age, exits: s.exits, profiles: profStats(s.id).map(x => ({ id: x.pr.id, key: x.key, mine: x.mine, cfg: Object.fromEntries(EXIT_KEYS.map(k => [k, x.cfg[k]])), stats: x.st })), conditions: [...SAFE.map(c => c.l), 'âge dans la fenêtre', ...s.conds.map(c => c.l), ...(xNeeded() ? ['lien X vérifié'] : [])] }));
   const allStats = () => Object.fromEntries(STRATS.map(s => [s.id, Object.assign({ name: s.name }, stats(s.id), { closed: L.closed.filter(x => x.strat === s.id).length })]));
   if (typeof TradeJournal === 'function') jr = TradeJournal(h, radar, live, bot, { pxSol, feat, exitsOf: id => (byId(id) || {}).exits, describe, allStats });
-  return { start, render, pick, candidates, stats, STRATS, byId, L, journal: () => jr, PROFILES, profStats, suggestion, pairs, cfgFor, _test: { feat, safe, passes, check, step, open, scan, value, buyQty, qualifies, finish, pxSol, tick } };
+  return { start, render, pick, candidates, stats, STRATS, byId, L, journal: () => jr, PROFILES, profStats, suggestion, pairs, cfgFor, MIGR_IDS,
+    copyCheck: t => { const s0 = byId('copy'), f = feat(t), r = check(s0, t, f); if (r.i < 0) return null; let v = null; try { v = r.c.v ? r.c.v(t, f) : null; } catch {} return { why: r.c.l, v }; }, _test: { feat, safe, passes, check, step, open, scan, value, buyQty, qualifies, finish, pxSol, tick } };
 }
 if (typeof module !== 'undefined') module.exports = StrategyLab;
+
+/* ================= COPIE DE WALLETS (Solana) =================
+   Tu donnes l'adresse d'un wallet à suivre. Vigie relève ses transactions toutes les 4 s environ (RPC Solana),
+   repère ses achats et ses ventes de jetons, puis :
+   - SIMULATION (toujours) : le laboratoire ouvre un trade simulé (stratégie « Copie de wallets »), avec les mêmes
+     contrôles et les mêmes sorties que le bot, plus une sortie quand le wallet copié revend la moitié ou plus ;
+   - RÉEL (seulement si tu l'actives) : le wallet du bot mèmes achète avec sa mise habituelle, revend avec ses règles,
+     et revend aussi quand le wallet copié revend.
+   Le wallet copié est seulement observé : rien n'est jamais signé avec lui. */
+function CopyTrade(h, radar, bot, rpc) {
+  const fin = Number.isFinite, esc = h.esc, $ = h.$;
+  const now = () => Date.now();
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  const WSOL = 'So11111111111111111111111111111111111111112';
+  const STABLE = ['EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v', 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB']; // USDC, USDT
+  const BASE = new Set([WSOL, ...STABLE]);
+  const RECENT = 90000;       // un achat du wallet copié reste « frais » 90 s (le labo et le réel doivent entrer avant)
+  const LATE = 120000;        // achat découvert plus de 2 min après coup : trop tard pour copier
+  const MIN_SOL = 0.05;       // les tout petits achats (tests, poussière) ne sont pas copiés
+  const MAX_W = 5;
+  const lab = () => (h.lab ? h.lab() : null);
+
+  const BLANK = { v: 1, wallets: [], view: 'sim', real: false, ev: [], seen: [] };
+  const S = Object.assign({}, BLANK, h.store.get('copy', {}));
+  if (!Array.isArray(S.wallets)) S.wallets = [];
+  if (!Array.isArray(S.ev)) S.ev = [];
+  if (!Array.isArray(S.seen)) S.seen = [];
+  const seen = new Set(S.seen);
+  const save = () => h.store.set('copy', { v: 1, wallets: S.wallets, view: S.view, real: !!S.real, ev: S.ev.slice(0, 120), seen: [...seen].slice(-500) });
+  const C = { buys: new Map(), sells: new Map(), busy: false, lastOk: 0, err: '', confirm: false, started: false };
+
+  /* ---------- formats ---------- */
+  const n = (x, d) => x.toLocaleString('fr-FR', { minimumFractionDigits: d, maximumFractionDigits: d });
+  const fSol = x => (!fin(x) ? '—' : (Math.abs(x) >= 10 ? n(x, 2) : Math.abs(x) >= 0.1 ? n(x, 3) : n(x, 4)) + ' SOL');
+  const fPct = x => (!fin(x) ? '—' : (x > 0 ? '+' : x < 0 ? '−' : '') + n(Math.abs(x * 100), Math.abs(x) < 0.1 ? 1 : 0) + ' %');
+  const short = a => (a ? a.slice(0, 4) + '…' + a.slice(-4) : '');
+  const ago = ms => { const s = Math.max(0, Math.round(ms / 1000)); return s < 60 ? s + ' s' : s < 3600 ? Math.floor(s / 60) + ' min' : s < 86400 ? Math.floor(s / 3600) + ' h' : Math.floor(s / 86400) + ' j'; };
+  const symOf = mint => { const t = radar.get(mint); return (t && t.symbol) || short(mint); };
+  const nameOf = addr => { const w = S.wallets.find(x => x.addr === addr); return w && w.label ? w.label : short(addr); };
+
+  /* ---------- lecture d'une transaction du wallet copié ---------- */
+  // Variations de solde du wallet : jetons achetés (payés en SOL ou en dollars stables) et jetons vendus ou sortis
+  function parse(tx, owner) {
+    if (!tx || !tx.meta || tx.meta.err) return [];
+    const msg = tx.transaction && tx.transaction.message;
+    if (!msg) return [];
+    const keys = (msg.accountKeys || []).map(k => (typeof k === 'string' ? k : k && k.pubkey));
+    const i = keys.indexOf(owner);
+    const solD = i >= 0 && tx.meta.postBalances && tx.meta.preBalances ? (tx.meta.postBalances[i] - tx.meta.preBalances[i]) / 1e9 : 0;
+    const pre = new Map(), post = new Map(), dec = new Map();
+    const fill = (M, arr) => {
+      for (const b of arr || []) {
+        if (!b || b.owner !== owner || !b.uiTokenAmount) continue;
+        let raw; try { raw = BigInt(b.uiTokenAmount.amount); } catch { continue; }
+        M.set(b.mint, (M.get(b.mint) || 0n) + raw); dec.set(b.mint, b.uiTokenAmount.decimals);
+      }
+    };
+    fill(pre, tx.meta.preTokenBalances); fill(post, tx.meta.postTokenBalances);
+    const d = m => (post.get(m) || 0n) - (pre.get(m) || 0n);
+    const sol = solD + Number(d(WSOL)) / 1e9;
+    const usd = STABLE.reduce((a, m) => a + Number(d(m)) / Math.pow(10, dec.get(m) || 6), 0);
+    const out = [];
+    for (const m of new Set([...pre.keys(), ...post.keys()])) {
+      if (BASE.has(m)) continue;
+      const dd = d(m);
+      if (dd === 0n) continue;
+      if (dd > 0n) {
+        // jetons reçus sans rien payer (transfert, airdrop) : ce n'est pas un achat
+        if (sol < -0.001 || usd < -0.5) out.push({ side: 'buy', mint: m, sol: sol < 0 ? -sol : null, usd: usd < 0 ? -usd : null });
+      } else {
+        const p0 = pre.get(m) || 0n;
+        const frac = p0 > 0n ? Math.min(1, Number((-dd * 10000n) / p0) / 10000) : 1;
+        out.push({ side: sol > 0.0005 || usd > 0.5 ? 'sell' : 'out', mint: m, frac, sol: sol > 0 ? sol : null });
+      }
+    }
+    return out;
+  }
+
+  /* ---------- surveillance ---------- */
+  function mark(sig) { seen.add(sig); if (seen.size > 800) seen.delete(seen.values().next().value); }
+  async function pollWallet(w) {
+    const sigs = await rpc('getSignaturesForAddress', [w.addr, { limit: 20, commitment: 'confirmed' }]);
+    if (!Array.isArray(sigs)) return;
+    w.checkedAt = now(); w.err = '';
+    // premier relevé : on note l'historique sans le rejouer (on ne copie qu'à partir de maintenant)
+    if (!w.base) { for (const x of sigs) mark(x.signature); w.base = true; save(); return; }
+    const fresh = sigs.filter(x => !seen.has(x.signature)).reverse(); // du plus ancien au plus récent
+    for (const x of fresh) mark(x.signature);
+    // wallet très actif (souvent un bot) : seulement les 8 dernières transactions
+    for (const x of fresh.filter(x => !x.err).slice(-8)) {
+      let tx = null;
+      try { tx = await rpc('getTransaction', [x.signature, { encoding: 'jsonParsed', maxSupportedTransactionVersion: 0, commitment: 'confirmed' }]); } catch { continue; }
+      for (const e of parse(tx, w.addr)) onEvent(w, x.signature, e, x.blockTime);
+    }
+    if (fresh.length) save();
+  }
+  async function poll() {
+    if (C.busy) return;
+    C.busy = true;
+    try {
+      for (const w of S.wallets.filter(w => w.on)) {
+        try { await pollWallet(w); } catch (e) { w.err = e.message; C.err = e.message; }
+      }
+      if (S.wallets.some(w => w.on && !w.err)) { C.lastOk = now(); C.err = ''; }
+      // ménage : les jetons copiés il y a plus de 15 min ne sont plus suivis de près pour la copie
+      for (const [m, b] of C.buys) if (now() - b.t > 15 * 60000) { C.buys.delete(m); radar.unpin(m, 'copy'); }
+      for (const [m, x] of C.sells) if (now() - x.t > 6 * 3600e3) C.sells.delete(m);
+    } finally { C.busy = false; }
+    if (h.visible && h.visible()) render();
+  }
+  function loop() {
+    const k = S.wallets.filter(w => w.on).length;
+    const next = k ? 4000 + 1500 * (k - 1) : 8000; // limite les appels au RPC public
+    setTimeout(async () => { try { if (k) await poll(); } catch {} loop(); }, next);
+  }
+
+  /* ---------- réaction à une opération du wallet copié ---------- */
+  function onEvent(w, sig, e, blockTime) {
+    const tx = blockTime ? blockTime * 1000 : now();
+    const ev = { t: now(), tx, w: w.addr, sig, side: e.side, mint: e.mint, sym: symOf(e.mint), sol: e.sol, usd: e.usd, frac: e.frac, act: '', why: '' };
+    if (e.side === 'buy') {
+      w.buys = (w.buys || 0) + 1;
+      C.sells.delete(e.mint); // nouvel achat : on repart de zéro pour ses ventes
+      if (now() - tx > LATE) { ev.act = 'skip'; ev.why = `découvert ${ago(now() - tx)} après l'achat : trop tard pour copier`; }
+      else if (fin(e.sol) && e.sol < MIN_SOL && !(e.usd > 5)) { ev.act = 'skip'; ev.why = `petit achat (${fSol(e.sol)}) : pas copié`; }
+      else {
+        C.buys.set(e.mint, { t: now(), w: w.addr, sol: e.sol, sig });
+        radar.pin(e.mint, 'copy', {});
+        ev.act = 'sim'; ev.why = 'trade simulé dans le laboratoire, si les contrôles passent';
+        if (S.real) realBuy(w, e.mint, ev);
+      }
+    } else {
+      w.sells = (w.sells || 0) + 1;
+      const prev = C.sells.get(e.mint);
+      const cum = 1 - (1 - (prev ? prev.frac : 0)) * (1 - (e.frac || 0)); // part cumulée revendue
+      C.sells.set(e.mint, { frac: cum, t: now() });
+      if (cum >= 0.5) {
+        ev.act = 'exit';
+        ev.why = `${e.side === 'sell' ? 'a revendu' : 'a sorti'} ${Math.round(cum * 100)} % de ses jetons : sortie des copies`;
+        if (bot.requestExit && bot.S.pos[e.mint] && bot.S.pos[e.mint].strat === 'copy') bot.requestExit(e.mint, `Le wallet copié a revendu ${Math.round(cum * 100)} % de ses jetons`);
+      } else { ev.act = 'info'; ev.why = `${e.side === 'sell' ? 'a revendu' : 'a sorti'} ${Math.round(cum * 100)} % de ses jetons (sortie des copies à partir de 50 %)`; }
+    }
+    S.ev.unshift(ev);
+    if (S.ev.length > 120) S.ev.length = 120;
+  }
+  // Achat réel : le wallet du bot mèmes entre si le coin passe les mêmes contrôles que la simulation
+  async function realBuy(w, mint, ev) {
+    try {
+      if (!bot.hasWallet()) throw new Error('pas encore de wallet du bot (onglet Mèmes)');
+      if (!bot.unlocked()) throw new Error('bot verrouillé : entre ton code dans l\'onglet Mèmes');
+      if (bot.traded(mint)) throw new Error('le bot a déjà tradé ce coin');
+      // le temps que le radar lise le coin (prix, sécurité) : 25 s au plus
+      const t0 = now();
+      let t = radar.get(mint);
+      while (now() - t0 < 25000 && !(t && (t.pair || (t.jup && +t.jup.px > 0) || (t.live && t.live.c)))) { await sleep(1500); t = radar.get(mint); }
+      if (!t) throw new Error('coin introuvable');
+      const L = lab(), chk = L && L.copyCheck ? L.copyCheck(t) : null;
+      if (chk) throw new Error(`écarté par les contrôles (${chk.why}${chk.v != null && chk.v !== '' ? ' : ' + chk.v : ''})`);
+      await bot.autoJoin(mint, null, `Copie de ${nameOf(w.addr)}`, { strat: 'copy' });
+      ev.act = 'real'; ev.why = 'acheté pour de vrai par le wallet du bot (et simulé)';
+    } catch (e) {
+      ev.why = 'simulé seulement · réel : ' + e.message; // la simulation, elle, suit son cours
+    }
+    save();
+    if (h.visible && h.visible()) render();
+  }
+
+  /* ---------- pour le laboratoire ---------- */
+  const recentBuy = mint => { const b = C.buys.get(mint); return b && now() - b.t <= RECENT ? b : null; };
+  const leaderExit = (mint, since) => { const x = C.sells.get(mint); return x && x.t >= since && x.frac >= 0.5 ? { pct: 100, urgent: true, why: `Le wallet copié a revendu ${Math.round(x.frac * 100)} % de ses jetons` } : null; };
+
+  /* ---------- affichage ---------- */
+  const ACT = { sim: ['simulé', 'long'], real: ['réel', 'long'], skip: ['ignoré', 'warn'], exit: ['sortie', 'short'], info: ['vente', ''] };
+  function evHtml(ev) {
+    const [lab0, cls] = ACT[ev.act] || ['', ''];
+    const sym = (radar.get(ev.mint) || {}).symbol || ev.sym;
+    const what = ev.side === 'buy' ? `achète ${esc(sym)}${fin(ev.sol) ? ' pour ' + fSol(ev.sol) : fin(ev.usd) ? ' pour ' + n(ev.usd, 0) + ' $' : ''}` : `${ev.side === 'sell' ? 'vend' : 'sort'} ${esc(sym)}${fin(ev.frac) ? ' (' + Math.round(ev.frac * 100) + ' %)' : ''}`;
+    return `<div class="j-row"><span class="chip ${cls}">${lab0}</span><div class="j-mid"><div>${esc(nameOf(ev.w))} ${what}</div><div class="mono">il y a ${ago(now() - ev.tx)} · ${esc(ev.why)}</div></div><a class="cp-tx" href="https://solscan.io/tx/${esc(ev.sig)}" target="_blank" rel="noopener">tx</a></div>`;
+  }
+  function statsHtml(st) {
+    return `<div class="w-top">
+      <div class="kv"><div class="k">Trades (24 h)</div><div class="v">${st.n}${st.open ? ` <small>+ ${st.open} en cours</small>` : ''}</div></div>
+      <div class="kv"><div class="k">Gagnants</div><div class="v">${st.n ? Math.round(st.wins / st.n * 100) + ' %' : '—'}</div></div>
+      <div class="kv"><div class="k">Moyenne nette</div><div class="v ${st.avg > 0 ? 'pos' : st.avg < 0 ? 'neg' : ''}">${st.n ? fPct(st.avg) : '—'}</div></div>
+    </div>`;
+  }
+  function render() {
+    const box = $('#copyBody');
+    if (!box) return;
+    const ae = document.activeElement;
+    if (ae && box.contains(ae) && ae.tagName === 'INPUT') return;
+    const sp = $('#copyState');
+    if (sp) sp.innerHTML = S.real ? '<span class="chip long">réel</span>' : S.wallets.some(w => w.on) ? '<span class="chip">simulation</span>' : '';
+    if (h.inFrame) { box.innerHTML = '<p class="note" style="margin:0">La copie de wallets ne tourne pas dans l\'aperçu Claude. Utilise la version hébergée de l\'appli.</p>'; return; }
+    const L = lab(), st = L ? L.stats('copy') : { n: 0, wins: 0, avg: 0, sum: 0, open: 0 };
+    const on = S.wallets.filter(w => w.on);
+    const wl = S.wallets.map(w => `<div class="cp-w${w.on ? '' : ' off'}"><div class="cp-wm"><b>${esc(w.label || short(w.addr))}</b><span class="mono">${esc(short(w.addr))}${w.on ? (w.err ? ` · <span class="neg">${esc(w.err)}</span>` : w.checkedAt ? ` · relevé il y a ${ago(now() - w.checkedAt)}` : ' · premier relevé…') : ' · en pause'} · ${w.buys || 0} achat${(w.buys || 0) > 1 ? 's vus' : ' vu'}</span></div>
+      <label class="pp-sw"><input type="checkbox" data-cw-on="${esc(w.addr)}"${w.on ? ' checked' : ''}>Suivre</label><button class="btn sm" data-cw-del="${esc(w.addr)}">Retirer</button></div>`).join('');
+    const addHtml = S.wallets.length < MAX_W ? `<div class="add"><input id="cpAddr" placeholder="Adresse Solana du wallet à copier" autocomplete="off" spellcheck="false"></div>
+      <div class="add" style="margin-top:6px"><input id="cpLabel" placeholder="Nom (facultatif)" autocomplete="off" maxlength="24"><button class="btn pri" data-c="add">Ajouter</button></div>` : `<p class="note">Maximum ${MAX_W} wallets.</p>`;
+    const seg = `<div class="seg cp-seg" role="tablist"><button data-cv="sim" aria-pressed="${S.view !== 'real'}">Simulation</button><button data-cv="real" aria-pressed="${S.view === 'real'}">Réel${S.real ? ' ●' : ''}</button></div>`;
+    const feed = S.ev.slice(0, 12).map(evHtml).join('');
+    let body;
+    if (S.view !== 'real') {
+      const op = L ? L.L.open.filter(p => p.strat === 'copy' && (p.prof || 'toi') === 'toi' && p.state !== 'pending') : [];
+      const cl = L ? L.L.closed.filter(x => x.strat === 'copy' && (x.prof || 'toi') === 'toi').slice(0, 8) : [];
+      body = `<p class="note" style="margin:0 0 8px">Chaque achat du wallet copié ouvre un trade simulé, sans argent : mise de ${fSol(bot.cfg().size)}, mêmes contrôles et mêmes sorties que le bot, plus une sortie quand le wallet revend. Résultats des 24 dernières heures.</p>
+        ${statsHtml(st)}
+        ${op.length ? `<h3 class="w-h">Copies simulées en cours</h3><div class="journal">${op.map(p => `<div class="j-row"><span class="chip">en cours</span><div class="j-mid"><div>${esc(p.sym)}</div><div class="mono">depuis ${ago(now() - p.t0)}</div></div><span class="j-r ${p.pnl > 0 ? 'pos' : p.pnl < 0 ? 'neg' : ''}">${fPct(p.pnl)}</span></div>`).join('')}</div>` : ''}
+        ${cl.length ? `<h3 class="w-h">Dernières copies simulées</h3><div class="journal">${cl.map(x => `<div class="j-row"><span class="chip ${x.gap ? '' : x.net >= 0 ? 'long' : 'short'}">${x.gap ? 'sans prix' : fPct(x.pnl)}</span><div class="j-mid"><div>${esc(x.sym)}</div><div class="mono">il y a ${ago(now() - x.t1)} · ${esc(x.why)}</div></div><span class="j-r ${x.net >= 0 ? 'pos' : 'neg'}">${x.gap ? '—' : fSol(x.net)}</span></div>`).join('')}</div>` : ''}`;
+    } else {
+      const pub = bot.S && bot.S.pub;
+      const pos = Object.values((bot.S && bot.S.pos) || {}).filter(p => p.state !== 'closed' && p.strat === 'copy');
+      const hist = ((bot.S && bot.S.hist) || []).filter(x => x.strat === 'copy').slice(0, 8);
+      const warn = !st.n ? 'La simulation n\'a encore aucun résultat : laisse-la tourner avant de copier pour de vrai.' : st.avg <= 0 ? `En simulation, copier ce${on.length > 1 ? 's' : ''} wallet${on.length > 1 ? 's' : ''} perd ${fPct(st.avg)} par trade en moyenne sur ${st.n} trades.` : st.n < 12 ? `Seulement ${st.n} copie${st.n > 1 ? 's' : ''} simulée${st.n > 1 ? 's' : ''} : c'est trop peu pour savoir si le wallet est bon.` : '';
+      const execHtml = pub ? `<p class="note" style="margin:0 0 6px">Wallet qui exécute : <b>le wallet du bot mèmes</b> <span class="mono">${esc(short(pub))}</span>, le même que pour l'onglet Mèmes (celui que tu alimentes depuis Phantom) · ${bot.unlocked() ? '<b class="pos">déverrouillé</b>' : '<b class="neg">verrouillé : entre ton code dans l\'onglet Mèmes</b>'}</p>`
+        : '<p class="note" style="margin:0 0 6px">Pas encore de wallet du bot : crée-le et alimente-le dans l\'onglet Mèmes (carte « Bot autonome »).</p>';
+      body = `${execHtml}
+        <div class="row-btns" style="margin:0 0 10px"><button class="btn sm" data-c="bot">${pub ? 'Changer de wallet d\'exécution' : 'Créer le wallet du bot'}</button></div>
+        <div class="advice" data-l="${S.real ? 'ok' : 'warn'}" style="margin:0 0 10px"><h3>${S.real ? 'Copie réelle active' : 'Copie réelle coupée'}</h3>
+          <p>${S.real ? `À chaque achat d'un wallet suivi, le bot achète ${fSol(bot.cfg().size)} si le coin passe les contrôles, puis revend avec ses règles ou dès que le wallet copié revend la moitié de ses jetons.` : 'Les achats des wallets suivis ne sont copiés qu\'en simulation.'}${warn ? ' ' + esc(warn) : ''}</p>
+          <div class="row-btns">${S.real ? '<button class="btn danger" data-c="off">Couper la copie réelle</button>' : '<button class="btn pri" data-c="arm">Copier pour de vrai</button>'}</div>
+          ${C.confirm && !S.real ? `<div class="confirm"><span>Le bot achètera seul, avec de l'argent réel, chaque coin acheté par ${on.length > 1 ? 'les wallets suivis' : 'le wallet suivi'}, dans la limite de ${bot.cfg().maxPos} positions et de sa perte maximale du jour. Tu entres quelques secondes après lui, souvent à un prix moins bon.</span><button class="btn sm danger" data-c="arm-yes">Oui, copier</button><button class="btn sm" data-c="arm-no">Annuler</button></div>` : ''}</div>
+        ${statsHtml(st)}
+        ${pos.length ? `<h3 class="w-h">Copies réelles en cours</h3><div class="journal">${pos.map(p => `<div class="j-row"><span class="chip long">réel</span><div class="j-mid"><div>${esc(p.sym)}</div><div class="mono">depuis ${ago(now() - p.t0)}${p.exitReq ? ' · sortie demandée' : ''}</div></div><span class="j-r"></span></div>`).join('')}</div>` : ''}
+        ${hist.length ? `<h3 class="w-h">Dernières copies réelles</h3><div class="journal">${hist.map(x => `<div class="j-row"><span class="chip ${x.net >= 0 ? 'long' : 'short'}">${fPct(x.pnl)}</span><div class="j-mid"><div>${esc(x.sym)}</div><div class="mono">il y a ${ago(now() - x.t1)} · ${esc(x.why || '')}</div></div><span class="j-r ${x.net >= 0 ? 'pos' : 'neg'}">${fSol(x.net)}</span></div>`).join('')}</div>` : ''}`;
+    }
+    box.innerHTML = `<h3 class="w-h" style="margin-top:0">Wallets suivis</h3>
+      ${wl ? `<div class="cp-list">${wl}</div>` : '<p class="note" style="margin:0">Aucun wallet suivi. Colle l\'adresse d\'un wallet Solana dont tu veux reproduire les trades.</p>'}
+      ${addHtml}
+      ${on.length && C.err && !C.lastOk ? `<p class="note neg">${esc(C.err)}</p>` : ''}
+      <div style="margin:14px 0 8px">${seg}</div>
+      ${body}
+      <h3 class="w-h">Ce que font les wallets suivis</h3>
+      ${feed ? `<div class="journal">${feed}</div>` : `<p class="note">${on.length ? 'Rien depuis que tu les suis. Seules les opérations à partir de maintenant sont copiées.' : 'Ajoute un wallet pour commencer.'}</p>`}`;
+  }
+
+  /* ---------- actions ---------- */
+  function addWallet(addr, label) {
+    addr = (addr || '').trim();
+    if (!/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(addr)) throw new Error('Adresse Solana invalide (32 à 44 caractères, sans 0, O, I ni l)');
+    if (bot.S && bot.S.pub === addr) throw new Error('C\'est le wallet du bot : il ne peut pas se copier lui-même');
+    if (S.wallets.some(w => w.addr === addr)) throw new Error('Ce wallet est déjà suivi');
+    if (S.wallets.length >= MAX_W) throw new Error(`Maximum ${MAX_W} wallets`);
+    S.wallets.push({ addr, label: (label || '').trim().slice(0, 24), on: true, at: now(), base: false, buys: 0, sells: 0 });
+    save();
+    h.log && h.log('Copie : wallet ajouté ' + short(addr));
+    if (C.started) setTimeout(() => poll().catch(() => {}), 300); // premier relevé tout de suite
+  }
+  function bindUI() {
+    const box = $('#copyBody');
+    if (!box) return;
+    box.addEventListener('click', e => {
+      const b = e.target.closest('button');
+      if (!b) return;
+      try {
+        if (b.dataset.cv) { S.view = b.dataset.cv; save(); }
+        else if (b.dataset.cwDel) { const a = b.dataset.cwDel; S.wallets = S.wallets.filter(w => w.addr !== a); save(); }
+        else if (b.dataset.c === 'add') { const a = $('#cpAddr'), l = $('#cpLabel'); addWallet(a && a.value, l && l.value); h.toast && h.toast('Wallet ajouté : ses opérations seront copiées en simulation à partir de maintenant', 'long'); }
+        else if (b.dataset.c === 'arm') C.confirm = true;
+        else if (b.dataset.c === 'arm-no') C.confirm = false;
+        else if (b.dataset.c === 'arm-yes') { C.confirm = false; S.real = true; save(); h.log && h.log('Copie : copie réelle activée'); }
+        else if (b.dataset.c === 'off') { S.real = false; save(); h.log && h.log('Copie : copie réelle coupée'); }
+        else if (b.dataset.c === 'bot') { h.showBot && h.showBot(); return; }
+      } catch (err) { h.toast && h.toast(err.message, 'short'); }
+      render();
+    });
+    box.addEventListener('change', e => {
+      const el = e.target;
+      if (!el.dataset || !el.dataset.cwOn) return;
+      const w = S.wallets.find(x => x.addr === el.dataset.cwOn);
+      if (w) { w.on = el.checked; if (w.on) { w.base = false; if (C.started) setTimeout(() => poll().catch(() => {}), 300); } save(); }
+      el.blur(); render();
+    });
+    box.addEventListener('keydown', e => {
+      if (e.key !== 'Enter' || !e.target || (e.target.id !== 'cpAddr' && e.target.id !== 'cpLabel')) return;
+      e.preventDefault();
+      try { addWallet($('#cpAddr').value, $('#cpLabel') ? $('#cpLabel').value : ''); h.toast && h.toast('Wallet ajouté', 'long'); } catch (err) { h.toast && h.toast(err.message, 'short'); }
+      e.target.blur(); render();
+    });
+  }
+  function start() {
+    if (C.started || h.inFrame) return;
+    C.started = true;
+    loop();
+  }
+  return { start, render, bindUI, recentBuy, leaderExit, S, _test: { parse, onEvent, poll, addWallet, C, realBuy } };
+}
+if (typeof module !== 'undefined') module.exports = CopyTrade;
 
 /* ================= HYPERLIQUID : protocole (lecture, signature, ordres) =================
    Futures perpétuels de Phantom (Perps). Le compte, c'est ton adresse EVM de Phantom.
@@ -7199,9 +7583,10 @@ if (typeof module !== 'undefined') module.exports = PerpsBot;
   /* ---------- navigation ---------- */
   function showTab(t) {
     curTab = t;
-    document.body.classList.toggle('meme', t === 'meme' || t === 'new' || t === 'perps');
-    { const mt = $('#memeTitle'); if (mt) mt.textContent = t === 'new' ? 'Nouveaux coins' : t === 'perps' ? 'Futures auto' : 'Radar mèmes'; }
-    { const a = $('#memeNet'), b = $('#memeSub'); if (a) a.textContent = t === 'perps' ? 'Hyperliquid' : 'Solana'; if (b) b.textContent = t === 'perps' ? 'via Phantom' : 'temps réel'; }
+    document.body.classList.toggle('meme', t === 'meme' || t === 'new' || t === 'perps' || t === 'copy');
+    { const mt = $('#memeTitle'); if (mt) mt.textContent = t === 'new' ? 'Nouveaux coins' : t === 'perps' ? 'Futures auto' : t === 'copy' ? 'Copie de wallets' : 'Radar mèmes'; }
+    { const a = $('#memeNet'), b = $('#memeSub'); if (a) a.textContent = t === 'perps' ? 'Hyperliquid' : 'Solana'; if (b) b.textContent = t === 'perps' ? 'via Phantom' : t === 'copy' ? 'suivi de wallets' : 'temps réel'; }
+    if (t === 'copy') setTimeout(() => copy && copy.render(), 0);
     if (t === 'perps') setTimeout(() => perps && perps.render(), 0);
     if (t === 'new') setTimeout(() => newCoins && newCoins.render(), 0);
     $$('.tab').forEach(s => { s.hidden = s.id !== 'tab-' + t; });
@@ -7217,7 +7602,7 @@ if (typeof module !== 'undefined') module.exports = PerpsBot;
   $$('.tabbar button').forEach(b => b.onclick = () => showTab(b.dataset.tab));
 
   // radar mèmes + trading via wallet + bot autonome
-  let trader = null, bot = null, newCoins = null, live = null, lab = null, perps = null;
+  let trader = null, bot = null, newCoins = null, live = null, lab = null, perps = null, copy = null;
   const inFrame = (() => { try { return window.top !== window.self; } catch { return true; } })();
   const buzz = p => { if (set.vibrate && navigator.vibrate) try { navigator.vibrate(p); } catch {} };
   const jup = JupClient(() => (trader ? trader.jupKey() : ''));
@@ -7266,7 +7651,8 @@ if (typeof module !== 'undefined') module.exports = PerpsBot;
     $, esc, store, toast, fmt: trader.fmt, autoCfg: () => newCoins.cfg(),
     solUsd: () => trader.solUsd(),
     requireX: () => newCoins.requireX(),
-    xOk: t => newCoins.xOk(t)
+    xOk: t => newCoins.xOk(t),
+    copy: () => copy
   }, radar, live, bot);
   newCoins.start();
   if (!inFrame) lab.start();
@@ -7279,12 +7665,22 @@ if (typeof module !== 'undefined') module.exports = PerpsBot;
   });
   perps.bindUI();
   if (!inFrame) perps.start();
-  let wTick = 0, pTick = 0;
+  // copie de wallets : le wallet copié est seulement lu ; les achats réels passent par le wallet du bot mèmes
+  copy = CopyTrade({
+    $, esc, store, log, toast, inFrame, lab: () => lab,
+    visible: () => curTab === 'copy' && document.visibilityState === 'visible',
+    showBot: () => { showTab('meme'); setTimeout(() => { const el = $('#botCard'); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 60); }
+  }, radar, bot, (m, p) => rpcPool.call(m, p));
+  copy.bindUI();
+  if (!inFrame) copy.start();
+  let wTick = 0, pTick = 0, cTick = 0;
   setInterval(() => {
     if (curTab === 'meme' && $('#memeSheet').hidden && $('#tradeSheet').hidden) radar.render();
     if (curTab === 'meme' && ++wTick % 2 === 0) trader.render();
     if (curTab === 'new' && document.visibilityState === 'visible') { const ae = document.activeElement; if (!(ae && ae.closest && ae.closest('#labCard'))) lab.render(); }
     if (curTab === 'perps' && document.visibilityState === 'visible' && ++pTick % 2 === 0) perps.render();
+    if (curTab === 'copy' && document.visibilityState === 'visible' && ++cTick % 2 === 0) copy.render();
+    { const cd = $('#copyDot'); if (cd) cd.hidden = !copy.S.real; }
     { const pd = $('#perpsDot'); if (pd) pd.hidden = !Object.keys(perps.S.real.pos).length; }
     const n = radar.badge(), d = $('#memeDot');
     d.hidden = !n; d.textContent = n || '';
@@ -7368,7 +7764,15 @@ if (typeof module !== 'undefined') module.exports = PerpsBot;
   $('#jClearYes').onclick = () => { journal = []; saveJournal(); $('#jClearConfirm').hidden = true; renderJournal(); st.dirty = true; };
 
   // veille et reprise
+  // Les positions mèmes n'ont pas de stop sur la blockchain : seule l'appli ouverte peut vendre.
+  // Le journal du 13-14/10 montre un −25 % devenu −60 % après 3 h d'appli en pause : on prévient dès que Vigie quitte l'écran.
+  let bgWarnAt = 0;
   document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden' && !inFrame && bot && bot.openCount() > 0 && Date.now() - bgWarnAt > 10 * 60000) {
+      bgWarnAt = Date.now();
+      const n = bot.openCount();
+      sysNotify(`${n} position${n > 1 ? 's' : ''} mème${n > 1 ? 's' : ''} ouverte${n > 1 ? 's' : ''} : le bot ne peut vendre que si Vigie reste à l'écran`, 'short');
+    }
     applyWake();
     if (document.visibilityState === 'visible' && st.feed && st.feed !== Demo && Date.now() - st.lastMsg > 12000) resync();
   });
@@ -7474,7 +7878,7 @@ if (typeof module !== 'undefined') module.exports = PerpsBot;
   applyWake();
   start();
   radar.start();
-  showTab(hash.startsWith('perps') ? 'perps' : ['signal', 'pos', 'scan', 'meme', 'new', 'stats', 'set'].includes(hash) ? hash : 'signal');
+  showTab(hash.startsWith('perps') ? 'perps' : ['signal', 'pos', 'scan', 'meme', 'new', 'copy', 'stats', 'set'].includes(hash) ? hash : 'signal');
 })();
 
 </script>
