@@ -264,6 +264,7 @@ main{padding:12px 16px calc(84px + env(safe-area-inset-bottom,0px));max-width:76
 .tradepop{position:fixed;left:50%;top:calc(10px + env(safe-area-inset-top,0px));transform:translateX(-50%);z-index:61;width:calc(100% - 32px);max-width:520px;display:flex;flex-direction:column;gap:8px}
 .tp-item{position:relative;background:var(--panel);color:var(--fg);border:1px solid var(--line);border-left:5px solid var(--long);border-radius:12px;padding:10px 40px 10px 14px;box-shadow:0 10px 28px #00000040;cursor:pointer;line-height:1.35}
 .tp-k{display:block;font-size:.7rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--long)}
+.tp-item.sim{border-left-color:var(--warn)} .tp-item.sim .tp-k{color:var(--warn)}
 .tp-sym{font-family:var(--f-display);font-size:1.08rem}
 .tp-h{font-weight:600}
 .tp-h .pos{color:var(--long)} .tp-h .neg{color:var(--short)} .tp-h .muted{color:var(--muted)}
@@ -778,7 +779,7 @@ a.btn{text-decoration:none;color:inherit;display:inline-block}
       <h2>Diagnostic de connexion</h2>
       <div class="journal" id="diag"></div>
     </div>
-    <p class="foot"><strong>Version 2 · setups calibrés.</strong> Vigie Scalp aide à décider, il ne décide pas à ta place. Ce n'est pas un conseil financier. Les signaux se trompent souvent : place toujours ton stop, et ne risque que ce que tu peux perdre.</p>
+    <p class="foot"><strong>Version 2 · setups calibrés.</strong> Mise à jour du 16 octobre 2026 (journal du 15/10 : profil Protégé, détenteurs en baisse). Vigie Scalp aide à décider, il ne décide pas à ta place. Ce n'est pas un conseil financier. Les signaux se trompent souvent : place toujours ton stop, et ne risque que ce que tu peux perdre.</p>
   </section>
 </main>
 
@@ -5154,6 +5155,12 @@ function StrategyLab(h, radar, live, bot) {
   ];
   // Condition commune ajoutée après analyse du journal du 13-14/10 (106 trades simulés) :
   // les entrées sur un prix en baisse faisaient −17 % en moyenne (3 gagnants sur 24), les autres −2 %.
+  // Journal du 13-15/10 : 24 entrées sur des coins dont le nombre de détenteurs baissait : −13 % en moyenne, 12 % de gagnants
+  // (contre −3,6 % et 24 % quand il était stable ou en hausse). Tendance inconnue : on laisse passer.
+  const holdTrend = t => { const fl = radar.flow ? radar.flow(t.mint) : null; if (!fl) return null; if (fl.dH != null) return { v: fl.dH, txt: `${fl.dH > 0 ? '+' : fl.dH < 0 ? '−' : ''}${Math.abs(fl.dH)} en ${Math.max(1, Math.round(fl.win / 60000))} min` }; if (fin(fl.dHp)) return { v: fl.dHp, txt: `${fl.dHp > 0 ? '+' : fl.dHp < 0 ? '−' : ''}${String(Math.round(Math.abs(fl.dHp) * 10) / 10).replace('.', ',')} % sur 5 min` }; return null; };
+  const HOLDDN = C('détenteurs pas en baisse à l\'entrée',
+    t => { const h0 = holdTrend(t); return !(h0 && h0.v < 0); },
+    t => { const h0 = holdTrend(t); return h0 ? `${t.symbol || (t.mint || '').slice(0, 6)} : détenteurs ${h0.txt}` : null; });
   const MOMO = C('prix pas en baisse à l\'entrée (dernière minute, sinon 5 min)',
     (t, f) => (f.px60 != null ? f.px60 >= 0 : !(fin(f.ch5) && f.ch5 <= 0)),
     (t, f) => (f.px60 != null ? Math.round(f.px60 * 1000) / 10 + ' % sur 1 min' : fin(f.ch5) ? f.ch5 + ' % sur 5 min' : null));
@@ -5190,6 +5197,10 @@ function StrategyLab(h, radar, live, bot) {
       desc: 'perte −25 %, gain visé +30 % (vend la moitié, le reste suit avec un stop à −25 % du plus haut), chute rapide −30 %' },
     { id: 'patient', name: 'Patient', auto: true, vals: { sl: 35, tp1: 50, tp1Part: 50, trail: 30, tp2: 300, beAt: 1000, beFloor: 3, drop: 40 },
       desc: 'perte −35 %, gain visé +50 % (vend la moitié, le reste suit avec un stop à −30 % du plus haut), chute rapide −40 %' },
+    // journal du 13-15/10 : 20 trades montés à +20 % en moyenne sont repartis en perte (−20 % en moyenne).
+    // Sur les mêmes entrées, protéger le gain dès +15 % (sortie si retombé à +5 %) : −7,0 % par trade au lieu de −8,5 %, 34 % de gagnants au lieu de 21 %.
+    { id: 'protege', name: 'Protégé', auto: true, vals: { sl: 25, tp1: 30, tp1Part: 50, trail: 25, tp2: 150, beAt: 15, beFloor: 5, drop: 30 },
+      desc: 'comme Équilibré, mais dès +15 % le gain est protégé : sortie s\'il retombe à +5 %' },
     { id: 'patient10', name: 'Patient, 10 min sans hausse', test: true, vals: { sl: 35, tp1: 50, tp1Part: 50, trail: 30, tp2: 300, beAt: 1000, beFloor: 3, drop: 40, npMin: 10, npNeed: 10 },
       desc: 'comme Patient, mais attend 10 min (au lieu de ta règle) avant de sortir un coin qui n\'a pas monté' }
   ];
@@ -5241,7 +5252,7 @@ function StrategyLab(h, radar, live, bot) {
   const xNeeded = () => !!(h.requireX && h.requireX());
   // Toutes les conditions d'une stratégie, dans l'ordre : renvoie le rang de la première qui échoue (-1 si tout passe)
   function check(s, t, f) {
-    const list = [...SAFE, BAN, ...(s.age ? [C('âge dans la fenêtre de la stratégie', (tt, ff) => ff.age != null && ff.age >= s.age[0] && ff.age <= s.age[1], (tt, ff) => (ff.age != null ? Math.round(ff.age) : null))] : []), ...s.conds, MOMO, BOTS, FAKE];
+    const list = [...SAFE, BAN, ...(s.age ? [C('âge dans la fenêtre de la stratégie', (tt, ff) => ff.age != null && ff.age >= s.age[0] && ff.age <= s.age[1], (tt, ff) => (ff.age != null ? Math.round(ff.age) : null))] : []), ...s.conds, MOMO, HOLDDN, BOTS, FAKE];
     if (xNeeded() && !s.manual) list.push(C('lien X vérifié (réglage du mode auto)', tt => !!(h.xOk && h.xOk(tt))));
     for (let i = 0; i < list.length; i++) {
       let ok = false;
@@ -5324,11 +5335,13 @@ function StrategyLab(h, radar, live, bot) {
     dirty = true;
     radar.pin(t.mint, 'lab', { symbol: t.symbol, name: t.name, created: t.created });
     if (live) live.watch(t.mint, 'lab');
+    if (h.tradeTaken) try { h.tradeTaken({ mint: t.mint, sym: t.symbol || t.mint.slice(0, 4), sim: true, strat: s.name, sub: `simulation · mise ${fSol(size)}` }); } catch {}
   }
   function finish(p, why, gap) {
     p.state = 'closed';
     const net = p.realized - p.cost;
-    if (p.paused && !gap) { gap = 'pause'; why = 'interrompu : appli en pause pendant le trade (pas compté) · ' + why; }
+    // pause de l'appli (écran éteint) : même si le prix a ensuite manqué, c'est la pause qui a coupé le suivi
+    if (p.paused) { gap = 'pause'; if (!/^interrompu/.test(why)) why = 'interrompu : appli en pause pendant le trade (pas compté) · ' + why; }
     L.closed.unshift({ id: p.id, grp: p.grp, jid: p.jid || null, strat: p.strat, src: p.src || null, rt: fin(p.rt0) ? Math.round(p.rt0 * 1e4) / 1e4 : null, prof: p.prof || 'toi', key: p.key || null, mint: p.mint, sym: p.sym, t0: p.t0, t1: now(), cost: p.cost, net, pnl: net / p.cost, why, gap: !!gap, peak: p.peakTot ? p.peakTot / p.cost - 1 : null });
     if (jr && p.jid) jr.close(jr.byId(p.jid), why, gap ? NaN : net / p.cost, gap ? NaN : net, gap ? { gap: gap === 'pause' ? 'pause' : true } : null);
     if (jr && p.jparent) jr.alt(jr.byId(p.jparent), { prof: p.prof, key: p.key, pnl: gap ? null : Math.round(net / p.cost * 1e4) / 1e4, why, holdS: p.tOpen ? Math.round((now() - p.tOpen) / 1000) : null, peak: p.peakTot ? Math.round((p.peakTot / p.cost - 1) * 1e4) / 1e4 : null });
@@ -7449,17 +7462,31 @@ if (typeof module !== 'undefined') module.exports = PerpsBot;
   }
   function tradePop(x) {
     const box = $('#tradePop');
-    const sym = x.sym || (x.mint || '').slice(0, 6) || '?';
+    const sym = x.sym || (x.mint || '').slice(0, 6) || '?', sim = !!x.sim;
     if (box) {
-      const it = document.createElement('div');
-      it.className = 'tp-item'; it.dataset.mint = x.mint || ''; it.dataset.until = String(Date.now() + POP_MS);
-      it.innerHTML = `<button class="tp-x" type="button" aria-label="Fermer">×</button><span class="tp-k">Trade pris</span><b class="tp-sym">${esc(sym)}</b> <span class="tp-h"></span>${x.sub ? `<small class="tp-sub">${esc(x.sub)}</small>` : ''}`;
-      box.prepend(it);
-      while (box.children.length > 3) box.lastChild.remove();
+      // un seul bandeau par coin : un trade simulé déjà affiché sur ce coin reçoit la stratégie en plus
+      const same = [...box.children].find(el => el.dataset.mint === (x.mint || '') && el.dataset.sim === (sim ? '1' : ''));
+      if (same && sim) {
+        const L = (same.dataset.strats || '').split('|').filter(Boolean);
+        if (x.strat && !L.includes(x.strat)) L.push(x.strat);
+        same.dataset.strats = L.join('|'); same.dataset.until = String(Date.now() + POP_MS);
+        const sub = same.querySelector('.tp-sub'); if (sub) sub.textContent = `${x.sub || ''}${L.length ? ' · ' + L.join(', ') : ''}`;
+        box.prepend(same);
+      } else {
+        const it = document.createElement('div');
+        it.className = 'tp-item' + (sim ? ' sim' : ''); it.dataset.mint = x.mint || ''; it.dataset.sim = sim ? '1' : ''; it.dataset.strats = x.strat || '';
+        it.dataset.until = String(Date.now() + POP_MS);
+        const subTxt = `${x.sub || ''}${x.strat ? ' · ' + x.strat : ''}`;
+        it.innerHTML = `<button class="tp-x" type="button" aria-label="Fermer">×</button><span class="tp-k">${sim ? 'Trade simulé' : 'Trade pris'}</span><b class="tp-sym">${esc(sym)}</b> <span class="tp-h"></span>${subTxt ? `<small class="tp-sub">${esc(subTxt)}</small>` : ''}`;
+        box.prepend(it);
+        while (box.children.length > 3) box.lastChild.remove();
+      }
       box.hidden = false;
       paintPop();
       if (!popT) popT = setInterval(paintPop, 2000);
     }
+    // simulation : bandeau seulement (pas de son ni de notification du téléphone, il y en a beaucoup)
+    if (sim) return;
     const msg = `Trade pris : ${sym} — ${holdInfo(x.mint).txt}`;
     if (set.notifTrade !== false) sysNotify(msg, 'long');
     beep(1);
@@ -8222,7 +8249,8 @@ if (typeof module !== 'undefined') module.exports = PerpsBot;
     requireX: () => newCoins.requireX(),
     xOk: t => newCoins.xOk(t),
     copy: () => copy,
-    banned: isBanned
+    banned: isBanned,
+    tradeTaken: tradePop
   }, radar, live, bot);
   newCoins.start();
   if (!inFrame) lab.start();
