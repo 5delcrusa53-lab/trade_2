@@ -1505,6 +1505,10 @@ if (typeof module !== 'undefined') module.exports = { Binance, Bybit, Demo, TF_M
       toutes les 8 à 10 s). Si le cap bondit fort en quelques secondes alors que les détenteurs sont restés collés
       sur les derniers relevés, ce sont des bots. Sur la courbe on voit chaque achat : il en faut plusieurs
       (un seul gros achat peut être une vraie baleine).
+   0) En direct, sur la courbe pump.fun : chaque achat et chaque wallet acheteur sont vus à la seconde (connexion Solana
+      gratuite, changements de solde des comptes du jeton). Si le cap bondit de +20 % en 5 s au plus, en 3 achats ou plus,
+      faits par 1 ou 2 wallets seulement : les wallets n'augmentent pas, ce sont des bots. On ne juge que si le suivi
+      des wallets tournait déjà avant le bond et qu'il a bien vu passer des changements de solde pendant le bond.
    Une fois repéré, le coin reste bloqué (le bond passé, la manipulation reste).
    Garde-fou : un seul relevé, détenteurs inconnus, relevés trop rapprochés ou trop vieux : on laisse passer.
    Chaque relevé de détenteurs garde le cap du même instant (holdHist). Seuils prudents, à ajuster avec le journal. */
@@ -1518,6 +1522,10 @@ const FAKE_JUMP_RECENT = 60000;    // 2) bond survenu dans la dernière minute
 const FAKE_JUMP_BUYS = 3;          // 2) sur la courbe en direct : au moins 3 achats dans le bond
 const FAKE_STUCK_N = 3;            // 2) détenteurs collés sur les 3 derniers relevés…
 const FAKE_STUCK_FRESH = 90000;    // …dont le dernier a moins de 90 s
+const FAKE_LIVE_WIN = 5000;        // 0) en direct : « quelques secondes », 5 s au plus
+const FAKE_LIVE_UP = 20;           // 0) cap +20 % au moins dans ces secondes…
+const FAKE_LIVE_BUYS = 3;          // 0) …fait d'au moins 3 achats…
+const FAKE_LIVE_WALLETS = 2;       // 0) …par 2 wallets différents au plus : ce sont des bots
 function capOf(t) {
   if (!t) return null;
   const v = (t.pair && (t.pair.marketCap || t.pair.fdv)) || (t.jup && t.jup.mcap) || (t.nc && t.nc.j && t.nc.j.mcap) || null;
@@ -1577,10 +1585,40 @@ function fakeJump(t, tn) {
   return { kind: 'bond', why: 'Le cap bondit sans nouveaux détenteurs : bots probables',
     v: `cap +${Math.round(best.up)} % en ${fakeDur(best.ms)}, détenteurs collés à ${fakeN(last.n)} sur ${S.length} relevés (${fakeDur(last.t - S[0].t)})` };
 }
+// 0) bond du cap en quelques secondes, porté par 1 ou 2 wallets (suivi en direct des wallets acheteurs)
+function fakeLive(t, tn) {
+  const L = t.live;
+  if (!L || !L.walOn || !L.wal || !Array.isArray(L.wal.ev) || !L.pts || L.pts.length < 2 || !Array.isArray(L.ev)) return null;
+  const from = Math.max(L.walOn + 1000, tn - FAKE_JUMP_RECENT); // seulement pendant que le suivi des wallets tournait
+  const P = [];
+  for (let k = L.pts.length - 1; k >= 0 && L.pts[k].t >= from; k--) P.unshift(L.pts[k]);
+  if (P.length < 2) return null;
+  const buysIn = (a, b) => L.ev.filter(e => e.d > 0 && e.t >= a && e.t <= b).length;
+  let best = null;
+  for (let j = P.length - 1; j > 0; j--) {
+    for (let i = j - 1; i >= 0 && P[j].t - P[i].t <= FAKE_LIVE_WIN; i--) {
+      if (!(P[i].px > 0) || !(P[j].px > 0)) continue;
+      const up = (P[j].px / P[i].px - 1) * 100;
+      if (up < FAKE_LIVE_UP || (best && up <= best.up)) continue;
+      const a = P[i].t, b = P[j].t + 1000; // un point = la dernière valeur de sa seconde
+      const n = buysIn(a, b);
+      if (n < FAKE_LIVE_BUYS) continue;
+      // wallets dont le solde monte (ou change, sens inconnu) pendant le bond ; aucun changement vu = flux muet, on ne juge pas
+      const W = L.wal.ev.filter(e => e.d >= 0 && e.t >= a - 500 && e.t <= b + 500);
+      if (!W.length) continue;
+      const ws = new Set(W.map(e => e.own)).size;
+      if (ws > FAKE_LIVE_WALLETS) continue;
+      best = { up, ms: Math.max(1000, P[j].t - P[i].t), n, ws };
+    }
+  }
+  if (!best) return null;
+  return { kind: 'direct', why: 'Le cap bondit avec 1 ou 2 wallets seulement : bots',
+    v: `cap +${Math.round(best.up)} % en ${fakeDur(best.ms)} : ${best.n} achats par ${best.ws} wallet${best.ws > 1 ? 's' : ''}` };
+}
 function fakeActivity(t) {
   if (!t) return null;
   if (t.fakeHit) return t.fakeHit;
-  const r = fakeWindow(t) || fakeJump(t, Date.now());
+  const r = fakeLive(t, Date.now()) || fakeWindow(t) || fakeJump(t, Date.now());
   if (r) t.fakeHit = Object.assign({ at: Date.now() }, r);
   return r ? t.fakeHit : null;
 }
@@ -2467,7 +2505,8 @@ function JupClient(getKey) {
         run();
       });
     },
-    post(path, body) { return raw(BASE + path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }, 70000); }
+    post(path, body) { return raw(BASE + path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }, 70000); },
+    pending: () => q.high.length + q.low.length
   };
 }
 
@@ -3126,7 +3165,7 @@ function CurveLive(h, radar) {
     W.ws = ws; W.status = 'wait';
     const to = setTimeout(() => { if (!W.open) try { ws.close(); } catch {} }, 8000);
     ws.onopen = () => {
-      clearTimeout(to); W.open = true; W.fails = 0; W.status = 'on'; W.okUrl = url; W.msg = host(url);
+      clearTimeout(to); W.open = true; W.fails = 0; W.status = 'on'; W.okUrl = url; W.msg = host(url); W.walOff = false;
       for (const s of W.subs.values()) { s.sid = null; send(s); }
       clearInterval(W.timer);
       W.timer = setInterval(() => { if (W.open) try { ws.send(JSON.stringify({ jsonrpc: '2.0', id: 0, method: 'getHealth' })); } catch {} }, 40000);
@@ -3136,7 +3175,21 @@ function CurveLive(h, radar) {
       let m; try { m = JSON.parse(ev.data); } catch { return; }
       if (m.id && W.pend.has(m.id)) {
         const s = W.pend.get(m.id); W.pend.delete(m.id);
-        if (m.result != null && W.subs.get(s.key) === s) { s.sid = m.result; W.bySid.set(m.result, s); }
+        if (m.result != null && W.subs.get(s.key) === s) {
+          s.sid = m.result; s.err = null; W.bySid.set(m.result, s);
+          if (s.kind === 'wal') { const t = radar.get(s.mint); if (t) { const L = liveOf(t); if (!L.walOn) L.walOn = now(); } W.walErr = ''; }
+        } else if (m.error && s.kind === 'wal') {
+          s.err = String(m.error.message || 'refusé').slice(0, 80); W.walErr = s.err; W.walOff = true; W.walHost = host(url);
+          // plus de nouvelle demande sur cette connexion ; abonnements refusés retirés
+          for (const x of [...W.subs.values()]) if (x.kind === 'wal' && x.sid == null) W.subs.delete(x.key);
+          if (!W.walWarned) { W.walWarned = true; if (h.onWalRefused) try { h.onWalRefused(W.walErr, W.walHost); } catch {} }
+        }
+        return;
+      }
+      if (m.method === 'programNotification' && m.params) {
+        const s = W.bySid.get(m.params.subscription);
+        const v = m.params.result && m.params.result.value;
+        if (s && v && v.pubkey && v.account && Array.isArray(v.account.data)) applyWal(s, v.pubkey, b64(v.account.data[0]));
         return;
       }
       if (m.method === 'accountNotification' && m.params) {
@@ -3150,6 +3203,8 @@ function CurveLive(h, radar) {
     ws.onclose = () => {
       clearTimeout(to); clearInterval(W.timer);
       const was = W.open;
+      // coupure : des changements de solde ont pu passer inaperçus, le suivi des wallets repart de zéro
+      for (const x of W.subs.values()) if (x.kind === 'wal') { const t = radar.get(x.mint); if (t && t.live) t.live.walOn = 0; }
       W.ws = null; W.open = false; W.bySid.clear(); W.pend.clear();
       W.status = 'off'; W.msg = was ? 'coupé, reconnexion' : 'injoignable : ' + host(url);
       if (!was) W.idx++;
@@ -3162,11 +3217,15 @@ function CurveLive(h, radar) {
     if (!W.open || !W.ws) return;
     const id = ++W.id;
     W.pend.set(id, s);
-    try { W.ws.send(JSON.stringify({ jsonrpc: '2.0', id, method: 'accountSubscribe', params: [s.acct, { encoding: 'base64', commitment: 'processed' }] })); } catch {}
+    // 'wal' : tous les comptes de ce jeton (un par wallet détenteur), chaque achat ou vente en direct, avec le wallet
+    const req = s.kind === 'wal'
+      ? { jsonrpc: '2.0', id, method: 'programSubscribe', params: [s.acct, { encoding: 'base64', commitment: 'processed', filters: [{ memcmp: { offset: 0, bytes: s.mint } }] }] }
+      : { jsonrpc: '2.0', id, method: 'accountSubscribe', params: [s.acct, { encoding: 'base64', commitment: 'processed' }] };
+    try { W.ws.send(JSON.stringify(req)); } catch {}
   }
   function drop(s) {
     W.subs.delete(s.key);
-    if (s.sid != null) { W.bySid.delete(s.sid); if (W.open) try { W.ws.send(JSON.stringify({ jsonrpc: '2.0', id: ++W.id, method: 'accountUnsubscribe', params: [s.sid] })); } catch {} }
+    if (s.sid != null) { W.bySid.delete(s.sid); if (W.open) try { W.ws.send(JSON.stringify({ jsonrpc: '2.0', id: ++W.id, method: s.kind === 'wal' ? 'programUnsubscribe' : 'accountUnsubscribe', params: [s.sid] })); } catch {} }
   }
   async function sub(key, acct, kind, mint, tag) {
     let s = W.subs.get(key);
@@ -3175,7 +3234,7 @@ function CurveLive(h, radar) {
     W.subs.set(key, s);
     if (W.open) send(s); else connect();
     // état initial (l'abonnement ne l'envoie qu'au prochain changement)
-    if (h.rpc) h.rpc('getAccountInfo', [acct, { encoding: 'base64', commitment: 'processed' }])
+    if (kind !== 'wal' && h.rpc) h.rpc('getAccountInfo', [acct, { encoding: 'base64', commitment: 'processed' }])
       .then(r => { if (W.subs.get(key) === s) { const v = r && r.value; apply(s, v && Array.isArray(v.data) ? b64(v.data[0]) : null, true); } }).catch(() => {});
     return s;
   }
@@ -3222,6 +3281,33 @@ function CurveLive(h, radar) {
     emit(s.mint);
   }
   function emit(mint) { for (const f of W.listeners) { try { f(mint); } catch {} } }
+  // Changement de solde d'un compte du jeton : qui (wallet propriétaire) et dans quel sens.
+  // Compte de jeton : mint (0-32), propriétaire (32-64), quantité u64 (64-72), même début en Token-2022.
+  const RESERVE_RAW = 100000000000000n; // ≥ 10 % de l'offre pump.fun (1 milliard × 10^6) : courbe ou réserve, pas un acheteur
+  function applyWal(s, pubkey, bytes) {
+    const t = radar.get(s.mint);
+    if (!t) return;
+    const L = liveOf(t), tn = now();
+    const V = L.wal || (L.wal = { acc: new Map(), ev: [], prog: null });
+    // le coin n'utilise qu'un des deux programmes de jetons : on coupe l'abonnement inutile
+    if (!V.prog) { V.prog = s.acct; for (const x of [...W.subs.values()]) if (x.kind === 'wal' && x.mint === s.mint && x.acct !== s.acct) drop(x); }
+    let own = null, amt = 0n;
+    if (bytes && bytes.length >= 72) {
+      let bin = ''; for (let i = 32; i < 64; i++) bin += String.fromCharCode(bytes[i]);
+      own = btoa(bin);
+      try { amt = new DataView(bytes.buffer, bytes.byteOffset + 64, 8).getBigUint64(0, true); } catch { return; }
+    }
+    const prev = V.acc.get(pubkey);
+    if (!own && prev) own = prev.own; // compte fermé : tout vendu
+    if (V.acc.size > 3000 && !prev) V.acc.delete(V.acc.keys().next().value);
+    V.acc.set(pubkey, { own, amt });
+    if (!own || amt >= RESERVE_RAW || (prev && prev.amt >= RESERVE_RAW)) return;
+    // sens : +1 achat, −1 vente, 0 inconnu (premier changement vu sur ce compte)
+    const d = prev ? (amt > prev.amt ? 1 : amt < prev.amt ? -1 : 0) : 0;
+    V.ev.push({ t: tn, own, d });
+    if (V.ev.length > 800) V.ev.splice(0, V.ev.length - 800);
+    if (V.ev[0] && tn - V.ev[0].t > 3 * 60000) V.ev = V.ev.filter(e => tn - e.t <= 3 * 60000);
+  }
 
   /* ---------- suivi ---------- */
   async function watch(mint, tag) {
@@ -3233,8 +3319,10 @@ function CurveLive(h, radar) {
       const acct = t.curveKey || await curveAddr(t);
       t.curveKey = acct;
       await sub('c:' + mint, acct, 'curve', mint, tag);
-      liveOf(t);
+      const L = liveOf(t);
       await watchDev(t, tag);
+      // wallets qui achètent, en direct (gratuit, même connexion) : les deux programmes de jetons tant qu'on ne sait pas lequel
+      if (!W.walOff) for (const prog of L.wal && L.wal.prog ? [L.wal.prog] : [Curve.TOKEN, Curve.TOKEN22]) await sub('w:' + mint + ':' + prog, prog, 'wal', mint, tag);
       return true;
     } catch (e) { W.msg = e.message; return false; }
   }
@@ -3281,8 +3369,8 @@ function CurveLive(h, radar) {
   return {
     watch, unwatch, watching, tagged, fresh, flowOf, devSoldSince, sellValue, pxChange,
     onUpdate: f => W.listeners.push(f),
-    status: () => ({ s: W.status, msg: W.msg, subs: [...W.subs.values()].filter(s => s.kind === 'curve').length, last: W.lastMsg }),
-    _test: { apply, W, liveOf }
+    status: () => { const wl = [...W.subs.values()].filter(s => s.kind === 'wal'); return { s: W.status, msg: W.msg, subs: [...W.subs.values()].filter(s => s.kind === 'curve').length, last: W.lastMsg, wal: { on: new Set(wl.filter(s => s.sid != null).map(s => s.mint)).size, asked: new Set(wl.map(s => s.mint)).size, err: W.walErr || '', off: !!W.walOff, host: W.walHost || '' } }; },
+    _test: { apply, applyWal, W, liveOf }
   };
 }
 if (typeof module !== 'undefined') module.exports = { Curve, CurveLive };
@@ -4704,7 +4792,7 @@ function TradeJournal(h, radar, live, bot, X) {
       tx5: f ? f.tx5 : null, b5: fl.b5 != null ? fl.b5 : null, s5: fl.s5 != null ? fl.s5 : null, b1: fl.b1 != null ? fl.b1 : null, s1: fl.s1 != null ? fl.s1 : null,
       share5: f && fin(f.share) ? r4(f.share) : null, traders5: f ? f.traders : null, orgBuyers5: fin(Jp.orgBuyers5) ? Jp.orgBuyers5 : fin(j.org) ? j.org : null,
       organic: fin(Jp.organic) ? Math.round(Jp.organic) : fin(j.organic) ? Math.round(j.organic) : null, organicLabel: Jp.label || j.label || null,
-      ch5: f && fin(f.ch5) ? r1(f.ch5) : null, fakeAct: (() => { const r = fakeActivity(t); return r ? r.v : null; })(), ch1: fin(m.ch1) ? r1(m.ch1) : null, vol5: fin(m.v5) ? Math.round(m.v5) : null, volH: fin(m.vh) ? Math.round(m.vh) : null,
+      ch5: f && fin(f.ch5) ? r1(f.ch5) : null, fakeAct: (() => { const r = fakeActivity(t); return r ? r.v : null; })(), walLive: !!(t.live && t.live.walOn), ch1: fin(m.ch1) ? r1(m.ch1) : null, vol5: fin(m.v5) ? Math.round(m.v5) : null, volH: fin(m.vh) ? Math.round(m.vh) : null,
       holders: fl.holders || null, holdersD: fl.dH != null ? fl.dH : null, holdersWinS: fl.win ? Math.round(fl.win / 1000) : null, holdersChg5Pct: fin(fl.dHp) ? r1(fl.dHp) : null,
       fromHi: t.life && fin(t.life.fromHi) ? r4(t.life.fromHi) : null, lifeHiMinAgo: t.life && t.life.hiT ? Math.round((now() - t.life.hiT) / 60000) : null,
       live: !!(live && live.fresh(t)), flow60: lf ? { buy: r4(lf.buy), sell: r4(lf.sell), big: r4(lf.big), n: lf.n } : null, flow180: lf3 ? { buy: r4(lf3.buy), sell: r4(lf3.sell), n: lf3.n } : null,
@@ -5087,7 +5175,7 @@ function StrategyLab(h, radar, live, bot) {
       : null));
   // Liste noire manuelle (coins et créateurs que tu as bannis toi-même)
   const BAN = C('coin et créateur pas sur ta liste noire', t => !(h.banned && h.banned(t)), t => (h.banned && h.banned(t) ? 'banni par toi' : null));
-  const FAKE = C('détenteurs qui suivent le cap (pas à plat quand il monte, pas de bond sans nouveaux détenteurs)',
+  const FAKE = C('pas de bots : le cap ne monte pas sans nouveaux wallets (détenteurs à plat, bond par 1 ou 2 wallets)',
     t => !fakeActivity(t),
     t => { const r = fakeActivity(t); return r ? `${t.symbol || (t.mint || '').slice(0, 6)} : ${r.v}` : null; });
   const byId = id => STRATS.find(s => s.id === id);
@@ -5423,7 +5511,8 @@ function StrategyLab(h, radar, live, bot) {
     const box = $('#labBody');
     if (!box) return;
     const ls = live ? live.status() : null, size = bot.cfg().size;
-    $('#labState').innerHTML = ls ? `<span class="chip ${ls.s === 'on' ? 'long' : ls.s === 'wait' ? 'warn' : ''}">${ls.s === 'on' ? 'temps réel' : ls.s === 'wait' ? 'connexion…' : ls.subs ? 'temps réel coupé' : 'prêt'}</span>` : '';
+    $('#labState').innerHTML = ls ? `<span class="chip ${ls.s === 'on' ? 'long' : ls.s === 'wait' ? 'warn' : ''}">${ls.s === 'on' ? 'temps réel' : ls.s === 'wait' ? 'connexion…' : ls.subs ? 'temps réel coupé' : 'prêt'}</span>`
+      + (ls.wal && ls.wal.on ? ` <span class="chip long" title="Wallets acheteurs suivis en direct sur ${ls.wal.on} coin${ls.wal.on > 1 ? 's' : ''}">wallets en direct · ${ls.wal.on}</span>` : ls.wal && ls.wal.err && ls.s === 'on' ? ` <span class="chip warn" title="${esc(ls.wal.err)}">wallets : refusé par le RPC</span>` : '') : '';
     const pk = pick();
     const opened0 = new Set([...box.querySelectorAll('details.l-row[open]')].map(d => d.dataset.id));
     const rows = STRATS.map(s => {
@@ -5442,7 +5531,8 @@ function StrategyLab(h, radar, live, bot) {
     const sgHtml = !sg ? '' : sg.pr.test && autoMode()
       ? `<div class="advice" data-l="info" style="margin:0 0 10px"><h3>Ta règle « pas de hausse » coupe des gagnants</h3><p>Sur « ${esc(sg.s.name)} », attendre 10 min au lieu de ${bot.cfg().npMin} min fait ${fPct(sg.st.avg)} en moyenne sur ${sg.st.n} trades simulés, contre ${fPct(sg.me.avg)}. C'est toi qui décides.</p><div class="row-btns"><button class="btn sm pri" data-lnp="10">Passer à 10 min</button></div></div>`
       : `<div class="advice" data-l="info" style="margin:0 0 10px"><h3>D'autres réglages de sortie feraient mieux</h3><p>Sur « ${esc(sg.s.name)} », les réglages « ${esc(sg.pr.name)} » (${esc(sg.pr.desc)}) font ${fPct(sg.st.avg)} en moyenne sur ${sg.st.n} trades simulés, contre ${fPct(sg.me.avg)} avec les tiens. C'est toi qui décides.</p><div class="row-btns"><button class="btn sm pri" data-lprof="${sg.pr.id}">Appliquer ces réglages au bot</button></div></div>`;
-    box.innerHTML = `${sgHtml}<div class="advice" data-l="${pk.ok ? 'ok' : 'warn'}" style="margin:0 0 10px"><h3>${pk.ok ? `Argent réel : « ${esc(pk.s.name)} »${pk.prof && autoMode() ? ` en « ${esc(pk.prof.name)} »` : ''}` : 'Simulation seulement'}</h3><p>${pk.ok ? `${esc(pk.txt)}, ${Math.round(pk.st.wins / pk.st.n * 100)} % gagnants. Le mode auto n'entre qu'avec cette stratégie, tant qu'elle reste rentable.` : esc(pk.reason)}</p></div>
+    const walMsg = ls && ls.wal && ls.wal.off && !ls.wal.on ? `<div class="advice" data-l="warn" style="margin:0 0 10px"><h3>Suivi des wallets en direct bloqué</h3><p>Le serveur Solana ${esc(ls.wal.host || '')} refuse ce suivi (« ${esc(ls.wal.err)} »). La règle « cap qui bondit avec 1 ou 2 wallets » ne peut pas s'appliquer ; les autres contrôles anti-bots continuent. Si ce message reste affiché, demande à Claude de retirer le flux des wallets en direct.</p></div>` : '';
+    box.innerHTML = `${walMsg}${sgHtml}<div class="advice" data-l="${pk.ok ? 'ok' : 'warn'}" style="margin:0 0 10px"><h3>${pk.ok ? `Argent réel : « ${esc(pk.s.name)} »${pk.prof && autoMode() ? ` en « ${esc(pk.prof.name)} »` : ''}` : 'Simulation seulement'}</h3><p>${pk.ok ? `${esc(pk.txt)}, ${Math.round(pk.st.wins / pk.st.n * 100)} % gagnants. Le mode auto n'entre qu'avec cette stratégie, tant qu'elle reste rentable.` : esc(pk.reason)}</p></div>
       <p class="note">Mise simulée : ${fSol(size)} par trade, comme le bot. Frais, glissement et 3 à 5 s de délai inclus. Résultats des 24 dernières heures.${autoMode() ? ' Perte et gain : le labo choisit, pour chaque stratégie, entre Rapide, Équilibré et Patient. Ta règle « pas de hausse » reste un maximum.' : ''}</p>
       <div class="l-list">${rows}</div>
       ${opened ? `<h3 class="w-h">Trades simulés en cours</h3><div class="journal">${opened}</div>` : ''}
@@ -5586,7 +5676,63 @@ function CopyTrade(h, radar, bot, rpc) {
     return out;
   }
 
-  /* ---------- surveillance ---------- */
+  /* ---------- surveillance ----------
+     Sans RPC perso, les RPC publics gratuits refusent vite (« Rate limit exceeded ») un relevé toutes les quelques
+     secondes, et leur refus prive aussi le bot de RPC. On lit donc les soldes du wallet copié chez Jupiter (un appel
+     par wallet toutes les 8 s environ) et on compare au relevé précédent : jeton qui apparaît ou augmente = achat,
+     jeton qui baisse = vente. Avec ton RPC perso : lecture des transactions (montants exacts) ; s'il flanche,
+     repli sur Jupiter. */
+  const SNAP = new Map(); // adresse → { sol, tok: Map(mint → { raw, dec }) } : dernier relevé Jupiter (en mémoire seulement)
+  const ownRpc = () => !!(h.ownRpc && h.ownRpc());
+  const errTxt = m => (/429|rate|limit|too many/i.test(m || '') ? 'trop d\'appels, Jupiter fait patienter' : /délai|répond pas/i.test(m || '') ? 'Jupiter ne répond pas' : /injoignable/i.test(m || '') ? 'pas de réseau' : String(m || 'erreur').replace(/^Jupiter : /, '').slice(0, 80));
+  async function pollJupWallet(w) {
+    const j = await h.jup('/ultra/v1/holdings/' + w.addr, 'high');
+    if (!j || typeof j !== 'object') throw new Error('réponse Jupiter vide');
+    const tok = new Map();
+    for (const [mint, arr] of Object.entries(j.tokens || {})) {
+      let raw = 0n, dec = 6;
+      for (const x of Array.isArray(arr) ? arr : []) { try { raw += BigInt(x.amount || '0'); } catch {} if (fin(+x.decimals)) dec = +x.decimals; }
+      tok.set(mint, { raw, dec });
+    }
+    const sol = fin(+j.uiAmount) ? +j.uiAmount : fin(+j.amount) ? +j.amount / 1e9 : 0;
+    const prev = SNAP.get(w.addr);
+    SNAP.set(w.addr, { sol, tok });
+    w.checkedAt = now(); w.err = ''; w.via = 'Jupiter';
+    if (!prev) return; // premier relevé : on note les soldes sans rien rejouer (on ne copie qu'à partir de maintenant)
+    const raw1 = m => (tok.get(m) || { raw: 0n }).raw, raw0 = m => (prev.tok.get(m) || { raw: 0n }).raw;
+    const d = m => raw1(m) - raw0(m);
+    const decOf = m => (tok.get(m) || prev.tok.get(m) || { dec: 6 }).dec;
+    const solD = sol - prev.sol + Number(d(WSOL)) / 1e9;
+    const usdD = STABLE.reduce((a, m) => a + Number(d(m)) / Math.pow(10, decOf(m)), 0);
+    const ups = [], downs = [];
+    for (const m of new Set([...tok.keys(), ...prev.tok.keys()])) {
+      if (BASE.has(m)) continue;
+      const dd = d(m);
+      if (dd > 0n) ups.push(m); else if (dd < 0n) downs.push(m);
+    }
+    const paid = solD < -0.001 || usdD < -0.5, got = solD > 0.0005 || usdD > 0.5;
+    for (const m of downs) {
+      const p0 = raw0(m), frac = p0 > 0n ? Math.min(1, Number((-d(m) * 10000n) / p0) / 10000) : 1;
+      onEvent(w, null, { side: got || ups.length ? 'sell' : 'out', mint: m, frac, sol: got && !ups.length && downs.length === 1 ? solD : null }, null);
+    }
+    // jetons reçus sans rien payer (transfert, airdrop) : pas un achat, sauf échange contre un autre jeton vendu au même moment
+    if (!paid && !downs.length) return;
+    for (const m of ups) onEvent(w, null, { side: 'buy', mint: m, sol: paid && solD < 0 && ups.length === 1 ? -solD : null, usd: paid && usdD < 0 && ups.length === 1 ? -usdD : null }, null);
+  }
+  async function pollOne(w) {
+    if (ownRpc()) {
+      try {
+        if (w.via !== 'RPC') w.base = false; // retour sur ton RPC : on repart de maintenant, sans rejouer
+        await pollWallet(w);
+        w.via = 'RPC'; SNAP.delete(w.addr);
+        return;
+      } catch (e) { w.rpcErr = e.message; }
+    }
+    if (w.via === 'RPC') SNAP.delete(w.addr); // passage sur Jupiter : nouveau relevé de départ
+    // le bot passe avant : si la file Jupiter est chargée (ventes, cotations), ce relevé attend le tour suivant
+    if (h.jupBusy && h.jupBusy() > 3) return;
+    await pollJupWallet(w);
+  }
   function mark(sig) { seen.add(sig); if (seen.size > 800) seen.delete(seen.values().next().value); }
   async function pollWallet(w) {
     const sigs = await rpc('getSignaturesForAddress', [w.addr, { limit: 20, commitment: 'confirmed' }]);
@@ -5609,7 +5755,14 @@ function CopyTrade(h, radar, bot, rpc) {
     C.busy = true;
     try {
       for (const w of S.wallets.filter(w => w.on)) {
-        try { await pollWallet(w); } catch (e) { w.err = e.message; C.err = e.message; }
+        if (w.retryAt && now() < w.retryAt) continue;
+        try { await pollOne(w); w.fails = 0; w.retryAt = 0; }
+        catch (e) {
+          // on espace les essais (8 s, 16 s, 32 s, puis 60 s) au lieu d'insister
+          w.fails = (w.fails || 0) + 1;
+          const wait = Math.min(60000, 8000 * Math.pow(2, w.fails - 1));
+          w.retryAt = now() + wait; w.err = errTxt(e.message); C.err = w.err;
+        }
       }
       if (S.wallets.some(w => w.on && !w.err)) { C.lastOk = now(); C.err = ''; }
       // ménage : les jetons copiés il y a plus de 15 min ne sont plus suivis de près pour la copie
@@ -5620,7 +5773,7 @@ function CopyTrade(h, radar, bot, rpc) {
   }
   function loop() {
     const k = S.wallets.filter(w => w.on).length;
-    const next = k ? 4000 + 1500 * (k - 1) : 8000; // limite les appels au RPC public
+    const next = !k ? 8000 : ownRpc() ? 4000 + 1500 * (k - 1) : 8000 + 3000 * (k - 1); // Jupiter sans clé : environ 30 appels par minute pour toute l'appli
     setTimeout(async () => { try { if (k) await poll(); } catch {} loop(); }, next);
   }
 
@@ -5696,7 +5849,7 @@ function CopyTrade(h, radar, bot, rpc) {
     const [lab0, cls] = ACT[ev.act] || ['', ''];
     const sym = (radar.get(ev.mint) || {}).symbol || ev.sym;
     const what = ev.side === 'buy' ? `achète ${esc(sym)}${fin(ev.sol) ? ' pour ' + fSol(ev.sol) : fin(ev.usd) ? ' pour ' + n(ev.usd, 0) + ' $' : ''}` : `${ev.side === 'sell' ? 'vend' : 'sort'} ${esc(sym)}${fin(ev.frac) ? ' (' + Math.round(ev.frac * 100) + ' %)' : ''}`;
-    return `<div class="j-row"><span class="chip ${cls}">${lab0}</span><div class="j-mid"><div>${esc(nameOf(ev.w))} ${what}</div><div class="mono">il y a ${ago(now() - ev.tx)} · ${esc(ev.why)}</div></div><a class="cp-tx" href="https://solscan.io/tx/${esc(ev.sig)}" target="_blank" rel="noopener">tx</a></div>`;
+    return `<div class="j-row"><span class="chip ${cls}">${lab0}</span><div class="j-mid"><div>${esc(nameOf(ev.w))} ${what}</div><div class="mono">il y a ${ago(now() - ev.tx)} · ${esc(ev.why)}</div></div>${ev.sig ? `<a class="cp-tx" href="https://solscan.io/tx/${esc(ev.sig)}" target="_blank" rel="noopener">tx</a>` : `<a class="cp-tx" href="https://solscan.io/account/${esc(ev.w)}" target="_blank" rel="noopener">wallet</a>`}</div>`;
   }
   // Classement des wallets suivis : copies simulées terminées sur 24 h, du meilleur au pire
   function rankHtml() {
@@ -5744,7 +5897,7 @@ function CopyTrade(h, radar, bot, rpc) {
     if (h.inFrame) { box.innerHTML = '<p class="note" style="margin:0">La copie de wallets ne tourne pas dans l\'aperçu Claude. Utilise la version hébergée de l\'appli.</p>'; return; }
     const L = lab(), st = L ? L.stats('copy') : { n: 0, wins: 0, avg: 0, sum: 0, open: 0 };
     const on = S.wallets.filter(w => w.on);
-    const wl = S.wallets.map(w => `<div class="cp-w${w.on ? '' : ' off'}"><div class="cp-wm"><b>${esc(w.label || short(w.addr))}</b><span class="mono">${esc(short(w.addr))}${w.on ? (w.err ? ` · <span class="neg">${esc(w.err)}</span>` : w.checkedAt ? ` · relevé il y a ${ago(now() - w.checkedAt)}` : ' · premier relevé…') : ' · en pause'} · ${w.buys || 0} achat${(w.buys || 0) > 1 ? 's vus' : ' vu'}</span></div>
+    const wl = S.wallets.map(w => `<div class="cp-w${w.on ? '' : ' off'}"><div class="cp-wm"><b>${esc(w.label || short(w.addr))}</b><span class="mono">${esc(short(w.addr))}${w.on ? (w.err ? ` · <span class="neg">${esc(w.err)}${w.retryAt > now() ? `, nouvel essai dans ${Math.max(1, Math.round((w.retryAt - now()) / 1000))} s` : ''}</span>` : w.checkedAt ? ` · ${w.via === 'RPC' ? 'via ton RPC' : 'via Jupiter'} · relevé il y a ${ago(now() - w.checkedAt)}` : ' · premier relevé…') : ' · en pause'} · ${w.buys || 0} achat${(w.buys || 0) > 1 ? 's vus' : ' vu'}</span></div>
       <label class="pp-sw"><input type="checkbox" data-cw-on="${esc(w.addr)}"${w.on ? ' checked' : ''}>Suivre</label><button class="btn sm" data-cw-del="${esc(w.addr)}">Retirer</button></div>`).join('');
     const addHtml = S.wallets.length < MAX_W ? `<div class="add"><input id="cpAddr" placeholder="Adresse Solana du wallet à copier" autocomplete="off" spellcheck="false"></div>
       <div class="add" style="margin-top:6px"><input id="cpLabel" placeholder="Nom (facultatif)" autocomplete="off" maxlength="24"><button class="btn pri" data-c="add">Ajouter</button></div>` : `<p class="note">Maximum ${MAX_W} wallets.</p>`;
@@ -5781,7 +5934,7 @@ function CopyTrade(h, radar, bot, rpc) {
       ${wl ? `<div class="cp-list">${wl}</div>` : '<p class="note" style="margin:0">Aucun wallet suivi. Colle l\'adresse d\'un wallet Solana dont tu veux reproduire les trades.</p>'}
       ${addHtml}
       ${S.wallets.length ? `<label class="toggle" style="margin-top:6px"><span>Alerte quand un wallet suivi achète<small>« Baleine vient d'acheter X », une fois par wallet et par coin. Sur l'écran verrouillé seulement si « Notifications sur le téléphone » est activé (Réglages), et tant qu'Android laisse tourner Vigie</small></span><input type="checkbox" id="cpAlert"${S.alerts !== false ? ' checked' : ''}></label>` : ''}
-      ${on.length && C.err && !C.lastOk ? `<p class="note neg">${esc(C.err)}</p>` : ''}
+      ${on.length && !ownRpc() ? '<p class="note" style="margin:6px 0 0">Suivi par Jupiter : un relevé des soldes toutes les 8 s environ par wallet. Les achats apparaissent donc avec quelques secondes de retard.</p>' : ''}
       <div style="margin:14px 0 8px">${seg}</div>
       ${body}
       <h3 class="w-h">Ce que font les wallets suivis</h3>
@@ -5847,9 +6000,10 @@ function CopyTrade(h, radar, bot, rpc) {
   function start() {
     if (C.started || h.inFrame) return;
     C.started = true;
+    for (const w of S.wallets) { w.err = ''; w.fails = 0; w.retryAt = 0; }
     loop();
   }
-  return { start, render, bindUI, recentBuy, leaderExit, S, addWallet: (a, l) => { addWallet(a, l); render(); }, has: a => S.wallets.some(w => w.addr === a), _test: { parse, onEvent, poll, addWallet, C, realBuy } };
+  return { start, render, bindUI, recentBuy, leaderExit, S, addWallet: (a, l) => { addWallet(a, l); render(); }, has: a => S.wallets.some(w => w.addr === a), _test: { parse, onEvent, poll, addWallet, C, realBuy, SNAP } };
 }
 if (typeof module !== 'undefined') module.exports = CopyTrade;
 
@@ -8039,6 +8193,7 @@ if (typeof module !== 'undefined') module.exports = PerpsBot;
   // temps réel : websocket Solana sur les courbes pump.fun (ton RPC perso d'abord, puis des RPC publics)
   live = CurveLive({
     loadW3: () => trader.loadW3(),
+    onWalRefused: (err, host) => { toast(`Suivi des wallets en direct refusé par ${host} (${err}). Le filtre anti-bots continue sans. Détails dans l'onglet Nouveaux.`, 'short'); },
     rpc: (m, p) => rpcPool.call(m, p),
     wsUrls: () => { const c = (trader.rpcUrl() || '').trim(); const L = []; if (/^https:\/\//.test(c)) L.push(c.replace(/^https:/, 'wss:')); return L.concat(['wss://solana-rpc.publicnode.com', 'wss://api.mainnet-beta.solana.com']); }
   }, radar);
@@ -8083,6 +8238,8 @@ if (typeof module !== 'undefined') module.exports = PerpsBot;
   // copie de wallets : le wallet copié est seulement lu ; les achats réels passent par le wallet du bot mèmes
   copy = CopyTrade({
     $, esc, store, log, toast, inFrame, lab: () => lab,
+    jup: (p, prio) => jup.get(p, prio), jupBusy: () => jup.pending(),
+    ownRpc: () => /^https:\/\//.test(((trader && trader.rpcUrl()) || '').trim()),
     alert: msg => { toast(msg, 'long'); sysNotify(msg, 'long'); },
     visible: () => curTab === 'copy' && document.visibilityState === 'visible',
     showBot: () => { showTab('meme'); setTimeout(() => { const el = $('#botCard'); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 60); }
