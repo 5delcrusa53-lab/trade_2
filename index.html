@@ -779,7 +779,7 @@ a.btn{text-decoration:none;color:inherit;display:inline-block}
       <h2>Diagnostic de connexion</h2>
       <div class="journal" id="diag"></div>
     </div>
-    <p class="foot"><strong>Version 2 · setups calibrés.</strong> Mise à jour du 16 octobre 2026 (journal du 15/10 : profil Protégé, détenteurs en baisse). Vigie Scalp aide à décider, il ne décide pas à ta place. Ce n'est pas un conseil financier. Les signaux se trompent souvent : place toujours ton stop, et ne risque que ce que tu peux perdre.</p>
+    <p class="foot"><strong>Version 2 · setups calibrés.</strong> Mise à jour du 16 octobre 2026, soir (alerte fenêtre d'âge impossible). Vigie Scalp aide à décider, il ne décide pas à ta place. Ce n'est pas un conseil financier. Les signaux se trompent souvent : place toujours ton stop, et ne risque que ce que tu peux perdre.</p>
   </section>
 </main>
 
@@ -4507,6 +4507,8 @@ function NewCoins(h, radar, bot) {
     const c = A.cfg;
     try {
       if (!c.on) { N.status = 'Mode auto coupé'; return; }
+      // minimum au-dessus du maximum : aucun coin ne peut passer, on le dit au lieu d'attendre en silence
+      if (c.minAgeSec >= c.maxAgeMin * 60) { N.status = `Fenêtre d'âge impossible : minimum ${secTxt(c.minAgeSec)}, maximum ${c.maxAgeMin} min. Aucun achat possible : baisse le minimum ou monte le maximum.`; return; }
       if (N.busy) return;
       if (!bot.unlocked()) { N.status = 'Bot verrouillé : déverrouille-le dans l\'onglet Mèmes'; return; }
       if (bot.dayLossHit()) { c.on = false; save(); bot.logMsg('Mode auto coupé : perte du jour atteinte', 'bad'); h.notify('Mode auto coupé : perte du jour atteinte', 'short'); return; }
@@ -4697,7 +4699,7 @@ function NewCoins(h, radar, bot) {
     for (const [id, k, mn, mx] of F) {
       const el = $(id); if (!el) continue;
       el.value = A.cfg[k];
-      el.addEventListener('change', () => { const v = parseFloat(String(el.value).replace(',', '.')); if (fin(v) && v >= mn && v <= mx) { A.cfg[k] = v; save(); N.list.forEach(evaluate); render(); } else { el.value = A.cfg[k]; h.toast(`Valeur hors limites (${mn} à ${mx}).`); } });
+      el.addEventListener('change', () => { const v = parseFloat(String(el.value).replace(',', '.')); if (fin(v) && v >= mn && v <= mx) { A.cfg[k] = v; save(); N.list.forEach(evaluate); render(); if ((k === 'minAgeSec' || k === 'maxAgeMin') && A.cfg.minAgeSec >= A.cfg.maxAgeMin * 60) h.toast(`Fenêtre impossible : minimum ${secTxt(A.cfg.minAgeSec)} au-dessus du maximum ${A.cfg.maxAgeMin} min. Le mode auto n'achètera rien.`, 'short'); } else { el.value = A.cfg[k]; h.toast(`Valeur hors limites (${mn} à ${mx}).`); } });
     }
     for (const [id, k] of [['#aReqX', 'requireX'], ['#aNew', 'useNew'], ['#aRadar', 'useRadar'], ['#aLab', 'needLab'], ['#aMigr', 'migrOnly']]) {
       const el = $(id); if (!el) continue;
