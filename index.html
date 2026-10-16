@@ -224,9 +224,9 @@ main{padding:12px 16px calc(84px + env(safe-area-inset-bottom,0px));max-width:76
 .confirm{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px;font-size:.86rem}
 
 /* barre d'onglets */
-.tabbar{position:fixed;left:0;right:0;bottom:0;z-index:30;background:var(--panel);border-top:1px solid var(--line);display:grid;grid-template-columns:repeat(9,1fr);padding:6px 2px calc(6px + env(safe-area-inset-bottom,0px))}
-.tabbar button{border:0;background:none;display:grid;justify-items:center;gap:2px;padding:4px 0;font-size:.56rem;min-width:0;overflow:hidden;color:var(--muted);letter-spacing:.02em;position:relative}
-.tabbar svg{width:22px;height:22px}
+.tabbar{position:fixed;left:0;right:0;bottom:0;z-index:30;background:var(--panel);border-top:1px solid var(--line);display:grid;grid-template-columns:repeat(10,1fr);padding:6px 2px calc(6px + env(safe-area-inset-bottom,0px))}
+.tabbar button{border:0;background:none;display:grid;justify-items:center;gap:2px;padding:4px 0;font-size:.5rem;min-width:0;overflow:hidden;color:var(--muted);letter-spacing:0;position:relative;white-space:nowrap}
+.tabbar svg{width:21px;height:21px}
 /* ---------- copie de wallets ---------- */
 .cp-list{display:grid;gap:6px;margin-bottom:4px}
 .cp-w{display:flex;align-items:center;gap:8px 10px;flex-wrap:wrap;border:1px solid var(--line);border-radius:10px;padding:8px 10px;background:var(--panel)}
@@ -239,8 +239,47 @@ main{padding:12px 16px calc(84px + env(safe-area-inset-bottom,0px));max-width:76
 .cp-tx{font-size:.72rem;color:var(--muted);align-self:center}
 #cpAddr,#cpLabel{text-transform:none;font-family:var(--f-mono)}
 .cp-rank{display:grid;gap:6px}
-#copyBody .pos,#feeBody .pos,#banBody .pos{color:var(--long)}
-#copyBody .neg,#feeBody .neg,#banBody .neg{color:var(--short)}
+#copyBody .pos,#feeBody .pos,#banBody .pos,#tab-bag .pos{color:var(--long)}
+#copyBody .neg,#feeBody .neg,#banBody .neg,#tab-bag .neg{color:var(--short)}
+/* onglet Bag */
+.bg-orders{display:grid;gap:8px;margin-top:8px}
+.bg-o{display:flex;align-items:center;gap:8px 10px;flex-wrap:wrap;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:8px 10px}
+.bg-om{flex:1 1 170px;min-width:0;display:grid;gap:2px}
+.bg-om b{font-family:var(--f-display);font-size:1rem}
+.bg-om small,.bg-l small{color:var(--muted);font-size:.78rem;line-height:1.35}
+.bg-stack{display:flex;height:12px;border-radius:999px;overflow:hidden;background:var(--panel2);margin:6px 0 8px}
+.bg-stack i{display:block;height:100%}
+.bg-tl{display:grid;gap:4px}
+.bg-t{display:flex;align-items:center;gap:8px;font-size:.86rem}
+.bg-t b{min-width:44px;font-family:var(--f-mono)}
+.bg-tv{color:var(--muted);font-family:var(--f-mono);font-size:.8rem}
+.bg-dot{width:10px;height:10px;border-radius:3px;flex:none}
+.bg-total{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.bg-total b{font-family:var(--f-display);font-size:1.6rem}
+.bg-lines{display:grid;gap:2px;margin:4px 0 6px}
+.bg-l{display:flex;align-items:center;gap:10px;padding:7px 2px;border-bottom:1px solid var(--line)}
+.bg-l>div{flex:1;min-width:0;display:grid}
+.bg-l b{font-size:.92rem;overflow-wrap:anywhere}
+.bg-lv{text-align:right;font-family:var(--f-mono);font-size:.88rem;display:grid}
+.bg-lv small{color:var(--muted);font-size:.74rem}
+#tab-bag .add select{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:8px 6px;font-family:var(--f-mono)}
+#tab-bag .add{flex-wrap:wrap}
+#tab-bag .add input{flex:1 1 90px}
+#tab-bag #bgAddr{text-transform:none}
+.bg-ana{display:grid;gap:8px}
+.bg-a{border:1px solid var(--line);border-radius:10px;padding:8px 10px;background:var(--panel)}
+.bg-ah{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.bg-ah b{font-family:var(--f-display);font-size:1.02rem}
+.bg-ah span:not(.chip){font-family:var(--f-mono);font-size:.86rem}
+.bg-ah .chip{margin-left:auto}
+.bg-ag{display:flex;flex-wrap:wrap;gap:4px 14px;margin-top:6px;font-size:.8rem;color:var(--muted);font-family:var(--f-mono)}
+.bg-tw{overflow-x:auto;margin:6px 0}
+.bg-tb{border-collapse:collapse;width:100%;font-family:var(--f-mono);font-size:.76rem}
+.bg-tb th,.bg-tb td{padding:5px 4px;text-align:right;white-space:nowrap;border-bottom:1px solid var(--line)}
+.bg-tb th:first-child{text-align:left;font-family:var(--f-body)}
+.bg-chart{width:100%;height:180px;display:block;margin:6px 0}
+.bg-chips{display:flex;flex-wrap:wrap;gap:6px}
+.bg-ck{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:999px;padding:5px 10px;font-family:var(--f-mono);font-size:.84rem;background:var(--panel)}
 .cp-r{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:10px;align-items:center;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--panel)}
 .cp-rk{font-family:var(--f-mono);font-weight:600;color:var(--muted);min-width:1.2em;text-align:center}
 .cp-rm{display:grid;gap:2px;min-width:0}
@@ -699,11 +738,46 @@ a.btn{text-decoration:none;color:inherit;display:inline-block}
     <div class="card">
       <h2>Comment ça marche</h2>
       <ol class="i-steps">
-        <li><b>Tu colles l'adresse d'un wallet Solana.</b> Vigie relit ses transactions toutes les 4 s environ, tant que l'appli est ouverte. Ce wallet est seulement observé : rien n'est jamais signé avec lui.</li>
+        <li><b>Tu colles l'adresse d'un wallet Solana.</b> Vigie relit ses soldes toutes les 8 s environ (via Jupiter), tant que l'appli est ouverte. Ce wallet est seulement observé : rien n'est jamais signé avec lui.</li>
         <li><b>Quand il achète un jeton</b> (0,05 SOL ou plus), la simulation entre aussitôt avec la mise du bot. Mêmes contrôles que le bot (sécurité, prix pas en baisse, anti-bots), mêmes sorties, plus une sortie dès qu'il revend la moitié de ses jetons ou plus.</li>
         <li><b>En réel</b>, seulement si tu l'actives : le wallet du bot mèmes achète et revend de la même façon. Les limites du bot s'appliquent : nombre de positions en même temps, perte maximale du jour.</li>
       </ol>
       <p class="note">À savoir : tu entres quelques secondes après le wallet copié, donc souvent un peu plus cher. Un wallet qui gagne en achetant dans les toutes premières secondes est très difficile à copier avec profit. Regarde la simulation sur plusieurs jours avant de passer en réel.</p>
+    </div>
+  </section>
+
+  <!-- ===== BAG : plan quotidien d'un panier de cryptos ===== -->
+  <section class="tab" id="tab-bag" hidden>
+    <div class="card" id="bagPlanCard">
+      <h2>Plan du jour <span class="sp" id="bagState"></span></h2>
+      <div id="bagPlan"><p class="note" style="margin:0">Démarrage…</p></div>
+    </div>
+    <div class="card">
+      <h2>Ton portefeuille</h2>
+      <div id="bagWallet"></div>
+    </div>
+    <div class="card">
+      <h2>Analyse des actifs</h2>
+      <div id="bagAna"></div>
+    </div>
+    <div class="card">
+      <h2>Le plan testé sur l'historique</h2>
+      <div id="bagBt"></div>
+    </div>
+    <div class="card">
+      <h2>Réglages du plan</h2>
+      <div id="bagSet"></div>
+    </div>
+    <div class="card">
+      <h2>Les règles, sans surprise</h2>
+      <ol class="i-steps">
+        <li><b>Tendance sur 3 horizons</b> (20, 60 et 120 jours). On achète un actif quand les trois montent, on le garde tant que la majorité monte, on vend tout vers USDC quand deux sur trois baissent.</li>
+        <li><b>Taille de chaque ligne</b> : plus l'actif est calme, plus il pèse ; 50 % du plan au plus. L'agitation totale est plafonnée selon ton niveau de risque, le reste attend en USDC.</li>
+        <li><b>Peu d'ordres</b> : les ventes « tendance cassée » se font le jour même ; les achats et ajustements seulement le lundi, et seulement si l'écart dépasse 10 % du capital.</li>
+        <li><b>Calcul sur la clôture de la veille</b> (minuit UTC), avec les prix Binance. Ton wallet est seulement lu : c'est toi qui passes les ordres (lien Jupiter fourni).</li>
+      </ol>
+      <p class="note">Les frais comptent énormément : le test suppose 0,2 % par ordre. L'échange intégré de Phantom prend bien plus (autour de 0,85 %) : passe plutôt par jup.ag (bouton « Ouvrir dans Jupiter ») ou une plateforme à frais bas. En France, échanger une crypto contre une autre (USDC compris) n'est en principe pas imposable ; seule la conversion en euros l'est. À vérifier selon ta situation.</p>
+      <p class="note">Ce plan applique des règles, il ne prédit pas l'avenir. Ce n'est pas un conseil financier : n'investis que ce que tu peux te permettre de voir baisser fortement.</p>
     </div>
   </section>
 
@@ -779,7 +853,7 @@ a.btn{text-decoration:none;color:inherit;display:inline-block}
       <h2>Diagnostic de connexion</h2>
       <div class="journal" id="diag"></div>
     </div>
-    <p class="foot"><strong>Version 2 · setups calibrés.</strong> Mise à jour du 16 octobre 2026, soir (alerte fenêtre d'âge impossible). Vigie Scalp aide à décider, il ne décide pas à ta place. Ce n'est pas un conseil financier. Les signaux se trompent souvent : place toujours ton stop, et ne risque que ce que tu peux perdre.</p>
+    <p class="foot"><strong>Version 2 · setups calibrés.</strong> Mise à jour du 16 octobre 2026, nuit (onglet Bag). Vigie Scalp aide à décider, il ne décide pas à ta place. Ce n'est pas un conseil financier. Les signaux se trompent souvent : place toujours ton stop, et ne risque que ce que tu peux perdre.</p>
   </section>
 </main>
 
@@ -791,6 +865,7 @@ a.btn{text-decoration:none;color:inherit;display:inline-block}
   <button role="tab" data-tab="new" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 2.5l1.9 5.6 5.6 1.9-5.6 1.9L12 17.5l-1.9-5.6L4.5 10l5.6-1.9z"/><path d="M18.5 15.5l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8z"/></svg>Nouveaux<span class="cnt" id="newDot" hidden></span></button>
   <button role="tab" data-tab="perps" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 17l5-5 4 3 8-8"/><path d="M3 21h18"/><path d="M16 7h4v4"/></svg>Futures<span class="dot" id="perpsDot" hidden></span></button>
   <button role="tab" data-tab="copy" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg>Copie<span class="dot" id="copyDot" hidden></span></button>
+  <button role="tab" data-tab="bag" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 8h14l-1.2 11.2a2 2 0 0 1-2 1.8H8.2a2 2 0 0 1-2-1.8z"/><path d="M9 8V6.5a3 3 0 0 1 6 0V8"/></svg>Bag</button>
   <button role="tab" data-tab="stats" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 20V10M12 20V4M19 20v-7"/></svg>Stats</button>
   <button role="tab" data-tab="set" aria-selected="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg>Réglages</button>
 </nav>
@@ -6195,6 +6270,541 @@ const HL = (() => {
 })();
 if (typeof module !== 'undefined') module.exports = HL;
 
+/* ================= BAG : plan quotidien d'un panier de cryptos majeures =================
+   Règles fixes, choisies avant de regarder les résultats et testées sur 2018-2026 (données journalières) :
+   - Tendance sur trois horizons : 20, 60 et 120 jours. On ENTRE sur un actif quand les trois montent ;
+     on le GARDE tant que la majorité monte ; on SORT (vente totale vers USDC) quand deux sur trois baissent.
+   - Poids : plus l'actif est calme (volatilité 30 jours), plus il pèse ; 50 % au plus par actif.
+   - Risque du panier plafonné (volatilité cible) : le reste attend en USDC.
+   - Sorties : n'importe quel jour. Achats et ajustements : le lundi seulement, et seulement si l'écart
+     avec la cible dépasse 10 % du capital (peu d'ordres, donc peu de frais).
+   Le test dans l'onglet rejoue exactement ces règles sur l'historique Binance, frais de 0,2 % par ordre compris. */
+const BAG_ASSETS = [
+  { id: 'BTC', name: 'Bitcoin', pair: 'BTCUSDT', sol: ['cbBTC', 'WBTC', 'zBTC', 'tBTC'], buy: 'cbBTC' },
+  { id: 'ETH', name: 'Ethereum', pair: 'ETHUSDT', sol: ['WETH', 'ETH'], buy: 'WETH' },
+  { id: 'SOL', name: 'Solana', pair: 'SOLUSDT', sol: ['SOL', 'WSOL'], buy: 'SOL' },
+  { id: 'BNB', name: 'BNB', pair: 'BNBUSDT', sol: [] },
+  { id: 'XRP', name: 'XRP', pair: 'XRPUSDT', sol: [] },
+  { id: 'LINK', name: 'Chainlink', pair: 'LINKUSDT', sol: [] },
+  { id: 'DOGE', name: 'Dogecoin', pair: 'DOGEUSDT', sol: [] },
+  { id: 'ADA', name: 'Cardano', pair: 'ADAUSDT', sol: [] },
+  { id: 'AVAX', name: 'Avalanche', pair: 'AVAXUSDT', sol: [] },
+  { id: 'SUI', name: 'Sui', pair: 'SUIUSDT', sol: [] }
+];
+const BAG_STABLES = ['USDC', 'USDT', 'PYUSD', 'USDG', 'USDS', 'USD1', 'FDUSD'];
+const BAG_P = { mom: [20, 60, 120], volWin: 30, covWin: 60, cap: 0.5, band: 0.10, cost: 0.002, minOrder: 10, rebalDow: 1 };
+const BAG_VT = { prudent: 0.4, normal: 0.6, dynamique: 0.8 };
+const BAG_DAY = 86400000;
+const BAG_MINT = { SOL: 'So11111111111111111111111111111111111111112', USDC: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v' };
+
+/* ---------- moteur (sans affichage : testable à part) ---------- */
+const BagEngine = {
+  // hist : { days: [t…] (minuit UTC), px: { BTC: [clôture | null…] } } ; ids : actifs du panier
+  prepare(hist, ids) {
+    const n = hist.days.length, M = Math.max(...BAG_P.mom), S = {}, H = {}, R = {};
+    for (const a of ids) {
+      const c = hist.px[a] || [];
+      const sc = new Array(n).fill(null), held = new Array(n).fill(false), lr = new Array(n).fill(null);
+      let h = false;
+      for (let i = 0; i < n; i++) {
+        if (i > 0 && c[i] > 0 && c[i - 1] > 0) lr[i] = Math.log(c[i] / c[i - 1]);
+        if (i >= M && c[i] > 0 && BAG_P.mom.every(m => c[i - m] > 0)) {
+          const s = BAG_P.mom.reduce((x, m) => x + (c[i] > c[i - m] ? 1 : -1), 0) / BAG_P.mom.length;
+          sc[i] = s;
+          h = s >= 1 - 1e-9 || (h && s > 0); // entrée : 3 sur 3 ; on garde tant que la majorité monte
+        } else h = false;
+        held[i] = h;
+      }
+      S[a] = sc; H[a] = held; R[a] = lr;
+    }
+    return { S, H, R };
+  },
+  // poids cibles au jour i (clôture connue), pour les actifs tenus
+  weights(prep, ids, i, vt) {
+    const { S, H, R } = prep, P = BAG_P;
+    const ok = a => { for (let k = i - P.covWin + 1; k <= i; k++) if (R[a][k] == null) return false; return true; };
+    const el = ids.filter(a => H[a][i] && i >= P.covWin && ok(a));
+    const w = {};
+    if (!el.length) return w;
+    const sd = x => { const m = x.reduce((s, v) => s + v, 0) / x.length; return Math.sqrt(x.reduce((s, v) => s + (v - m) * (v - m), 0) / x.length); };
+    const vol = el.map(a => sd(R[a].slice(i - P.volWin + 1, i + 1)) * Math.sqrt(365));
+    let ww = el.map((a, j) => Math.max(S[a][i], 1 / 3) / (vol[j] || 1));
+    const tot = ww.reduce((s, v) => s + v, 0);
+    ww = ww.map(v => Math.min(P.cap, v / tot));
+    // volatilité du panier (covariance des 60 derniers jours) ramenée à la cible
+    const X = el.map(a => R[a].slice(i - P.covWin + 1, i + 1)), mu = X.map(x => x.reduce((s, v) => s + v, 0) / x.length);
+    let pv = 0;
+    for (let p = 0; p < el.length; p++) for (let q = 0; q < el.length; q++) {
+      let c = 0; for (let k = 0; k < P.covWin; k++) c += (X[p][k] - mu[p]) * (X[q][k] - mu[q]);
+      pv += ww[p] * ww[q] * c / (P.covWin - 1) * 365;
+    }
+    const k = Math.min(1, vt / Math.sqrt(Math.max(pv, 1e-12)));
+    el.forEach((a, j) => { w[a] = ww[j] * k; });
+    return w;
+  },
+  // rejoue les règles jour par jour : ordres exécutés le lendemain du signal, frais compris
+  backtest(hist, ids, vt, from) {
+    const prep = this.prepare(hist, ids), n = hist.days.length, P = BAG_P;
+    const need = Math.max(...P.mom) + P.covWin;
+    let start = from != null ? from : n;
+    if (from == null) for (let i = 0; i < n; i++) if (ids.some(a => prep.S[a][i] != null && i >= need)) { start = i; break; }
+    if (start >= n - 2) return null;
+    let cash = 1, trades = 0, pend = null;
+    const u = {}; ids.forEach(a => { u[a] = 0; });
+    const eq = [], expo = [];
+    for (let i = start; i < n; i++) {
+      const px = a => hist.px[a][i];
+      const value = () => cash + ids.reduce((s, a) => s + (px(a) > 0 ? u[a] * px(a) : 0), 0);
+      let val = value();
+      if (pend) {
+        const dow = new Date(hist.days[i]).getUTCDay();
+        for (const a of ids) {
+          if (!(px(a) > 0)) continue;
+          const cur = u[a] * px(a) / val, inn = pend.held[a], tw = inn ? (pend.w[a] || 0) : 0;
+          const exit = !inn && u[a] > 0;
+          if (exit || (dow === P.rebalDow && Math.abs(tw - cur) > P.band)) {
+            const amt = (tw - cur) * val;
+            u[a] += amt / px(a); cash -= amt + Math.abs(amt) * P.cost; trades++;
+          }
+        }
+        val = value();
+      }
+      eq.push({ t: hist.days[i], v: val }); expo.push(1 - cash / val);
+      const held = {}; ids.forEach(a => { held[a] = prep.H[a][i]; });
+      pend = { held, w: this.weights(prep, ids, i, vt) };
+    }
+    return { eq, trades, expo: expo.reduce((s, v) => s + v, 0) / expo.length, start };
+  },
+  // garder sans rien faire : un actif seul, ou le panier à parts égales rééquilibré tous les 30 jours
+  hold(hist, ids, start) {
+    const n = hist.days.length, u = {}; let cash = 1, last = null; const eq = [];
+    for (let i = start; i < n; i++) {
+      const av = ids.filter(a => hist.px[a][i] > 0);
+      const val = () => cash + av.reduce((s, a) => s + (u[a] || 0) * hist.px[a][i], 0);
+      let v = val();
+      if (last == null || i - last >= 30) {
+        for (const a of av) { const cur = (u[a] || 0) * hist.px[a][i] / v, amt = (1 / av.length - cur) * v; u[a] = (u[a] || 0) + amt / hist.px[a][i]; cash -= amt + Math.abs(amt) * BAG_P.cost; }
+        last = i; v = val();
+      }
+      eq.push({ t: hist.days[i], v });
+    }
+    return eq;
+  },
+  stats(eq) {
+    if (!eq || eq.length < 2) return null;
+    const v = eq.map(x => x.v), yrs = (eq[eq.length - 1].t - eq[0].t) / (365 * BAG_DAY);
+    let peak = v[0], mdd = 0;
+    for (const x of v) { peak = Math.max(peak, x); mdd = Math.min(mdd, x / peak - 1); }
+    const r = []; for (let i = 1; i < v.length; i++) r.push(Math.log(v[i] / v[i - 1]));
+    const m = r.reduce((s, x) => s + x, 0) / r.length, sd = Math.sqrt(r.reduce((s, x) => s + (x - m) * (x - m), 0) / r.length);
+    const years = {};
+    let prev = v[0];
+    eq.forEach((x, i) => { const y = new Date(x.t).getUTCFullYear(); if (!years[y]) years[y] = { a: i ? prev : v[0] }; years[y].b = x.v; prev = x.v; });
+    const yr = {}; for (const y in years) yr[y] = years[y].b / years[y].a - 1;
+    return { total: v[v.length - 1] / v[0] - 1, cagr: yrs > 0 ? Math.pow(v[v.length - 1] / v[0], 1 / yrs) - 1 : 0, mdd, sharpe: sd > 0 ? m / sd * Math.sqrt(365) : 0, yrs, yr };
+  }
+};
+
+function BagPlan(h) {
+  const fin = Number.isFinite, esc = h.esc, $ = h.$;
+  const now = () => Date.now();
+  const BLANK = { v: 1, ids: ['BTC', 'ETH', 'SOL'], risk: 'normal', outMax: 20, addr: '', manual: [], cash: 0, snaps: [], notified: '' };
+  const S = Object.assign({}, BLANK, h.store.get('bag', {}));
+  if (!Array.isArray(S.ids) || !S.ids.length) S.ids = BLANK.ids.slice();
+  if (!Array.isArray(S.manual)) S.manual = [];
+  if (!Array.isArray(S.snaps)) S.snaps = [];
+  const save = () => h.store.set('bag', { v: 1, ids: S.ids, risk: S.risk, outMax: S.outMax, addr: S.addr, manual: S.manual, cash: S.cash, snaps: S.snaps.slice(-400), notified: S.notified });
+  const B = { hist: null, live: {}, loading: false, err: '', at: 0, wal: null, walAt: 0, walErr: '', walBusy: false, bt: null, btKey: '', mints: {}, plan: null, view: 'plan' };
+  const assetOf = id => BAG_ASSETS.find(a => a.id === id);
+
+  /* ---------- formats ---------- */
+  const nf = (x, d = 0) => (fin(x) ? x.toLocaleString('fr-FR', { minimumFractionDigits: d, maximumFractionDigits: d }) : '—');
+  const usd = x => (fin(x) ? (Math.abs(x) >= 1000 ? nf(x, 0) : Math.abs(x) >= 100 ? nf(x, 0) : nf(x, 2)) + ' $' : '—');
+  const pct = (x, d = 0) => (fin(x) ? (x > 0 ? '+' : x < 0 ? '−' : '') + nf(Math.abs(x * 100), d) + ' %' : '—');
+  const px = x => (fin(x) ? (x >= 1000 ? nf(x, 0) : x >= 1 ? nf(x, 2) : nf(x, 4)) + ' $' : '—');
+  const qty = x => (fin(x) ? (Math.abs(x) >= 100 ? nf(x, 1) : Math.abs(x) >= 1 ? nf(x, 3) : nf(x, 5)) : '—');
+  const share = x => (fin(x) ? nf(Math.max(0, x) * 100, 0) + ' %' : '—'); // part d'un total, sans signe
+  const dayKey = t => new Date(t).toISOString().slice(0, 10);
+  const short = a => (a ? a.slice(0, 4) + '…' + a.slice(-4) : '');
+
+  /* ---------- prix journaliers (Binance, gratuit, sans clé) ---------- */
+  const HOSTS = ['https://api.binance.com', 'https://data-api.binance.vision'];
+  async function klines(pair, pages, limit = 1000) {
+    let lastErr = null;
+    for (const host of HOSTS) {
+      try {
+        let end = null, out = [];
+        for (let p = 0; p < pages; p++) {
+          const r = await fetchJSON(`${host}/api/v3/klines?symbol=${pair}&interval=1d&limit=${limit}${end ? '&endTime=' + end : ''}`, 15000);
+          if (!Array.isArray(r) || !r.length) break;
+          out = r.concat(out); end = r[0][0] - 1;
+          if (r.length < limit) break;
+        }
+        if (out.length) return out.map(k => [k[0], +k[4], k[6]]);
+      } catch (e) { lastErr = e; }
+    }
+    throw lastErr || new Error('aucune donnée');
+  }
+  function cacheGet() { const c = h.store.get('bagpx', null); return c && c.data ? c : { data: {}, at: {} }; }
+  async function loadPrices(force) {
+    if (B.loading) return;
+    B.loading = true; B.err = ''; render();
+    const C = cacheGet();
+    try {
+      for (const id of S.ids) {
+        const a = assetOf(id); if (!a) continue;
+        const have = C.data[id], age = now() - ((C.at && C.at[id]) || 0);
+        if (have && have.length > 200 && !force && age < 15 * 60000) continue;
+        const rows = have && have.length > 200 ? await klines(a.pair, 1, 60) : await klines(a.pair, 3);
+        const m = new Map((have || []).map(r => [r[0], r]));
+        for (const r of rows) m.set(r[0], r);
+        C.data[id] = [...m.values()].sort((x, y) => x[0] - y[0]).slice(-3200);
+        C.at = C.at || {}; C.at[id] = now();
+      }
+      h.store.set('bagpx', C);
+    } catch (e) { B.err = 'Prix Binance indisponibles (' + e.message + ')'; }
+    buildHist(C);
+    B.loading = false; B.at = now();
+    compute();
+  }
+  function buildHist(C) {
+    const tn = now(), days = new Set();
+    const ids = S.ids.filter(id => C.data[id] && C.data[id].length);
+    for (const id of ids) for (const r of C.data[id]) if (r[2] < tn) days.add(r[0]); // journées terminées seulement
+    const D = [...days].sort((a, b) => a - b), idx = new Map(D.map((t, i) => [t, i]));
+    const pxs = {};
+    for (const id of ids) {
+      const arr = new Array(D.length).fill(null);
+      for (const r of C.data[id]) if (r[2] < tn && idx.has(r[0])) arr[idx.get(r[0])] = r[1];
+      pxs[id] = arr;
+      const last = C.data[id][C.data[id].length - 1];
+      B.live[id] = last ? last[1] : null; // prix du moment (bougie du jour en cours)
+    }
+    B.hist = D.length ? { days: D, px: pxs, ids } : null;
+  }
+
+  /* ---------- ton wallet (Solana, lu chez Jupiter) et tes autres avoirs ---------- */
+  function addr() { return (S.addr || (h.walletAddr && h.walletAddr()) || '').trim(); }
+  async function loadWallet() {
+    const a = addr();
+    if (!a || B.walBusy) { render(); return; }
+    B.walBusy = true; B.walErr = ''; render();
+    try {
+      const j = await h.jup('/ultra/v1/holdings/' + a, 'high');
+      const lines = [];
+      const sol = fin(+j.uiAmount) ? +j.uiAmount : fin(+j.amount) ? +j.amount / 1e9 : 0;
+      if (sol > 0) lines.push({ mint: BAG_MINT.SOL, ui: sol, native: true });
+      for (const [mint, arr] of Object.entries(j.tokens || {})) {
+        let ui = 0; for (const x of Array.isArray(arr) ? arr : []) ui += +x.uiAmount || 0;
+        if (ui > 0) { const l = lines.find(x => x.mint === mint && !x.native); if (l) l.ui += ui; else lines.push({ mint, ui }); }
+      }
+      // noms, prix, jetons vérifiés : recherche Jupiter par lots de 100
+      const info = new Map();
+      const mints = [...new Set(lines.map(l => l.mint))];
+      for (let k = 0; k < mints.length; k += 100) {
+        const r = await h.jup('/tokens/v2/search?query=' + mints.slice(k, k + 100).join(','), 'high');
+        for (const x of Array.isArray(r) ? r : []) info.set(x.id, x);
+      }
+      for (const l of lines) {
+        const x = info.get(l.mint) || {};
+        l.sym = l.native ? 'SOL' : x.symbol || short(l.mint); l.name = x.name || ''; l.verified = !!x.isVerified || l.native;
+        l.price = +x.usdPrice || (l.native || l.mint === BAG_MINT.SOL ? B.live.SOL || null : null);
+        l.usd = fin(l.price) ? l.ui * l.price : null;
+        l.cls = classify(l);
+        if (l.verified && l.cls !== 'OUT' && l.cls !== 'USD') B.mints[l.cls] = B.mints[l.cls] || l.mint;
+      }
+      B.wal = { addr: a, lines: lines.filter(l => !(fin(l.usd) && l.usd < 0.5)), at: now() };
+    } catch (e) { B.walErr = (e && e.message) || 'lecture impossible'; }
+    B.walBusy = false; B.walAt = now();
+    compute();
+  }
+  function classify(l) {
+    if (l.native || l.mint === BAG_MINT.SOL) return 'SOL';
+    if (!l.verified) return 'OUT';
+    if (BAG_STABLES.includes(l.sym)) return 'USD';
+    for (const a of BAG_ASSETS) if (a.sol.includes(l.sym) && (a.id !== 'ETH' || /ether/i.test(l.name || 'ether'))) return a.id;
+    return 'OUT';
+  }
+  // positions consolidées : wallet + avoirs ailleurs (saisis à la main) + argent prêt à investir
+  function positions() {
+    const pos = {}, out = [];
+    let cash = Math.max(0, +S.cash || 0), any = false;
+    for (const l of (B.wal && B.wal.lines) || []) {
+      if (!fin(l.usd)) continue;
+      any = true;
+      if (l.cls === 'USD') cash += l.usd;
+      else if (l.cls === 'OUT' || !S.ids.includes(l.cls)) out.push({ sym: l.sym, usd: l.usd, mint: l.mint, verified: l.verified, asset: l.cls !== 'OUT' ? l.cls : null });
+      else { const p = pos[l.cls] || (pos[l.cls] = { usd: 0, qty: 0, where: [] }); p.usd += l.usd; p.qty += l.ui; if (!p.where.includes('wallet')) p.where.push('wallet'); }
+    }
+    for (const m of S.manual) {
+      const lp = B.live[m.id];
+      if (!fin(+m.qty) || !(m.qty > 0)) continue;
+      if (m.id === 'USD') { cash += +m.qty; any = true; continue; }
+      if (!fin(lp)) continue;
+      any = true;
+      const v = m.qty * lp;
+      if (!S.ids.includes(m.id)) { out.push({ sym: m.id, usd: v, manual: true }); continue; }
+      const p = pos[m.id] || (pos[m.id] = { usd: 0, qty: 0, where: [] }); p.usd += v; p.qty += +m.qty; if (!p.where.includes(m.where || 'ailleurs')) p.where.push(m.where || 'ailleurs');
+    }
+    const plan = Object.values(pos).reduce((s, p) => s + p.usd, 0) + cash, outV = out.reduce((s, x) => s + x.usd, 0);
+    return { pos, cash, out: out.sort((a, b) => b.usd - a.usd), plan, outV, total: plan + outV, any };
+  }
+
+  /* ---------- analyse et plan du jour ---------- */
+  function analysis() {
+    const H = B.hist; if (!H) return null;
+    const ids = H.ids, prep = BagEngine.prepare(H, ids), i = H.days.length - 1;
+    const vt = BAG_VT[S.risk] || BAG_VT.normal;
+    const w = BagEngine.weights(prep, ids, i, vt);
+    const rows = ids.map(id => {
+      const c = H.px[id], ret = m => (c[i] > 0 && c[i - m] > 0 ? c[i] / c[i - m] - 1 : null);
+      let hi = 0; for (let k = Math.max(0, i - 364); k <= i; k++) if (c[k] > hi) hi = c[k];
+      const r = prep.R[id].slice(i - 29, i + 1).filter(fin);
+      const m = r.reduce((s, v) => s + v, 0) / (r.length || 1);
+      const vol = r.length > 10 ? Math.sqrt(r.reduce((s, v) => s + (v - m) * (v - m), 0) / r.length) * Math.sqrt(365) : null;
+      const sc = prep.S[id][i], held = prep.H[id][i], wasHeld = i > 0 ? prep.H[id][i - 1] : false;
+      const ups = sc == null ? null : Math.round((sc * 3 + 3) / 2);
+      return { id, price: B.live[id] || c[i], r20: ret(20), r60: ret(60), r120: ret(120), fromHi: hi > 0 ? c[i] / hi - 1 : null, vol, score: sc, ups, held, wasHeld, w: w[id] || 0, enough: sc != null };
+    });
+    const nIn = rows.filter(r => r.held).length, btc = rows.find(r => r.id === 'BTC');
+    const regime = nIn === 0 ? 'baissier' : nIn === rows.length && (!btc || btc.held) ? 'haussier' : 'mitigé';
+    return { rows, w, vt, day: H.days[i], regime, nIn, cashW: 1 - Object.values(w).reduce((s, v) => s + v, 0) };
+  }
+  function makePlan(A, P, monday) {
+    if (!A) return null;
+    const orders = [], cap = P.plan, band = BAG_P.band * cap;
+    // 1) sorties : tous les jours, vente totale vers USDC
+    for (const r of A.rows) {
+      const cur = (P.pos[r.id] || {}).usd || 0;
+      if (!r.held && cur >= BAG_P.minOrder) orders.push({ side: 'sell', id: r.id, usd: cur, all: true, why: r.ups != null ? `tendance cassée : ${r.ups === 0 ? 'les 3 tendances' : (3 - r.ups) + ' des 3 tendances'} (20, 60, 120 j) baissent` : 'pas assez d\'historique pour le suivre' });
+    }
+    // 2) lundi : ajustements vers la cible quand l'écart dépasse 10 % du capital
+    const adjust = [];
+    for (const r of A.rows) {
+      if (!r.held) continue;
+      const cur = (P.pos[r.id] || {}).usd || 0, tgt = r.w * cap, d = tgt - cur;
+      if (Math.abs(d) > band && Math.abs(d) >= BAG_P.minOrder) adjust.push({ side: d > 0 ? 'buy' : 'sell', id: r.id, usd: Math.abs(d), tgt, cur,
+        why: d > 0 ? (cur < BAG_P.minOrder ? `en tendance sur les 3 horizons : entrée à ${share(r.w)} du capital` : `sous sa cible (${share(cur / cap)} au lieu de ${share(r.w)})`) : `au-dessus de sa cible (${share(cur / cap)} au lieu de ${share(r.w)}) : on encaisse une partie` });
+    }
+    if (monday) orders.push(...adjust);
+    // 3) achats limités à ce qui est disponible (USDC + ventes du jour)
+    const sells = orders.filter(o => o.side === 'sell').reduce((s, o) => s + o.usd, 0);
+    const buys = orders.filter(o => o.side === 'buy');
+    const want = buys.reduce((s, o) => s + o.usd, 0), avail = P.cash + sells * (1 - BAG_P.cost);
+    let short = 0;
+    if (want > avail && want > 0) { const k = Math.max(0, avail) / want; short = want - avail; for (const o of buys) o.usd *= k; }
+    const keep = orders.filter(o => o.usd >= BAG_P.minOrder);
+    // 4) jetons hors plan (mèmes…) au-delà de la part maximale choisie
+    const outOrders = [];
+    if (S.outMax < 100 && P.total > 0 && P.outV / P.total > S.outMax / 100) {
+      let excess = P.outV - P.total * S.outMax / 100;
+      for (const x of P.out) { if (excess < BAG_P.minOrder) break; const v = Math.min(x.usd, excess); if (v >= BAG_P.minOrder) { outOrders.push({ side: 'sell', id: x.sym, usd: v, all: v >= x.usd * 0.98, out: true, mint: x.mint, why: `hors plan : tes jetons hors panier pèsent ${share(P.outV / P.total)} du total, au-delà de ta limite de ${S.outMax} %` }); excess -= v; } }
+    }
+    return { orders: keep.concat(outOrders), preview: monday ? [] : adjust, short, buyUsd: keep.filter(o => o.side === 'buy').reduce((s, o) => s + o.usd, 0), sellUsd: keep.concat(outOrders).filter(o => o.side === 'sell').reduce((s, o) => s + o.usd, 0) };
+  }
+  function compute() {
+    const A = analysis(), P = positions(), monday = new Date().getDay() === BAG_P.rebalDow;
+    B.A = A; B.P = P;
+    B.plan = A && P.any ? makePlan(A, P, monday) : null;
+    // relevé quotidien de la valeur totale (pour l'évolution)
+    if (P.any && P.total > 0) {
+      const k = dayKey(now()), last = S.snaps[S.snaps.length - 1];
+      if (last && last.d === k) { last.v = Math.round(P.total * 100) / 100; last.p = Math.round(P.plan * 100) / 100; }
+      else S.snaps.push({ d: k, v: Math.round(P.total * 100) / 100, p: Math.round(P.plan * 100) / 100 });
+      save();
+    }
+    // prévenir une fois par jour s'il y a quelque chose à faire
+    if (B.plan && B.plan.orders.length) {
+      const sig = dayKey(now()) + ':' + B.plan.orders.map(o => o.side + o.id).join(',');
+      if (S.notified !== sig) {
+        S.notified = sig; save();
+        const txt = B.plan.orders.slice(0, 3).map(o => `${o.side === 'buy' ? 'acheter' : 'vendre'} ${o.id} (≈ ${usd(o.usd)})`).join(', ');
+        if (h.notify) h.notify(`Bag : plan du jour — ${txt}${B.plan.orders.length > 3 ? '…' : ''}`, 'long');
+      }
+    }
+    // test sur l'historique : recalculé quand le panier ou le risque change
+    const key = B.hist ? S.ids.join(',') + '|' + S.risk + '|' + B.hist.days.length : '';
+    if (key && key !== B.btKey) { B.btKey = key; setTimeout(runBacktest, 30); }
+    render();
+  }
+  function runBacktest() {
+    const H = B.hist; if (!H) return;
+    const ids = H.ids, vt = BAG_VT[S.risk] || BAG_VT.normal;
+    const r = BagEngine.backtest(H, ids, vt);
+    if (!r) { B.bt = { none: true }; render(); return; }
+    const btc = H.px.BTC ? BagEngine.hold(H, ['BTC'], r.start) : null, ew = BagEngine.hold(H, ids, r.start);
+    B.bt = { s: BagEngine.stats(r.eq), b: btc ? BagEngine.stats(btc) : null, e: BagEngine.stats(ew), eq: r.eq, btc, ew, trades: r.trades, expo: r.expo, from: r.eq[0].t };
+    render();
+  }
+
+  /* ---------- affichage ---------- */
+  const jupLink = (o) => {
+    const a = assetOf(o.id), m = o.out ? o.mint : (B.mints[o.id] || (o.id === 'SOL' ? BAG_MINT.SOL : null));
+    const tok = m || (a && a.buy);
+    if (!tok) return '';
+    const url = o.side === 'buy' ? `https://jup.ag/swap/${BAG_MINT.USDC}-${tok}` : `https://jup.ag/swap/${tok}-${BAG_MINT.USDC}`;
+    return `<a class="btn sm" href="${esc(url)}" target="_blank" rel="noopener">Ouvrir dans Jupiter</a>`;
+  };
+  function orderHtml(o, A) {
+    const r = A && A.rows.find(x => x.id === o.id), p = r && r.price;
+    const q = fin(p) && p > 0 && !o.out ? ` · ≈ ${qty(o.usd / p)} ${esc(o.id)}` : '';
+    return `<div class="bg-o"><span class="chip ${o.side === 'buy' ? 'long' : 'short'}">${o.side === 'buy' ? 'ACHETER' : 'VENDRE'}</span>
+      <div class="bg-om"><b>${esc(o.id)} · ${usd(o.usd)}${o.all ? ' (tout)' : ''}</b><small>${esc(o.why)}${q}</small></div>${jupLink(o)}</div>`;
+  }
+  function bar(parts) {
+    return `<div class="bg-stack">${parts.filter(x => x.v > 0).map(x => `<i style="width:${Math.max(0.5, x.v * 100).toFixed(2)}%;background:${x.c}" title="${esc(x.l)} ${share(x.v)}"></i>`).join('')}</div>`;
+  }
+  const COL = { BTC: '#f2a33a', ETH: '#7b86e8', SOL: '#33c3a6', BNB: '#e0c341', XRP: '#5b8fd9', LINK: '#3f6fd8', DOGE: '#c9a659', ADA: '#4f7fbf', AVAX: '#e05555', SUI: '#58b7e8', USD: 'var(--muted)', OUT: '#b06ad9' };
+  function render() {
+    if (!h.visible || !h.visible()) return;
+    renderPlan(); renderWallet(); renderAna(); renderBt(); renderSet();
+  }
+  function renderPlan() {
+    const box = $('#bagPlan'); if (!box) return;
+    const A = B.A, P = B.P, plan = B.plan, st = $('#bagState');
+    if (st) st.innerHTML = A ? `<span class="chip ${A.regime === 'haussier' ? 'long' : A.regime === 'baissier' ? 'short' : 'warn'}">marché ${A.regime}</span>` : '';
+    if (!A) { box.innerHTML = `<p class="note" style="margin:0">${B.loading ? 'Chargement de l\'historique des prix (Binance)…' : esc(B.err || 'Prix pas encore chargés.')}</p>`; return; }
+    if (!P || !P.any) {
+      box.innerHTML = `<p class="note" style="margin:0 0 8px">Indique ton wallet Solana (ou tes avoirs) dans « Ton portefeuille » ci-dessous : le plan se calcule sur ce que tu détiens.</p>${targetHtml(A, null)}`;
+      return;
+    }
+    const monday = new Date().getDay() === BAG_P.rebalDow;
+    const head = plan.orders.length
+      ? `<div class="advice" data-l="${plan.orders.some(o => o.side === 'sell') ? 'warn' : 'ok'}" style="margin:0 0 10px"><h3>Aujourd'hui : ${plan.buyUsd >= BAG_P.minOrder ? `acheter pour ${usd(plan.buyUsd)}` : ''}${plan.buyUsd >= BAG_P.minOrder && plan.sellUsd >= BAG_P.minOrder ? ' · ' : ''}${plan.sellUsd >= BAG_P.minOrder ? `vendre pour ${usd(plan.sellUsd)}` : ''}</h3>
+        <div class="bg-orders">${plan.orders.map(o => orderHtml(o, A)).join('')}</div>
+        ${plan.short >= BAG_P.minOrder ? `<p class="small" style="margin:8px 0 0">Il manque ${usd(plan.short)} en USDC pour suivre complètement le plan : les achats ont été réduits d'autant. Ajoute des USDC dans ton wallet si tu veux le suivre à 100 %.</p>` : ''}</div>`
+      : `<div class="advice" data-l="ok" style="margin:0 0 10px"><h3>Aujourd'hui : rien à faire</h3><p>${monday ? 'Jour de rééquilibrage, mais ton portefeuille est déjà proche de la cible (écarts sous 10 %).' : 'Aucune tendance cassée sur tes actifs. Prochain rééquilibrage : lundi.'} Ne rien faire est souvent la bonne décision : chaque ordre coûte des frais.</p></div>`;
+    const prev = !monday && plan.preview.length ? `<p class="note" style="margin:0 0 8px"><b>Si rien ne change d'ici lundi :</b> ${plan.preview.map(o => `${o.side === 'buy' ? 'acheter' : 'vendre'} ${esc(o.id)} ≈ ${usd(o.usd)}`).join(', ')}.</p>` : '';
+    box.innerHTML = head + prev + targetHtml(A, P) + `<p class="small muted" style="margin:8px 0 0">Calculé sur la clôture du ${new Date(A.day).toLocaleDateString('fr-FR')} (journée terminée, heure UTC). Capital du plan : ${usd(P.plan)} (hors jetons hors panier).</p>`;
+  }
+  function targetHtml(A, P) {
+    const cap = P ? P.plan : 0;
+    const rows = A.rows.map(r => {
+      const cur = P && cap > 0 ? ((P.pos[r.id] || {}).usd || 0) / cap : null;
+      return `<div class="bg-t"><span class="bg-dot" style="background:${COL[r.id] || 'var(--muted)'}"></span><b>${esc(r.id)}</b><span class="bg-tv">cible ${share(r.w)}${cur != null ? ` · actuel ${share(cur)}` : ''}</span></div>`;
+    }).join('');
+    const cashCur = P && cap > 0 ? P.cash / cap : null;
+    return `<h3 class="w-h" style="margin-top:4px">Répartition visée</h3>${bar(A.rows.map(r => ({ v: r.w, c: COL[r.id], l: r.id })).concat([{ v: Math.max(0, A.cashW), c: COL.USD, l: 'USDC' }]))}
+      <div class="bg-tl">${rows}<div class="bg-t"><span class="bg-dot" style="background:${COL.USD}"></span><b>USDC</b><span class="bg-tv">cible ${share(A.cashW)}${cashCur != null ? ` · actuel ${share(cashCur)}` : ''}</span></div></div>`;
+  }
+  function renderWallet() {
+    const box = $('#bagWallet'); if (!box) return;
+    const ae = document.activeElement; if (ae && box.contains(ae) && ae.tagName === 'INPUT') return;
+    const P = B.P, a = addr(), walletName = h.walletAddr && h.walletAddr() && h.walletAddr() === a ? ' (wallet connecté)' : '';
+    const lines = [];
+    if (P && P.any) {
+      for (const id of S.ids) { const p = P.pos[id]; if (p && p.usd >= 0.5) lines.push({ k: id, l: `${id} · ${qty(p.qty)}`, v: p.usd, c: COL[id], sub: p.where.join(' + ') }); }
+      if (P.cash >= 0.5) lines.push({ k: 'USD', l: 'Dollars stables (USDC…)', v: P.cash, c: COL.USD, sub: S.cash > 0 ? `dont ${usd(+S.cash)} prêts à investir hors wallet` : '' });
+      for (const x of P.out.slice(0, 8)) lines.push({ k: 'OUT', l: `${x.sym}${x.verified === false ? ' (non vérifié)' : ''}`, v: x.usd, c: COL.OUT, sub: 'hors panier' });
+      if (P.out.length > 8) lines.push({ k: 'OUT', l: `${P.out.length - 8} autres jetons`, v: P.out.slice(8).reduce((s, x) => s + x.usd, 0), c: COL.OUT, sub: 'hors panier' });
+    }
+    const T = P ? P.total : 0, sn = S.snaps, ch = d => { if (!sn.length) return null; const k = dayKey(now() - d * BAG_DAY), ref = [...sn].reverse().find(x => x.d <= k); return ref && ref.v > 0 ? T / ref.v - 1 : null; };
+    const evo = [[1, '1 j'], [7, '7 j'], [30, '30 j']].map(([d, l]) => { const v = ch(d); return v != null && sn.length > 1 ? `${l} <span class="${v >= 0 ? 'pos' : 'neg'}">${pct(v, 1)}</span>` : null; }).filter(Boolean).join(' · ');
+    box.innerHTML = `${P && P.any ? `<div class="bg-total"><b>${usd(T)}</b><span class="small muted">au total${evo ? ' · ' + evo : ''}</span></div>
+      ${bar(lines.map(x => ({ v: T > 0 ? x.v / T : 0, c: x.c, l: x.l })))}
+      <div class="bg-lines">${lines.map(x => `<div class="bg-l"><span class="bg-dot" style="background:${x.c}"></span><div><b>${esc(x.l)}</b>${x.sub ? `<small>${esc(x.sub)}</small>` : ''}</div><span class="bg-lv">${usd(x.v)}<small>${share(T > 0 ? x.v / T : 0)}</small></span></div>`).join('')}</div>` : '<p class="note" style="margin:0 0 8px">Aucun avoir lu pour l\'instant.</p>'}
+      <h3 class="w-h">Wallet Solana suivi</h3>
+      <div class="add"><input id="bgAddr" placeholder="Adresse Solana (Phantom…)" autocomplete="off" spellcheck="false" value="${esc(S.addr || '')}"><button class="btn" data-bg="addr">Suivre</button></div>
+      <p class="small muted" style="margin:4px 0 0">${a ? `Suivi : ${esc(short(a))}${walletName}${B.walBusy ? ' · lecture…' : B.walErr ? ` · <span class="neg">${esc(B.walErr)}</span>` : B.walAt ? ` · lu il y a ${Math.max(0, Math.round((now() - B.walAt) / 1000))} s` : ''}` : 'Aucune adresse : colle celle de ton wallet Phantom, ou connecte-le dans l\'onglet Mèmes.'} · lecture seule, rien n'est signé.</p>
+      <div class="row-btns" style="margin:6px 0 0"><button class="btn sm" data-bg="refresh">Actualiser</button></div>
+      <h3 class="w-h">Avoirs ailleurs (Binance, autre wallet…)</h3>
+      ${S.manual.length ? `<div class="bg-lines">${S.manual.map((m, i) => `<div class="bg-l"><span class="bg-dot" style="background:${COL[m.id] || COL.OUT}"></span><div><b>${esc(m.id === 'USD' ? 'Dollars (USDC, USDT…)' : m.id)} · ${qty(+m.qty)}</b><small>${esc(m.where || 'ailleurs')}</small></div><button class="btn sm" data-bg-del="${i}">Retirer</button></div>`).join('')}</div>` : ''}
+      <div class="add"><select id="bgMId">${BAG_ASSETS.map(x => `<option value="${x.id}">${x.id}</option>`).join('')}<option value="USD">Dollars</option></select><input id="bgMQty" type="number" inputmode="decimal" step="any" min="0" placeholder="Quantité"><input id="bgMWhere" placeholder="Où (facultatif)" maxlength="20"><button class="btn" data-bg="madd">Ajouter</button></div>
+      <div class="field" style="margin-top:8px"><label for="bgCash">Argent prêt à investir, hors wallet ($)</label><input id="bgCash" type="number" inputmode="decimal" step="10" min="0" value="${+S.cash || 0}"><span class="hint">Compté comme des USDC disponibles pour les achats du plan</span></div>`;
+  }
+  function renderAna() {
+    const box = $('#bagAna'); if (!box) return;
+    const A = B.A;
+    if (!A) { box.innerHTML = '<p class="note" style="margin:0">En attente des prix.</p>'; return; }
+    const arrow = v => (v == null ? '<span class="muted">—</span>' : `<span class="${v >= 0 ? 'pos' : 'neg'}">${pct(v)}</span>`);
+    const status = r => !r.enough ? '<span class="chip">historique court</span>' : r.held ? (r.ups === 3 ? '<span class="chip long">tendance 3/3</span>' : '<span class="chip warn">gardé 2/3</span>') : `<span class="chip short">hors tendance ${r.ups}/3</span>`;
+    const txt = A.regime === 'haussier' ? 'Tous les actifs du panier sont en tendance haussière : le plan est investi (dans la limite de risque choisie).'
+      : A.regime === 'baissier' ? 'Aucun actif n\'est en tendance : le plan reste en USDC et attend. C\'est ce qui protège des grosses chutes (2018, 2022).'
+      : `${A.nIn} actif${A.nIn > 1 ? 's' : ''} sur ${A.rows.length} en tendance : le plan n'investit que ceux-là, le reste attend en USDC.`;
+    box.innerHTML = `<p class="note" style="margin:0 0 8px">${txt}</p><div class="bg-ana">${A.rows.map(r => `<div class="bg-a">
+        <div class="bg-ah"><b>${esc(r.id)}</b><span>${px(r.price)}</span>${status(r)}</div>
+        <div class="bg-ag"><span>20 j ${arrow(r.r20)}</span><span>60 j ${arrow(r.r60)}</span><span>120 j ${arrow(r.r120)}</span><span>${r.fromHi != null && r.fromHi > -0.005 ? 'au plus haut sur 1 an' : `vs plus haut 1 an ${arrow(r.fromHi)}`}</span><span>agitation ${r.vol != null ? nf(r.vol * 100, 0) + ' %/an' : '—'}</span><span>cible ${share(r.w)}</span></div>
+      </div>`).join('')}</div>`;
+  }
+  function renderBt() {
+    const box = $('#bagBt'); if (!box) return;
+    const T = B.bt;
+    if (!T) { box.innerHTML = '<p class="note" style="margin:0">Calcul après le chargement des prix…</p>'; return; }
+    if (T.none) { box.innerHTML = '<p class="note" style="margin:0">Pas assez d\'historique pour ce panier.</p>'; return; }
+    const row = (l, s) => s ? `<tr><th>${l}</th><td class="${s.total >= 0 ? 'pos' : 'neg'}">${pct(s.total)}</td><td>${pct(s.cagr, 1)}</td><td class="neg">${pct(s.mdd)}</td></tr>` : '';
+    const yrs = Object.keys(T.s.yr).sort();
+    box.innerHTML = `<p class="note" style="margin:0 0 8px">Les règles du plan rejouées jour par jour depuis le ${new Date(T.from).toLocaleDateString('fr-FR')} sur ${esc(B.hist.ids.join(', '))}, frais de 0,2 % par ordre compris, ordres passés le lendemain du signal.</p>
+      <div class="bg-tw"><table class="bg-tb"><thead><tr><th></th><th>Total</th><th>Par an</th><th>Pire baisse</th></tr></thead><tbody>
+      ${row('Le plan', T.s)}${row('Garder BTC', T.b)}${row('Parts égales', T.e)}</tbody></table></div>
+      <p class="small muted" style="margin:0">Le plan : environ ${nf(T.trades / Math.max(T.s.yrs, 0.1), 0)} ordres par an, investi ${share(T.expo)} du temps en moyenne (le reste en USDC). « Parts égales » : le panier gardé sans jamais vendre, rééquilibré chaque mois.</p>
+      <canvas id="bgChart" class="bg-chart" height="180"></canvas>
+      <div class="bg-tw"><table class="bg-tb"><thead><tr><th>Année</th><th>Le plan</th>${T.b ? '<th>Garder BTC</th>' : ''}<th>Parts égales</th></tr></thead><tbody>
+      ${yrs.map(y => `<tr><th>${y}</th><td class="${T.s.yr[y] >= 0 ? 'pos' : 'neg'}">${pct(T.s.yr[y])}</td>${T.b ? `<td class="${(T.b.yr[y] || 0) >= 0 ? 'pos' : 'neg'}">${T.b.yr[y] != null ? pct(T.b.yr[y]) : '—'}</td>` : ''}<td class="${(T.e.yr[y] || 0) >= 0 ? 'pos' : 'neg'}">${T.e.yr[y] != null ? pct(T.e.yr[y]) : '—'}</td></tr>`).join('')}</tbody></table></div>
+      <p class="note">À lire honnêtement : le plan gagne surtout en évitant les grosses chutes (2018, 2022). En pleine euphorie (2023-2024), il gagne nettement moins que garder du BTC, parce qu'il garde des USDC et coupe dès que la tendance faiblit. Le passé ne garantit rien pour la suite.</p>`;
+    drawChart();
+  }
+  function drawChart() {
+    const cv = $('#bgChart'), T = B.bt; if (!cv || !T || !T.eq) return;
+    const W = cv.clientWidth || 320, Hh = 180, dpr = window.devicePixelRatio || 1;
+    cv.width = W * dpr; cv.height = Hh * dpr; const g = cv.getContext('2d'); g.scale(dpr, dpr);
+    const css = getComputedStyle(document.documentElement), col = n => css.getPropertyValue(n).trim() || '#888';
+    const series = [{ e: T.eq, c: col('--long'), l: 'Plan' }, T.btc ? { e: T.btc, c: '#f2a33a', l: 'BTC' } : null, { e: T.ew, c: col('--muted'), l: 'Parts égales' }].filter(Boolean);
+    let lo = Infinity, hi = -Infinity;
+    for (const s of series) for (const x of s.e) { const v = Math.log(x.v); lo = Math.min(lo, v); hi = Math.max(hi, v); }
+    const t0 = T.eq[0].t, t1 = T.eq[T.eq.length - 1].t, X = t => 6 + (t - t0) / (t1 - t0 || 1) * (W - 12), Y = v => Hh - 18 - (Math.log(v) - lo) / (hi - lo || 1) * (Hh - 30);
+    g.clearRect(0, 0, W, Hh); g.lineWidth = 1.6;
+    for (const s of series) { g.strokeStyle = s.c; g.beginPath(); s.e.forEach((x, i) => { const px0 = X(x.t), py = Y(x.v); if (i) g.lineTo(px0, py); else g.moveTo(px0, py); }); g.stroke(); }
+    g.font = '11px sans-serif'; let lx = 8;
+    for (const s of series) { g.fillStyle = s.c; g.fillRect(lx, Hh - 11, 10, 3); g.fillText(s.l, lx + 14, Hh - 6); lx += g.measureText(s.l).width + 30; }
+  }
+  function renderSet() {
+    const box = $('#bagSet'); if (!box) return;
+    const ae = document.activeElement; if (ae && box.contains(ae) && ae.tagName === 'INPUT') return;
+    box.innerHTML = `<h3 class="w-h" style="margin-top:0">Actifs du panier</h3>
+      <div class="bg-chips">${BAG_ASSETS.map(a => `<label class="bg-ck"><input type="checkbox" data-bg-id="${a.id}"${S.ids.includes(a.id) ? ' checked' : ''}>${a.id}</label>`).join('')}</div>
+      <p class="small muted" style="margin:4px 0 10px">BTC, ETH et SOL s'achètent dans Phantom via Jupiter. Les autres, plutôt sur une plateforme d'échange. Plus il y a d'actifs, plus il y a d'ordres et de frais.</p>
+      <h3 class="w-h">Niveau de risque</h3>
+      <div class="seg" role="group">${Object.keys(BAG_VT).map(k => `<button data-bg-risk="${k}" aria-pressed="${S.risk === k}">${k === 'prudent' ? 'Prudent' : k === 'normal' ? 'Normal' : 'Dynamique'}</button>`).join('')}</div>
+      <p class="small muted" style="margin:4px 0 10px">Agitation maximale du panier : ${nf((BAG_VT[S.risk] || 0.6) * 100)} % par an. Plus prudent = plus d'USDC, des baisses plus petites, des hausses plus petites.</p>
+      <div class="field"><label for="bgOut">Part maximale hors panier (mèmes, autres jetons) en %</label><input id="bgOut" type="number" inputmode="numeric" min="0" max="100" step="5" value="${S.outMax}"><span class="hint">Au-delà, le plan te propose d'alléger. 100 = jamais.</span></div>`;
+  }
+
+  /* ---------- actions ---------- */
+  function bindUI() {
+    const root = $('#tab-bag'); if (!root) return;
+    root.addEventListener('click', e => {
+      const b = e.target.closest('button'); if (!b) return;
+      if (b.dataset.bg === 'addr') { const v = ($('#bgAddr').value || '').trim(); if (v && !/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(v)) { h.toast('Adresse Solana invalide'); return; } S.addr = v; save(); B.wal = null; loadWallet(); }
+      else if (b.dataset.bg === 'refresh') { loadWallet(); loadPrices(); }
+      else if (b.dataset.bg === 'madd') {
+        const id = $('#bgMId').value, q = parseFloat(String($('#bgMQty').value).replace(',', '.')), where = ($('#bgMWhere').value || '').trim();
+        if (!(q > 0)) { h.toast('Indique une quantité'); return; }
+        S.manual.push({ id, qty: q, where: where.slice(0, 20) }); save(); compute();
+      } else if (b.dataset.bgDel != null) { S.manual.splice(+b.dataset.bgDel, 1); save(); compute(); }
+      else if (b.dataset.bgRisk) { S.risk = b.dataset.bgRisk; save(); compute(); }
+    });
+    root.addEventListener('change', e => {
+      const el = e.target;
+      if (el.dataset && el.dataset.bgId) {
+        const id = el.dataset.bgId; S.ids = el.checked ? [...new Set(S.ids.concat(id))] : S.ids.filter(x => x !== id);
+        if (!S.ids.length) { S.ids = ['BTC']; h.toast('Il faut au moins un actif'); }
+        S.ids = BAG_ASSETS.map(a => a.id).filter(x => S.ids.includes(x)); save(); loadPrices();
+      } else if (el.id === 'bgCash') { const v = parseFloat(String(el.value).replace(',', '.')); S.cash = fin(v) && v >= 0 ? v : 0; save(); el.blur(); compute(); }
+      else if (el.id === 'bgOut') { const v = parseFloat(el.value); S.outMax = fin(v) ? Math.min(100, Math.max(0, v)) : 20; save(); el.blur(); compute(); }
+    });
+  }
+  let started = false;
+  function start() {
+    if (started) return; started = true;
+    buildHist(cacheGet()); compute();
+    loadPrices(); loadWallet();
+    setInterval(() => { if (h.visible && h.visible()) { loadPrices(); } }, 10 * 60000);
+    setInterval(() => { if (addr()) loadWallet(); }, 5 * 60000);
+  }
+  function show() { start(); compute(); if (now() - B.walAt > 60000) loadWallet(); if (now() - B.at > 10 * 60000) loadPrices(); }
+  return { start, show, render, bindUI, S, B, _test: { analysis, makePlan, positions, compute, classify, buildHist } };
+}
+
 /* ================= FUTURES AUTO (Hyperliquid via Phantom) =================
    Suivi de tendance sur bougies 4 h, règles fixes (aucun réglage ajusté sur le passé) :
    - Entrée : clôture 4 h au-dessus du plus haut des 55 bougies précédentes (LONG) ou sous leur plus bas (SHORT).
@@ -8178,9 +8788,10 @@ if (typeof module !== 'undefined') module.exports = PerpsBot;
   /* ---------- navigation ---------- */
   function showTab(t) {
     curTab = t;
-    document.body.classList.toggle('meme', t === 'meme' || t === 'new' || t === 'perps' || t === 'copy');
-    { const mt = $('#memeTitle'); if (mt) mt.textContent = t === 'new' ? 'Nouveaux coins' : t === 'perps' ? 'Futures auto' : t === 'copy' ? 'Copie de wallets' : 'Radar mèmes'; }
-    { const a = $('#memeNet'), b = $('#memeSub'); if (a) a.textContent = t === 'perps' ? 'Hyperliquid' : 'Solana'; if (b) b.textContent = t === 'perps' ? 'via Phantom' : t === 'copy' ? 'suivi de wallets' : 'temps réel'; }
+    document.body.classList.toggle('meme', t === 'meme' || t === 'new' || t === 'perps' || t === 'copy' || t === 'bag');
+    { const mt = $('#memeTitle'); if (mt) mt.textContent = t === 'new' ? 'Nouveaux coins' : t === 'perps' ? 'Futures auto' : t === 'copy' ? 'Copie de wallets' : t === 'bag' ? 'Bag crypto' : 'Radar mèmes'; }
+    { const a = $('#memeNet'), b = $('#memeSub'); if (a) a.textContent = t === 'perps' ? 'Hyperliquid' : t === 'bag' ? 'Plan' : 'Solana'; if (b) b.textContent = t === 'perps' ? 'via Phantom' : t === 'copy' ? 'suivi de wallets' : t === 'bag' ? 'du jour' : 'temps réel'; }
+    if (t === 'bag') setTimeout(() => bag && bag.show(), 0);
     if (t === 'copy') setTimeout(() => copy && copy.render(), 0);
     if (t === 'perps') setTimeout(() => perps && perps.render(), 0);
     if (t === 'new') setTimeout(() => newCoins && newCoins.render(), 0);
@@ -8197,7 +8808,7 @@ if (typeof module !== 'undefined') module.exports = PerpsBot;
   $$('.tabbar button').forEach(b => b.onclick = () => showTab(b.dataset.tab));
 
   // radar mèmes + trading via wallet + bot autonome
-  let trader = null, bot = null, newCoins = null, live = null, lab = null, perps = null, copy = null;
+  let trader = null, bot = null, newCoins = null, live = null, lab = null, perps = null, copy = null, bag = null;
   const inFrame = (() => { try { return window.top !== window.self; } catch { return true; } })();
   const buzz = p => { if (set.vibrate && navigator.vibrate) try { navigator.vibrate(p); } catch {} };
   const jup = JupClient(() => (trader ? trader.jupKey() : ''));
@@ -8276,6 +8887,16 @@ if (typeof module !== 'undefined') module.exports = PerpsBot;
   }, radar, bot, (m, p) => rpcPool.call(m, p));
   copy.bindUI();
   if (!inFrame) copy.start();
+  // bag : panier de cryptos majeures, plan d'achats et de ventes du jour (le wallet est seulement lu)
+  bag = BagPlan({
+    $, esc, store, toast,
+    jup: (p, prio) => jup.get(p, prio),
+    walletAddr: () => (trader && trader.addr ? trader.addr() : '') || '',
+    visible: () => curTab === 'bag' && document.visibilityState === 'visible',
+    notify: (msg, cls) => { toast(msg, cls); sysNotify(msg, cls); }
+  });
+  bag.bindUI();
+  setTimeout(() => { try { bag.start(); } catch (e) { log('Bag : ' + e.message); } }, 15000);
   let wTick = 0, pTick = 0, cTick = 0;
   setInterval(() => {
     if (curTab === 'meme' && $('#memeSheet').hidden && $('#tradeSheet').hidden) radar.render();
