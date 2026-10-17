@@ -615,7 +615,13 @@ a.btn{text-decoration:none;color:inherit;display:inline-block}
 .p-adv{display:grid;gap:2px;font-size:.86rem}
 .p-adv b{font-family:var(--f-display);font-size:1.02rem}
 .w-oth{margin-top:10px;font-size:.88rem}
-#liveBody .j-row{align-items:center}
+#liveBody .j-row,#ppRadarBody .j-row{align-items:center}
+#ppRadarBody .lv-ask{margin:2px 0 10px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--panel2)}
+#ppRadarBody .lv-ask .kvs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px 12px;margin:6px 0 8px;font-size:.86rem}
+#ppRadarBody .lv-ask .kvs b{font-family:var(--f-mono);font-weight:600}
+#ppRadarBody .lv-ask input[type=number],#ppRadarBody .lv-ask input[type=password]{width:7em;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:6px 8px;font-family:var(--f-mono);color:var(--fg)}
+#ppRadarBody .j-r small{display:block;font-size:.72rem;opacity:.8}
+#ppRadarBody .mono.pos{color:var(--long)} #ppRadarBody .mono.neg{color:var(--short)}
 #liveBody .lv-ask{margin:2px 0 10px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--panel2)}
 #liveBody .lv-ask .kvs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px 12px;margin:6px 0 8px;font-size:.86rem}
 #liveBody .lv-ask .kvs b{font-family:var(--f-mono);font-weight:600}
@@ -1081,6 +1087,10 @@ a.btn{text-decoration:none;color:inherit;display:inline-block}
       <h2>Bot futures <span class="sp" id="perpsState"></span></h2>
       <div id="perpsBody"><p class="note" style="margin:0">Démarrage…</p></div>
     </div>
+    <div class="card" id="ppRadarCard">
+      <h2>Cassures en vue <small class="muted">toutes les cryptos Hyperliquid</small> <span class="sp" id="ppRadarState"></span></h2>
+      <div id="ppRadarBody"><p class="note" style="margin:0">Connexion à Hyperliquid…</p></div>
+    </div>
     <div class="card">
       <h2>Comment le bot décide</h2>
       <ol class="i-steps">
@@ -1229,7 +1239,7 @@ a.btn{text-decoration:none;color:inherit;display:inline-block}
       <h2>Diagnostic de connexion</h2>
       <div class="journal" id="diag"></div>
     </div>
-    <p class="foot"><strong>Version 2 · setups calibrés.</strong> Mise à jour du 17 octobre 2026 (signaux en direct dans l'écran Signal : prendre et clôturer une position Hyperliquid, stop posé tout seul). Vigie Scalp aide à décider, il ne décide pas à ta place. Ce n'est pas un conseil financier. Les signaux se trompent souvent : place toujours ton stop, et ne risque que ce que tu peux perdre.</p>
+    <p class="foot"><strong>Version 2 · setups calibrés.</strong> Mise à jour du 17 octobre 2026 (Futures : « Cassures en vue » sur toutes les cryptos Hyperliquid, position d'un bouton avec stop et stop suiveur). Vigie Scalp aide à décider, il ne décide pas à ta place. Ce n'est pas un conseil financier. Les signaux se trompent souvent : place toujours ton stop, et ne risque que ce que tu peux perdre.</p>
   </section>
 </main>
 
@@ -8194,7 +8204,7 @@ function PerpsBot(h) {
   }
   async function manualQuote(o) {
     if (!P.meta || now() - P.metaAt > 30000) await loadMeta();
-    const coin = hlCoin(o.sym), a = P.meta[coin];
+    const coin = o.coin || hlCoin(o.sym), a = P.meta[coin];
     if (!a) throw new Error(`${coin} ne se trade pas sur Hyperliquid`);
     if (S.acct && (!P.acctState || now() - P.acctAt > 15000)) await refreshAcct();
     const dir = o.dir > 0 ? 1 : -1, mid = a.mid || a.mark, sf = +o.stopFrac;
@@ -8228,7 +8238,7 @@ function PerpsBot(h) {
     const px = HL.roundPx(q.mid * (isBuy ? 1.005 : 0.995), a.szDec);
     const orders = [HL.limitWire(a.idx, isBuy, px, q.qty, false, 'Ioc'), HL.triggerWire(a.idx, !isBuy, q.stop, q.qty, 'sl')];
     // noté AVANT l'envoi : si la réponse se perd, la surveillance retrouvera la position
-    const rec = { coin: q.coin, sym: o.sym, dir: q.dir, t0: now(), entry: q.mid, stop: q.stop, stopFrac: q.stopFrac, qty: q.qty, lev: q.lev, riskUsd: q.risk, setup: o.setup || null, tf: o.tf || null, pending: true };
+    const rec = Object.assign({ coin: q.coin, sym: o.sym || q.coin, dir: q.dir, t0: now(), entry: q.mid, stop: q.stop, stopFrac: q.stopFrac, qty: q.qty, lev: q.lev, riskUsd: q.risk, setup: o.setup || null, tf: o.tf || null, pending: true }, o.extra || {});
     S.manual.pos[q.coin] = rec; save();
     let resp;
     try { resp = await HL.exchange(P.wallet, { type: 'order', orders, grouping: 'normalTpsl' }); }
@@ -8237,6 +8247,7 @@ function PerpsBot(h) {
     if (e0.error) { delete S.manual.pos[q.coin]; save(); throw new Error('ordre refusé : ' + e0.error); }
     if (!e0.filled) { delete S.manual.pos[q.coin]; save(); throw new Error('ordre non exécuté (pas assez de contrepartie au prix)'); }
     Object.assign(rec, { pending: false, entry: +e0.filled.avgPx, qty: +e0.filled.totalSz });
+    if (rec.trail) rec.best = rec.entry;
     save();
     log(`Position à la main ${q.dir > 0 ? 'LONG' : 'SHORT'} ${q.coin} : ${HL.wire(rec.qty)} à ${pxf(rec.entry)}, levier ${q.lev}x isolé, stop ${pxf(q.stop)} ${e1.error ? 'refusé (' + e1.error + '), remis par la surveillance' : 'posé chez Hyperliquid'}, risque ${usd(q.risk)}`, 'buy');
     setTimeout(() => manualGuard().catch(() => {}), 3000);
@@ -8279,6 +8290,7 @@ function PerpsBot(h) {
       if (!p) { await settleManual(coin, r); continue; }
       if (!P.wallet) continue;
       const sls = P.orders.filter(o => o.coin === coin && o.isTrigger && o.reduceOnly && isSl(o));
+      if (r.trail && sls.length) { try { await trailManual(coin, a, p, r, sls); } catch (e) { log(`${coin} : stop suiveur non mis à jour (${e.message})`, 'warn'); } continue; }
       if (sls.length) continue;
       const sz = Math.abs(+p.szi), isBuy = +p.szi < 0, mid = a.mid || a.mark;
       if ((r.stop - mid) * r.dir >= 0) { log(`${coin} : le prix a dépassé le stop et aucun stop n'est en place, fermeture`, 'warn'); try { await manualCloseIn(coin, a, p, r); } catch (e) { log(`${coin} : fermeture impossible (${e.message})`, 'bad'); } continue; }
@@ -8290,6 +8302,35 @@ function PerpsBot(h) {
       } catch (e) { log(`${coin} : stop impossible à poser (${e.message}), fermeture`, 'bad'); try { await manualCloseIn(coin, a, p, r); } catch {} }
     }
     save();
+  }
+  // Stop suiveur de la règle : à chaque bougie 4 h fermée depuis la dernière fois, stop = meilleure clôture − 3 ATR (jamais reculé)
+  async function trailManual(coin, a, p, r, sls) {
+    const lastClosed = Math.floor(now() / TFMS) * TFMS - TFMS;
+    if (!(lastClosed > (r.lastT || 0))) return;
+    const rows = await HL.info({ type: 'candleSnapshot', req: { coin, interval: TF, startTime: now() - 40 * TFMS, endTime: now() } });
+    const b = (Array.isArray(rows) ? rows : []).map(k => ({ t: +k.t, o: +k.o, h: +k.h, l: +k.l, c: +k.c })).filter(k => fin(k.c) && k.t + TFMS <= now()).sort((x, y) => x.t - y.t);
+    if (b.length < RULE.atr + 2) return;
+    const A = ATR(b);
+    let want = r.stop;
+    for (let i = 0; i < b.length; i++) {
+      if (b[i].t <= (r.lastT || 0)) continue;
+      r.lastT = b[i].t;
+      r.best = r.dir > 0 ? Math.max(r.best || r.entry, b[i].c) : Math.min(r.best || r.entry, b[i].c);
+      if (fin(A[i])) r.atr = A[i];
+      const tr = r.best - r.dir * RULE.m * (A[i] || r.atr);
+      if (fin(tr) && (tr - want) * r.dir > 0) want = tr;
+    }
+    save();
+    const mid = a.mid || a.mark;
+    if ((want - mid) * r.dir >= 0) { log(`${coin} : le prix est déjà sous le stop suiveur, sortie`, 'warn'); await manualCloseIn(coin, a, p, r); r.closeWhy = 'stop suiveur'; save(); return; }
+    if (!((want - r.stop) * r.dir > 0.1 * (r.atr || 0))) return;
+    const nx = HL.roundPx(want, a.szDec), sz = Math.abs(+p.szi), isBuy = +p.szi < 0;
+    const resp = await HL.exchange(P.wallet, { type: 'order', orders: [HL.triggerWire(a.idx, isBuy, nx, sz, 'sl')], grouping: 'positionTpsl' });
+    const err = HL.statuses(resp).find(x => x && x.error);
+    if (err) throw new Error(err.error);
+    for (const o of sls) await cancel(a, o.oid);
+    r.stop = nx; r.trailed = true; save();
+    log(`${coin} : stop suiveur remonté à ${pxf(nx)} (position à la main)`, 'ok');
   }
   async function manualCloseIn(coin, a, p, r) {
     const sz = Math.abs(+p.szi), isBuy = +p.szi < 0, mid = a.mid || a.mark;
@@ -8313,7 +8354,7 @@ function PerpsBot(h) {
     if (!closing.length && (r.tries = (r.tries || 0) + 1) < 6) { save(); return false; }
     if (!closing.length) pnl = null;
     const exitPx = closing.length ? closing.reduce((s, f) => s + +f.px * +f.sz, 0) / closing.reduce((s, f) => s + +f.sz, 0) : null;
-    const why = r.closeWhy || 'stop touché';
+    const why = r.closeWhy || (r.trailed ? 'stop suiveur touché' : 'stop touché');
     const R = fin(pnl) && r.riskUsd ? pnl / r.riskUsd : null;
     S.manual.hist.unshift({ coin, sym: r.sym, dir: r.dir, t0: r.t0, t1: now(), entry: r.entry, exitPx, stop: r.stop, qty: r.qty, lev: r.lev, pnl, fund, R, riskUsd: r.riskUsd, why, setup: r.setup });
     S.manual.hist = S.manual.hist.slice(0, 200);
@@ -8331,6 +8372,171 @@ function PerpsBot(h) {
       const hasSl = P.orders.some(o => o.coin === r.coin && o.isTrigger && o.reduceOnly && isSl(o));
       return Object.assign({}, r, { mid, upnl, live: !!p, hasSl, R: fin(upnl) && r.riskUsd ? upnl / r.riskUsd : NaN });
     });
+  }
+  /* ---------- radar des cassures : toutes les cryptos liquides d'Hyperliquid ----------
+     Même règle que le bot (canal 55 × 4 h, stop 2 ATR, stop suiveur 3 ATR). Pensé pour rester léger sur le téléphone :
+     - une passe de 80 bougies 4 h par crypto (volume ≥ 2 M$ par jour), une requête toutes les 2 s, après le chargement du bot ;
+     - refaite seulement à chaque clôture 4 h (les canaux ne bougent qu'à ce moment-là), et gardée entre deux ouvertures de l'appli ;
+     - entre-temps, la distance à la cassure suit le prix en direct (flux allMids déjà ouvert pour le bot) : aucune requête de plus ;
+     - le test long (≈ 2 ans d'historique) n'est lancé que pour les cryptos proches d'une cassure, et gardé 24 h. */
+  const RD_MIN_VOL = 2e6, RD_GAP = 2000, RD_NEAR = 0.5, RD_MAX = 12;
+  const RD = Object.assign({ bar: 0, at: 0, coins: {} }, h.store.get('perpsRadar', {}));
+  const RDS = { busy: false, done: 0, total: 0, ask: null, quote: null, qErr: '', qBusy: false, send: false, closing: {}, all: false, trail: true, started: false, risk: null, bound: false };
+  const lastClosedBar = () => Math.floor(now() / TFMS) * TFMS - TFMS; // début de la dernière bougie 4 h fermée
+  const radarCoins = () => Object.values(P.meta || {}).filter(a => a.vol >= RD_MIN_VOL && fin(a.mark) && a.mark > 0).sort((x, y) => y.vol - x.vol).map(a => a.name);
+  async function radarScan(force) {
+    if (RDS.busy || !P.meta || h.inFrame) return;
+    const bar = lastClosedBar();
+    if (!force && RD.bar === bar && Object.keys(RD.coins).length) return;
+    RDS.busy = true;
+    const L = radarCoins(), coins = {};
+    RDS.total = L.length; RDS.done = 0;
+    try {
+      for (const coin of L) {
+        while (P.qBusy || P.q.length) await sleep(1500); // le bot passe d'abord (historiques, tests)
+        try {
+          const r = await HL.info({ type: 'candleSnapshot', req: { coin, interval: TF, startTime: now() - 80 * TFMS, endTime: now() } });
+          const b = (Array.isArray(r) ? r : []).map(k => ({ t: +k.t, o: +k.o, h: +k.h, l: +k.l, c: +k.c })).filter(k => fin(k.c) && k.t + TFMS <= now()).sort((x, y) => x.t - y.t);
+          if (b.length >= RULE.N + RULE.atr + 2) {
+            const A = ATR(b), i = b.length - 1, ch = channel(b, b.length), sg = sigAt(b, A, i);
+            coins[coin] = { hi: ch.hi, lo: ch.lo, atr: A[i], c: b[i].c, t: b[i].t, sig: sg ? { dir: sg.dir, entry: sg.entry, stop: sg.stop, atr: sg.atr, t: sg.t, tc: sg.tc, hi: sg.hi, lo: sg.lo } : null };
+          }
+        } catch {}
+        RDS.done++;
+        if (RDS.done % 10 === 0) { RD.coins = Object.assign({}, RD.coins, coins); if (h.visible && h.visible()) renderRadar(); }
+        if (RDS.done < L.length) await sleep(RD_GAP);
+      }
+      RD.coins = coins; RD.bar = bar; RD.at = now();
+      h.store.set('perpsRadar', RD);
+    } finally { RDS.busy = false; radarTests(); if (h.visible && h.visible()) renderRadar(); }
+  }
+  // Cryptos proches d'une cassure, au prix du moment
+  function radarCands() {
+    const out = [];
+    for (const [coin, x] of Object.entries(RD.coins)) {
+      const a = P.meta && P.meta[coin];
+      if (!a || !(x.atr > 0)) continue;
+      const mid = a.mid || a.mark;
+      if (!fin(mid) || mid <= 0) continue;
+      const s = x.sig;
+      if (s && now() - s.tc < TFMS && Math.abs(mid - s.entry) <= LATE_ATR * s.atr && (mid - (s.dir > 0 ? s.hi : s.lo)) * s.dir > 0) { out.push({ coin, kind: 'conf', dir: s.dir, mid, atr: s.atr, stop: s.stop, d: 0, lvl: s.dir > 0 ? s.hi : s.lo, sig: s }); continue; }
+      const dL = (x.hi - mid) / x.atr, dS = (mid - x.lo) / x.atr;
+      const add = (kind, dir, d, lvl) => out.push({ coin, kind, dir, mid, atr: x.atr, stop: mid - dir * RULE.k * x.atr, d, lvl });
+      if (dL <= 0) add('live', 1, dL, x.hi); else if (dS <= 0) add('live', -1, dS, x.lo);
+      else if (dL <= RD_NEAR) add('near', 1, dL, x.hi); else if (dS <= RD_NEAR) add('near', -1, dS, x.lo);
+    }
+    const rank = c => (c.kind === 'conf' ? 0 : c.kind === 'live' ? 1 : 2);
+    return out.sort((p, q) => (btOk(q.coin) - btOk(p.coin)) || rank(p) - rank(q) || p.d - q.d);
+  }
+  // Test long seulement pour les cryptos proches d'une cassure (file du bot, une requête toutes les 6 s)
+  function radarTests() { for (const c of radarCands().slice(0, RD_MAX + 4)) if (stale(c.coin) && !P.testing[c.coin]) testCoin(c.coin); }
+  const testTxt = coin => {
+    const t = S.bt[coin];
+    if (P.testing[coin] || !t) return { cls: '', txt: P.testing[coin] ? 'test sur l\'historique en cours…' : 'test en attente' };
+    if (t.tooShort) return { cls: '', txt: 'historique trop court pour tester' };
+    const y = rpy(coin), yrs = (t.to - t.from) / (365 * 86400e3);
+    return { cls: btOk(coin) ? 'pos' : 'neg', txt: `test ${String(Math.round(yrs * 10) / 10).replace('.', ',')} an${yrs >= 2 ? 's' : ''} : ${fin(y) ? Rf(y) + '/an' : '—'} · ${t.n} trades · ${Math.round((t.win || 0) * 100)} % gagnants${btOk(coin) ? '' : ' · la règle perd ici'}` };
+  };
+  async function radarQuote() {
+    const c = radarCands().find(x => x.coin === RDS.ask);
+    if (!c) return;
+    RDS.qBusy = true; RDS.qErr = ''; renderRadar();
+    try {
+      await refreshAcct();
+      const eq = equity(), risk = fin(RDS.risk) && RDS.risk > 0 ? RDS.risk : fin(eq) ? Math.round(eq * S.cfg.risk) / 100 : NaN;
+      if (!fin(risk)) throw new Error('solde Perps illisible : relie ton compte Phantom ci-dessus');
+      const a = P.meta[c.coin], mid = a.mid || a.mark;
+      const stop = c.kind === 'conf' ? c.sig.stop : mid - c.dir * RULE.k * c.atr;
+      RDS.quote = await manualQuote({ coin: c.coin, dir: c.dir, stopFrac: (mid - stop) / mid * c.dir, riskUsd: risk, lev: S.cfg.levCap });
+      Object.assign(RDS.quote, { kind: c.kind, riskIn: risk });
+    } catch (e) { RDS.quote = null; RDS.qErr = e.message; }
+    RDS.qBusy = false; renderRadar();
+  }
+  function radarAsk(c) {
+    const g = manualReady(), q = RDS.quote && RDS.quote.coin === c.coin ? RDS.quote : null, side = c.dir > 0 ? 'LONG' : 'SHORT';
+    if (g && g !== 'locked') return `<div class="lv-ask"><p class="note" style="margin:0 0 8px">Pour trader en direct, ${esc(g)}.</p><div class="row-btns" style="margin:0"><button class="btn sm" data-rd="cancel">Annuler</button></div></div>`;
+    const lock = g === 'locked' ? `<p class="note" style="margin:0 0 6px">Bot futures verrouillé : entre ton code pour signer l'ordre.</p><div class="add" style="margin:0 0 8px"><input id="rdPin" type="password" placeholder="Code du bot futures" autocomplete="current-password"><button class="btn sm pri" data-rd="unlock">Déverrouiller</button></div>` : '';
+    const warn = c.kind === 'conf' ? '' : `<p class="note" style="margin:0 0 6px;color:var(--warn)">Anticipation : la règle n'entre qu'à la clôture d'une bougie 4 h hors du canal (prochaine à ${new Date(lastClosedBar() + 2 * TFMS).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}). Entrer avant, c'est hors règle : la cassure peut ne pas tenir.</p>`;
+    const bad = btOk(c.coin) ? '' : '<p class="note" style="margin:0 0 6px;color:var(--short)">Sur l\'historique de cette crypto, la règle perd (ou n\'est pas encore testée).</p>';
+    const body = RDS.qBusy && !q ? '<p class="note" style="margin:0">Calcul de la position…</p>'
+      : RDS.qErr ? `<p class="note" style="margin:0;color:var(--short)">${esc(RDS.qErr)}</p>`
+      : q ? `<div class="kvs"><span>Entrée au marché</span><b>${pxf(q.mid)}</b><span>Stop posé à</span><b>${pxf(q.stop)} (${pct(-q.stopFrac, 2)})</b>
+          <span>Taille</span><b>${HL.wire(q.qty)} ${esc(q.coin)} · ${usd(q.ntl)}</b><span>Levier</span><b>${q.lev}x isolé</b>
+          <span>Marge bloquée</span><b>${usd(q.margin)}</b><span>Perte si stop touché</span><b class="neg">−${usd(q.risk)}</b>
+          <span>Liquidation</span><b>à ${pct(-q.liqFrac * c.dir, 1)}</b><span>Funding / h</span><b>${fin(q.funding) ? pct(q.funding * c.dir, 4) : '—'}</b></div>
+          ${q.capped ? '<p class="note" style="margin:0 0 6px">Taille réduite : la marge est limitée à 90 % de ton disponible.</p>' : ''}${!q.ok ? `<p class="note" style="margin:0 0 6px;color:var(--short)">${esc(q.why)}</p>` : ''}` : '';
+    return `<div class="lv-ask"><div><b>${side} ${esc(c.coin)}</b> · argent réel</div>${warn}${bad}${lock}${body}
+      <label class="toggle" style="margin:4px 0 6px"><span>Stop suiveur de la règle<small>Remonté à chaque clôture 4 h : meilleure clôture − 3 ATR, jamais reculé</small></span><input type="checkbox" data-rd="trail"${RDS.trail ? ' checked' : ''}></label>
+      <div class="add" style="margin:0 0 8px"><label for="rdRisk" class="muted" style="align-self:center">Risque ($)</label><input id="rdRisk" type="number" inputmode="decimal" step="0.5" min="1" value="${q ? Math.round(q.riskIn * 100) / 100 : (fin(RDS.risk) ? RDS.risk : '')}"></div>
+      <div class="row-btns" style="margin:0"><button class="btn sm ${c.dir > 0 ? 'pri' : 'danger'}" data-rd="confirm"${!q || !q.ok || g || RDS.send ? ' disabled' : ''}>${RDS.send ? 'Envoi…' : `Confirmer le ${side}`}</button><button class="btn sm" data-rd="cancel">Annuler</button></div></div>`;
+  }
+  function renderRadar() {
+    const box = $('#ppRadarBody');
+    if (!box) return;
+    if (P.ui.approveFor || P.ui.revoke) { const cd = $('#ppRadarCard'); if (cd) cd.hidden = true; return; }
+    const ae = document.activeElement;
+    if (ae && box.contains(ae) && ae.tagName === 'INPUT') return;
+    if (h.inFrame) { box.innerHTML = '<p class="note" style="margin:0">Le radar ne tourne pas dans l\'aperçu Claude. Utilise la version hébergée de l\'appli.</p>'; return; }
+    if (!RDS.started && P.meta) { RDS.started = true; setTimeout(() => radarScan(false), 1500); }
+    const C = radarCands(), good = C.filter(c => btOk(c.coin)), list = (RDS.all ? C : good).slice(0, RD_MAX), hidden = C.length - good.length;
+    if (RDS.ask && !list.some(c => c.coin === RDS.ask)) { RDS.ask = null; RDS.quote = null; }
+    const nA = Object.keys(RD.coins).length, mine = manualList(), held = new Set([...mine.map(x => x.coin), ...positions().map(p => p.coin), ...Object.keys(S.real.pos)]);
+    const st = $('#ppRadarState'); if (st) st.innerHTML = RDS.busy ? `<span class="chip warn">analyse ${RDS.done}/${RDS.total}</span>` : list.length ? `<span class="chip long">${list.length} en vue</span>` : '';
+    const nextClose = new Date(lastClosedBar() + 2 * TFMS).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+    const rows = list.map(c => {
+      const tt = testTxt(c.coin), side = c.dir > 0 ? 'LONG' : 'SHORT', hiLo = c.dir > 0 ? 'plus haut' : 'plus bas';
+      const state = c.kind === 'conf' ? `Cassure confirmée à la clôture de ${new Date(c.sig.tc).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })} (règle)`
+        : c.kind === 'live' ? `Passe le ${hiLo} 55 × 4 h (${pxf(c.lvl)}) : à confirmer à la clôture de ${nextClose}`
+        : `À ${String(Math.round(c.d * 100) / 100).replace('.', ',')} ATR du ${hiLo} 55 × 4 h (${pxf(c.lvl)}, ${pct((c.lvl - c.mid) / c.mid, 2)})`;
+      return `<div class="j-row"><span class="chip ${c.dir > 0 ? 'long' : 'short'}">${side}</span><div class="j-mid"><div><b>${esc(c.coin)}</b> · ${pxf(c.mid)}</div><div class="mono">${esc(state)}</div><div class="mono ${tt.cls}">${esc(tt.txt)}</div></div>${held.has(c.coin) ? '<span class="chip">en position</span>' : `<button class="btn sm ${c.dir > 0 ? 'pri' : 'danger'}" data-rd="ask" data-coin="${esc(c.coin)}">${RDS.ask === c.coin ? 'Fermer' : 'Prendre'}</button>`}</div>${RDS.ask === c.coin ? radarAsk(c) : ''}`;
+    }).join('');
+    const rowsP = mine.map(x => `<div class="j-row"><span class="chip ${x.dir > 0 ? 'long' : 'short'}">${x.dir > 0 ? 'LONG' : 'SHORT'}</span><div class="j-mid"><div><b>${esc(x.coin)}</b> · ${x.pending ? 'ordre en cours…' : `entrée ${pxf(x.entry)} · levier ${x.lev}x`}</div><div class="mono">stop ${pxf(x.stop)}${x.trail ? (x.trailed ? ' (suiveur, remonté)' : ' (suiveur)') : ''}${x.live && !x.hasSl ? ' · en cours de pose…' : ''} · prix ${pxf(x.mid)}</div>
+      <div class="row-btns" style="margin:4px 0 0"><button class="btn sm danger" data-rd="close" data-coin="${esc(x.coin)}"${RDS.closing[x.coin] ? ' disabled' : ''}>${RDS.closing[x.coin] ? 'Clôture…' : 'Clôturer'}</button></div></div>
+      <span class="j-r ${x.upnl > 0 ? 'pos' : x.upnl < 0 ? 'neg' : ''}">${fin(x.upnl) ? (x.upnl > 0 ? '+' : '') + usd(x.upnl) : '—'}${fin(x.R) ? `<small>${Rf(x.R)}</small>` : ''}</span></div>`).join('');
+    const status = RDS.busy ? `Analyse en cours : ${RDS.done}/${RDS.total} cryptos (une toutes les 2 s, le téléphone ne force pas).`
+      : nA ? `${nA} cryptos d'Hyperliquid analysées (volume d'au moins 2 M$ par jour) · canaux de la clôture de ${new Date(RD.bar + TFMS).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })} · prix en direct · prochaine analyse à ${nextClose}.`
+      : P.meta ? 'Première analyse de toutes les cryptos…' : 'Connexion à Hyperliquid…';
+    box.innerHTML = `${rowsP ? `<h3 class="w-h" style="margin-top:0">Mes positions à la main</h3><div class="journal">${rowsP}</div>` : ''}
+      <p class="note" style="margin:0 0 8px">${esc(status)}</p>
+      ${list.length ? `<div class="journal">${rows}</div>` : `<p class="note" style="margin:0">${nA ? `Aucune crypto${RDS.all ? '' : ' au test positif'} à moins de ${String(RD_NEAR).replace('.', ',')} ATR d'une cassure en ce moment.` : ''}</p>`}
+      ${hidden > 0 || RDS.all ? `<div class="row-btns"><button class="btn sm" data-rd="all">${RDS.all ? 'Seulement les cryptos au test positif' : `Voir aussi les ${hidden} autre${hidden > 1 ? 's' : ''} (test négatif ou pas encore testé${hidden > 1 ? 's' : ''})`}</button>${!RDS.busy ? '<button class="btn sm" data-rd="rescan">Relancer l\'analyse</button>' : ''}</div>` : (!RDS.busy && nA ? '<div class="row-btns"><button class="btn sm" data-rd="rescan">Relancer l\'analyse</button></div>' : '')}
+      <p class="note">Même règle que le bot : cassure du canal des 55 dernières bougies 4 h, stop à 2 ATR posé chez Hyperliquid avec l'entrée. « Cassure confirmée » = ce que ferait le bot ; « à confirmer » et « à … ATR » = anticipation, hors règle. Le test rejoue la règle sur l'historique de chaque crypto : sur nos essais, elle ne gagnait que sur peu de cryptos, d'où le filtre « test positif ». Risque par trade : ${String(S.cfg.risk).replace('.', ',')} % du compte (modifiable avant de confirmer), levier ${S.cfg.levCap}x maximum, marge isolée.</p>`;
+    if (!RDS.bound) {
+      RDS.bound = true;
+      box.addEventListener('click', async e => {
+        const b = e.target.closest('[data-rd]'); if (!b || b.disabled || b.tagName === 'INPUT') return;
+        const a = b.dataset.rd;
+        if (a === 'ask') { const c = b.dataset.coin; if (RDS.ask === c) { RDS.ask = null; RDS.quote = null; renderRadar(); return; } RDS.ask = c; RDS.quote = null; RDS.qErr = ''; RDS.risk = null; radarQuote(); return; }
+        if (a === 'cancel') { RDS.ask = null; RDS.quote = null; renderRadar(); return; }
+        if (a === 'all') { RDS.all = !RDS.all; renderRadar(); radarTests(); return; }
+        if (a === 'rescan') { radarScan(true); renderRadar(); return; }
+        if (a === 'unlock') { const el = $('#rdPin'); b.disabled = true; try { await manual.unlock(el ? el.value : ''); h.toast && h.toast('Bot futures déverrouillé', 'long'); radarQuote(); } catch (err) { h.toast && h.toast(err.message, 'short'); } finally { b.disabled = false; renderRadar(); } return; }
+        if (a === 'confirm') {
+          const c = radarCands().find(x => x.coin === RDS.ask), q = RDS.quote;
+          if (!c || !q) return;
+          if (now() - q.at > 20000) { h.toast && h.toast('Prix mis à jour : vérifie puis confirme', 'warn'); radarQuote(); return; }
+          RDS.send = true; renderRadar();
+          try {
+            const rec = await manualOpen({ coin: c.coin, dir: c.dir, stopFrac: q.stopFrac, riskUsd: q.riskIn, lev: S.cfg.levCap, setup: 'radar-4h',
+              extra: { src: 'radar', kind: c.kind, trail: !!RDS.trail, atr: c.atr, lastT: c.kind === 'conf' ? c.sig.t : lastClosedBar() } });
+            h.toast && h.toast(`${rec.dir > 0 ? 'LONG' : 'SHORT'} ${rec.coin} ouvert, stop posé à ${pxf(rec.stop)}`, 'long');
+            RDS.ask = null; RDS.quote = null;
+          } catch (err) { h.toast && h.toast('Position non ouverte : ' + err.message, 'short'); RDS.qErr = err.message; }
+          finally { RDS.send = false; renderRadar(); }
+          return;
+        }
+        if (a === 'close') {
+          const c = b.dataset.coin; RDS.closing[c] = true; renderRadar();
+          try { await manualClose(c); h.toast && h.toast(`${c} clôturé au marché`, 'long'); } catch (err) { h.toast && h.toast('Clôture impossible : ' + err.message, 'short'); }
+          finally { delete RDS.closing[c]; renderRadar(); }
+        }
+      });
+      box.addEventListener('change', e => {
+        const el = e.target; if (!el) return;
+        if (el.dataset && el.dataset.rd === 'trail') { RDS.trail = el.checked; return; }
+        if (el.id === 'rdRisk') { const x = parseFloat(String(el.value).replace(',', '.')); if (fin(x) && x > 0 && x <= 100000) { RDS.risk = x; el.blur(); radarQuote(); } else h.toast && h.toast('Risque invalide'); }
+      });
+    }
   }
   const manual = { ready: manualReady, quote: manualQuote, open: manualOpen, close: manualClose, list: manualList, guard: () => manualGuard(), hlCoin,
     hist: () => S.manual.hist.slice(0, 20), acctAt: () => P.acctAt,
@@ -8357,6 +8563,7 @@ function PerpsBot(h) {
     boot();
     setInterval(() => { loadMeta().catch(() => {}); for (const coin of universe()) catchUp(coin).catch(() => {}); }, 60000);
     setInterval(() => { if (Object.keys(S.manual.pos).length) manualGuard().catch(() => {}); }, 15000);
+    setInterval(() => { if (RDS.started && !RDS.busy && RD.bar !== lastClosedBar() && document.visibilityState === 'visible') radarScan(false); }, 60000);
     if (Object.keys(S.manual.pos).length) setTimeout(() => manualGuard().catch(() => {}), 4000);
     document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { for (const coin of universe()) catchUp(coin).catch(() => {}); if (S.acct) guard().catch(() => {}); } });
     setInterval(() => { if (S.acct) guard().catch(e => log('Surveillance : ' + e.message, 'warn')); }, 10000);
@@ -8442,6 +8649,7 @@ function PerpsBot(h) {
   function render() {
     const box = $('#perpsBody');
     if (!box) return;
+    try { renderRadar(); } catch (e) { if (h.log) h.log('Radar : ' + e.message); }
     const ae = document.activeElement;
     if (ae && box.contains(ae) && ae.tagName === 'INPUT') return;
     if (h.inFrame) { box.innerHTML = '<p class="note">Le bot futures ne tourne pas dans l\'aperçu Claude. Utilise la version hébergée de l\'appli.</p>'; return; }
@@ -8585,7 +8793,7 @@ function PerpsBot(h) {
     box.addEventListener('input', e => { if (e.target && e.target.id === 'ppQ') P.ui.qd = e.target.value; });
   }
 
-  return { start, render, bindUI, S, P, build, manual, _test: { hlCoin, manualQuote, manualGuard, build, catchUp, revokeWithPhantom, forgetKey, equity, available, unified, acctHelp, sizeFor, riskGate, backtest, retest, btOk, eligible, sigAt, step, onBar, stateOf, history, loadMeta, tryReal, guard, settle, closeNow, refreshAcct, createAgent, unlock, approveWithPhantom, checkAgent, universe, fees, closed, P, RULE } };
+  return { start, render, bindUI, S, P, build, manual, _test: { hlCoin, manualQuote, manualGuard, radarScan, radarCands, RD, RDS, renderRadar, build, catchUp, revokeWithPhantom, forgetKey, equity, available, unified, acctHelp, sizeFor, riskGate, backtest, retest, btOk, eligible, sigAt, step, onBar, stateOf, history, loadMeta, tryReal, guard, settle, closeNow, refreshAcct, createAgent, unlock, approveWithPhantom, checkAgent, universe, fees, closed, P, RULE } };
 }
 if (typeof module !== 'undefined') module.exports = PerpsBot;
 
