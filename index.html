@@ -417,6 +417,32 @@ body.home .row-link{border-color:rgba(255,255,255,.25);color:rgba(255,255,255,.8
 .tile[data-go="stats"]{--g:linear-gradient(150deg,#111a3a 0%,#3b4a8a 100%)}
 .tile[data-go="bag"]{--g:linear-gradient(135deg,#022c22 0%,#047857 55%,#14b8a6 100%)}
 
+/* ---------- tuile météo des cryptos ---------- */
+.tile.art.wx-tile{display:block;padding:12px 12px 8px;--g:radial-gradient(90% 70% at 100% 0%,rgba(253,186,116,.42),transparent 60%),linear-gradient(170deg,#0b2550 0%,#174a8c 55%,#2b6cb0 100%)}
+.tile.wx-tile .t-art{top:4px;left:6px;right:auto;width:74px;height:44px;opacity:1}
+#wxCard{scroll-margin-top:86px}
+.wx{position:relative;display:grid}
+.wx-h,.wx-r{display:grid;grid-template-columns:72px repeat(4,minmax(0,1fr));align-items:center}
+.wx-h{font-size:.72rem;color:rgba(255,255,255,.75);padding:2px 2px 6px}
+.wx-h>span{text-align:center} .wx-h .wx-t{text-align:left}
+.wx-r{padding:6px 2px;border-top:1px solid rgba(255,255,255,.13)}
+.wx-c{display:grid;line-height:1.15;min-width:0}
+.wx-c b{font-family:var(--f-display);font-weight:700;font-size:1.04rem;text-shadow:0 1px 10px rgba(0,0,0,.3)}
+.wx-c small{font-family:var(--f-mono);font-size:.64rem;color:rgba(255,255,255,.7);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.wx-i{display:grid;justify-items:center;gap:1px;min-width:0}
+.wx-i svg{width:32px;height:32px;filter:drop-shadow(0 4px 10px rgba(0,0,0,.3))}
+.wx-i>span{font-family:var(--f-mono);font-size:.66rem;font-variant-numeric:tabular-nums}
+.wx-i .up{color:#86efac} .wx-i .dn{color:#fda4af} .wx-i .eq{color:rgba(255,255,255,.78)}
+.wx-f{display:flex;align-items:center;justify-content:center;gap:8px;font-size:.68rem;color:rgba(255,255,255,.72);padding:8px 2px 2px;border-top:1px solid rgba(255,255,255,.13)}
+.wx-sc{display:flex;gap:3px} .wx-sc svg{width:18px;height:18px}
+.wx-list{display:grid;gap:6px;margin-bottom:6px}
+.wx-li{display:flex;align-items:center;gap:10px;border:1px solid var(--line);border-radius:10px;padding:8px 10px;background:var(--panel)}
+.wx-li>div:first-child{flex:1;min-width:0;display:grid}
+.wx-li b{font-family:var(--f-display);font-size:1rem}
+.wx-li small{color:var(--muted);font-size:.76rem;overflow-wrap:anywhere}
+#wxSet .add input{text-transform:none}
+#wxSet .neg{color:var(--short)}
+
 /* ---------- radar mèmes ---------- */
 body.meme .futures-only{display:none!important}
 body:not(.meme) .meme-only{display:none!important}
@@ -631,6 +657,17 @@ a.btn{text-decoration:none;color:inherit;display:inline-block}
       <span class="hz-sub" id="hzSub">Lecture des marchés…</span>
       <canvas class="hz-line" id="hzLine" aria-hidden="true"></canvas>
     </button>
+    <div class="hg" role="group" aria-labelledby="hgWx">
+      <h2 class="hg-t" id="hgWx">Météo des cryptos</h2>
+      <div class="tiles">
+      <button class="tile wide art wx-tile" type="button" data-go="set" data-scroll="wxCard" aria-label="Météo des cryptos. Touche pour choisir les coins.">
+        <span class="t-art" aria-hidden="true"><svg viewBox="112 -10 92 76" preserveAspectRatio="xMidYMid meet"><defs><radialGradient id="wxS" cx=".4" cy=".4"><stop offset="0" stop-color="#fff7c2"/><stop offset=".6" stop-color="#fcd34d"/><stop offset="1" stop-color="#f59e0b"/></radialGradient><filter id="wxB" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="6"/></filter></defs>
+<circle cx="168" cy="22" r="26" fill="#fcd34d" opacity=".35" filter="url(#wxB)"/><g stroke="#fcd34d" stroke-width="2.5" stroke-linecap="round" opacity=".6"><path d="M168 -4v6M142 22h-6M149.6 3.6l4.2 4.2M186.4 3.6l-4.2 4.2"/></g><circle cx="168" cy="22" r="14" fill="url(#wxS)" opacity=".85"/>
+<path d="M118 54h52a14 14 0 0 0 1-28 19 19 0 0 0-36 5 11 11 0 0 0-17 23z" fill="#fff" opacity=".28"/><path d="M150 70h34a10 10 0 0 0 .6-20 13 13 0 0 0-25 3 8 8 0 0 0-9.6 17z" fill="#fff" opacity=".2"/></svg></span>
+        <span class="wx" id="wxTile"><span class="wx-h"><span class="wx-t"></span><span>1 j</span><span>1 sem</span><span>1 mois</span><span>3 mois</span></span><span class="wx-f"><span>Lecture des prix…</span></span></span>
+      </button>
+      </div>
+    </div>
     <div class="hg" role="group" aria-labelledby="hgMeme">
       <h2 class="hg-t" id="hgMeme">Mèmes Solana</h2>
       <div class="tiles">
@@ -1050,6 +1087,10 @@ a.btn{text-decoration:none;color:inherit;display:inline-block}
         <div class="field"><label for="sMmr">Marge de maintenance (%)</label><input id="sMmr" type="number" inputmode="decimal" step="0.05"></div>
       </div>
     </div>
+    <div class="card" id="wxCard">
+      <h2>Météo des cryptos</h2>
+      <div id="wxSet"></div>
+    </div>
     <div class="card">
       <h2>Alertes</h2>
       <p class="note" style="margin:0 0 4px">Par défaut, seuls les trades pris sonnent : achats et ventes du bot, positions futures ouvertes ou clôturées, danger sur ta position.</p>
@@ -1078,7 +1119,7 @@ a.btn{text-decoration:none;color:inherit;display:inline-block}
       <h2>Diagnostic de connexion</h2>
       <div class="journal" id="diag"></div>
     </div>
-    <p class="foot"><strong>Version 2 · setups calibrés.</strong> Mise à jour du 17 octobre 2026 (accueil illustré). Vigie Scalp aide à décider, il ne décide pas à ta place. Ce n'est pas un conseil financier. Les signaux se trompent souvent : place toujours ton stop, et ne risque que ce que tu peux perdre.</p>
+    <p class="foot"><strong>Version 2 · setups calibrés.</strong> Mise à jour du 17 octobre 2026 (météo des cryptos). Vigie Scalp aide à décider, il ne décide pas à ta place. Ce n'est pas un conseil financier. Les signaux se trompent souvent : place toujours ton stop, et ne risque que ce que tu peux perdre.</p>
   </section>
 </main>
 
@@ -7017,6 +7058,199 @@ function BagPlan(h) {
   return { start, show, render, bindUI, S, B, _test: { analysis, makePlan, positions, compute, classify, buildHist } };
 }
 
+/* ================= MÉTÉO DES CRYPTOS =================
+   Une tuile de l'accueil : pour chaque coin choisi, le « temps qu'il fait » sur 1 jour, 1 semaine, 1 mois et 3 mois.
+   Forte baisse = orage, baisse = pluie, stable = nuages, hausse = soleil voilé, forte hausse = grand soleil.
+   Seuils plus larges sur les longues périodes (sinon 3 mois serait presque toujours extrême).
+   Prix : Binance (paires XXX/USDT) ; sinon jeton Solana : prix et 24 h chez Jupiter, historique journalier chez GeckoTerminal. */
+const WX_TH = { d: [1, 3, 6], w: [3, 8, 15], m: [5, 12, 25], q: [10, 25, 45] }; // [soleil voilé / pluie, grand soleil, orage] en %
+const WX_COLS = [['d', '1 j', 1], ['w', '1 sem', 7], ['m', '1 mois', 30], ['q', '3 mois', 90]];
+const WX_IC = {
+  sun: '<svg viewBox="0 0 48 48" aria-hidden="true"><g stroke="#fcd34d" stroke-width="3" stroke-linecap="round" opacity=".9"><path d="M24 4v6M24 38v6M4 24h6M38 24h6M9.9 9.9l4.2 4.2M33.9 33.9l4.2 4.2M9.9 38.1l4.2-4.2M33.9 14.1l4.2-4.2"/></g><circle cx="24" cy="24" r="10" fill="#fcd34d"/><circle cx="21" cy="21" r="5" fill="#fff7c2" opacity=".7"/></svg>',
+  sunCloud: '<svg viewBox="0 0 48 48" aria-hidden="true"><g stroke="#fcd34d" stroke-width="2.6" stroke-linecap="round" opacity=".9"><path d="M18 4v5M6 16h5M9.5 7.5l3.5 3.5M26.5 7.5l-3.5 3.5"/></g><circle cx="18" cy="17" r="8" fill="#fcd34d"/><path d="M15 38h20a8 8 0 0 0 0-16 11 11 0 0 0-21 3 6.5 6.5 0 0 0 1 13z" fill="#f1f5ff" opacity=".95"/></svg>',
+  cloud: '<svg viewBox="0 0 48 48" aria-hidden="true"><path d="M12 36h24a9 9 0 0 0 .5-18 12 12 0 0 0-23 4A7 7 0 0 0 12 36z" fill="#dbe3f5" opacity=".95"/><path d="M8 40h20" stroke="#dbe3f5" stroke-opacity=".35" stroke-width="2.5" stroke-linecap="round"/></svg>',
+  rain: '<svg viewBox="0 0 48 48" aria-hidden="true"><path d="M12 30h24a9 9 0 0 0 .5-18 12 12 0 0 0-23 4A7 7 0 0 0 12 30z" fill="#a9b6d6"/><g stroke="#7dd3fc" stroke-width="2.6" stroke-linecap="round"><path d="M16 35l-2 6M24 35l-2 6M32 35l-2 6"/></g></svg>',
+  storm: '<svg viewBox="0 0 48 48" aria-hidden="true"><path d="M12 28h24a9 9 0 0 0 .5-18 12 12 0 0 0-23 4A7 7 0 0 0 12 28z" fill="#6b7596"/><path d="M25 24l-6 11h6l-3 10 9-14h-6l3-7z" fill="#fde047"/><g stroke="#7dd3fc" stroke-width="2.4" stroke-linecap="round" opacity=".9"><path d="M14 32l-2 5M35 32l-2 5"/></g></svg>',
+  none: '<svg viewBox="0 0 48 48" aria-hidden="true"><path d="M12 36h24a9 9 0 0 0 .5-18 12 12 0 0 0-23 4A7 7 0 0 0 12 36z" fill="none" stroke="#dbe3f5" stroke-opacity=".35" stroke-width="2" stroke-dasharray="3 4"/></svg>'
+};
+const WX_WORD = { sun: 'grand soleil', sunCloud: 'soleil voilé', cloud: 'nuageux', rain: 'pluie', storm: 'orage', none: 'pas de données' };
+function wxSky(v, k) {
+  if (!Number.isFinite(v)) return 'none';
+  const [a, b, c] = WX_TH[k];
+  return v >= b ? 'sun' : v >= a ? 'sunCloud' : v > -a ? 'cloud' : v > -c ? 'rain' : 'storm';
+}
+
+function CryptoWeather(h) {
+  const fin = Number.isFinite, esc = h.esc, $ = h.$;
+  const now = () => Date.now(), DAY = 86400000;
+  const DEF = [{ id: 'BTC', src: 'bin' }, { id: 'ETH', src: 'bin' }, { id: 'SKR', src: 'auto' }, { id: 'DOGE', src: 'bin' }];
+  const S = Object.assign({ coins: DEF, data: {} }, h.store.get('wx', {}));
+  if (!Array.isArray(S.coins) || !S.coins.length) S.coins = DEF.slice();
+  if (!S.data || typeof S.data !== 'object') S.data = {};
+  const save = () => h.store.set('wx', { coins: S.coins, data: S.data });
+  const W = { busy: false, ver: 0, drawn: -1, adding: false, err: '' };
+  const MAX = 8;
+  const key = c => c.src === 'sol' ? 'sol:' + c.mint : 'bin:' + c.id;
+
+  /* ---------- formats ---------- */
+  const nf = (x, d) => x.toLocaleString('fr-FR', { minimumFractionDigits: d, maximumFractionDigits: d });
+  const fpx = x => (!fin(x) ? '—' : x >= 1000 ? nf(x, 0) : x >= 1 ? nf(x, 2) : x >= 0.01 ? nf(x, 4) : x.toPrecision(3).replace('.', ',')) + ' $';
+  const fpc = v => (!fin(v) ? '—' : (v > 0 ? '+' : v < 0 ? '−' : '') + nf(Math.abs(v), Math.abs(v) < 10 ? 1 : 0) + ' %');
+
+  /* ---------- données ---------- */
+  const BIN = ['https://api.binance.com', 'https://data-api.binance.vision'];
+  async function binGet(path) {
+    let last = null;
+    for (const host of BIN) { try { return await fetchJSON(host + path, 12000); } catch (e) { last = e; } }
+    throw last || new Error('Binance injoignable');
+  }
+  async function binanceOk(sym) { try { const r = await binGet(`/api/v3/ticker/price?symbol=${sym}USDT`); return !!(r && +r.price > 0); } catch { return false; } }
+  async function solFind(q) {
+    const r = await h.jup('/tokens/v2/search?query=' + encodeURIComponent(q), 'high');
+    const L = (Array.isArray(r) ? r : []).filter(x => x && x.id);
+    if (/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(q)) return L.find(x => x.id === q) || null;
+    const same = L.filter(x => String(x.symbol || '').toUpperCase() === q.toUpperCase());
+    const pool = same.length ? same : [];
+    pool.sort((a, b) => (!!b.isVerified - !!a.isVerified) || ((+b.liquidity || 0) - (+a.liquidity || 0)) || ((+b.mcap || 0) - (+a.mcap || 0)));
+    return pool[0] || null;
+  }
+  // Variation (%) entre le prix actuel et la clôture d'il y a n jours, sur une liste [ts ms, clôture] croissante
+  function since(rows, price, days) {
+    const t = now() - days * DAY;
+    let ref = null;
+    for (const r of rows) { if (r[0] <= t + 6 * 3600e3) ref = r[1]; else break; }
+    return ref > 0 && price > 0 ? (price / ref - 1) * 100 : null;
+  }
+  async function loadBin(c) {
+    const [k, t] = await Promise.all([binGet(`/api/v3/klines?symbol=${c.id}USDT&interval=1d&limit=100`), binGet(`/api/v3/ticker/24hr?symbol=${c.id}USDT`)]);
+    const rows = (Array.isArray(k) ? k : []).map(x => [x[0], +x[4]]);
+    const price = +t.lastPrice || (rows.length ? rows[rows.length - 1][1] : NaN);
+    const closed = rows.filter(r => r[0] + DAY <= now());
+    return { px: price, d: +t.priceChangePercent, w: since(closed, price, 7), m: since(closed, price, 30), q: since(closed, price, 90), at: now() };
+  }
+  async function loadSol(c) {
+    const r = await h.jup('/tokens/v2/search?query=' + c.mint, 'high');
+    const x = (Array.isArray(r) ? r : []).find(y => y.id === c.mint) || {};
+    const price = +x.usdPrice;
+    const d24 = x.stats24h && fin(+x.stats24h.priceChange) ? +x.stats24h.priceChange : null;
+    // historique journalier : le pool le plus liquide chez GeckoTerminal
+    let pool = c.pool;
+    if (!pool) {
+      const p = await fetchJSON(`https://api.geckoterminal.com/api/v2/networks/solana/tokens/${c.mint}/pools?page=1`, 12000);
+      const L = (p && p.data) || [];
+      L.sort((a, b) => (+((b.attributes || {}).reserve_in_usd) || 0) - (+((a.attributes || {}).reserve_in_usd) || 0));
+      pool = L[0] && L[0].attributes && L[0].attributes.address;
+      if (pool) { c.pool = pool; save(); }
+    }
+    let rows = [];
+    if (pool) {
+      const o = await fetchJSON(`https://api.geckoterminal.com/api/v2/networks/solana/pools/${pool}/ohlcv/day?aggregate=1&limit=100&currency=usd&token=${c.mint}`, 12000);
+      rows = (((o || {}).data || {}).attributes || {}).ohlcv_list || [];
+      rows = rows.map(v => [v[0] * 1000, +v[4]]).filter(v => v[1] > 0).sort((a, b) => a[0] - b[0]);
+    }
+    const closed = rows.filter(v => v[0] + DAY <= now());
+    const px = fin(price) && price > 0 ? price : rows.length ? rows[rows.length - 1][1] : NaN;
+    return { px, d: d24 != null ? d24 : since(closed, px, 1), w: since(closed, px, 7), m: since(closed, px, 30), q: since(closed, px, 90), at: now(), name: x.name || c.name };
+  }
+  async function resolve(c) {
+    if (c.src !== 'auto') return c;
+    if (await binanceOk(c.id)) { c.src = 'bin'; save(); return c; }
+    const x = await solFind(c.id);
+    if (!x) throw new Error('introuvable');
+    c.src = 'sol'; c.mint = x.id; c.name = x.name || ''; c.id = String(x.symbol || c.id).toUpperCase(); save();
+    return c;
+  }
+  async function refresh(force) {
+    if (W.busy) return;
+    W.busy = true;
+    try {
+      for (const c of S.coins) {
+        const k0 = key(c), cur = S.data[k0];
+        if (!force && cur && !cur.err && now() - cur.at < 15 * 60000) continue;
+        try { await resolve(c); const r = c.src === 'sol' ? await loadSol(c) : await loadBin(c); S.data[key(c)] = r; }
+        catch (e) { S.data[key(c)] = Object.assign({}, S.data[key(c)] || {}, { err: (e && e.message) || 'erreur', at: now() }); }
+        W.ver++;
+      }
+      save();
+    } finally { W.busy = false; W.ver++; renderTile(true); renderSettings(); }
+  }
+
+  /* ---------- tuile de l'accueil ---------- */
+  function renderTile(force) {
+    const box = $('#wxTile'); if (!box) return;
+    if (!force && W.drawn === W.ver) return;
+    W.drawn = W.ver;
+    const rows = S.coins.map(c => {
+      const d = S.data[key(c)] || {};
+      const cells = WX_COLS.map(([k]) => {
+        const v = d.err && !fin(d[k]) ? null : d[k], s = wxSky(v, k);
+        return `<span class="wx-i" title="${WX_WORD[s]}">${WX_IC[s]}<span class="${!fin(v) ? 'eq' : v >= 0.05 ? 'up' : v <= -0.05 ? 'dn' : 'eq'}">${fpc(v)}</span></span>`;
+      }).join('');
+      return `<span class="wx-r"><span class="wx-c"><b>${esc(c.id)}</b><small>${d.err && !fin(d.px) ? esc(d.err === 'introuvable' ? 'introuvable' : 'pas de prix') : fpx(d.px)}</small></span>${cells}</span>`;
+    }).join('');
+    box.innerHTML = `<span class="wx-h"><span class="wx-t"></span>${WX_COLS.map(c => `<span>${c[1]}</span>`).join('')}</span>${rows}
+      <span class="wx-f"><span>forte baisse</span><span class="wx-sc">${['storm', 'rain', 'cloud', 'sunCloud', 'sun'].map(k => WX_IC[k]).join('')}</span><span>forte hausse</span></span>`;
+  }
+
+  /* ---------- réglages : choisir les coins ---------- */
+  function renderSettings() {
+    const box = $('#wxSet'); if (!box) return;
+    const ae = document.activeElement; if (ae && box.contains(ae) && ae.tagName === 'INPUT') return;
+    box.innerHTML = `<p class="note" style="margin:0 0 8px">Les coins affichés dans la tuile « Météo des cryptos » de l'accueil, dans cet ordre. ${MAX} au maximum.</p>
+      <div class="wx-list">${S.coins.map((c, i) => { const d = S.data[key(c)] || {}; return `<div class="wx-li"><div><b>${esc(c.id)}</b><small>${c.src === 'sol' ? `jeton Solana${c.name ? ' · ' + esc(c.name) : ''} · ${esc(c.mint.slice(0, 4) + '…' + c.mint.slice(-4))}` : c.src === 'bin' ? 'Binance' : 'recherche…'}${d.err ? ` · <span class="neg">${esc(d.err)}</span>` : ''}</small></div>
+        <div class="row-btns" style="margin:0">${i > 0 ? `<button class="btn sm" data-wx-up="${i}" aria-label="Monter ${esc(c.id)}">↑</button>` : ''}<button class="btn sm" data-wx-del="${i}">Retirer</button></div></div>`; }).join('')}</div>
+      ${S.coins.length < MAX ? `<div class="add"><input id="wxAdd" placeholder="Symbole (PEPE…) ou adresse Solana" autocomplete="off" spellcheck="false"><button class="btn pri" data-wx="add"${W.adding ? ' disabled' : ''}>${W.adding ? 'Recherche…' : 'Ajouter'}</button></div>` : ''}
+      ${W.err ? `<p class="note neg" style="margin:6px 0 0">${esc(W.err)}</p>` : ''}
+      <p class="small muted" style="margin:8px 0 0">Un symbole est d'abord cherché sur Binance (paire en USDT), sinon parmi les jetons Solana vérifiés chez Jupiter. Pour un jeton précis, colle son adresse Solana.</p>
+      <p class="small muted" style="margin:4px 0 0">Seuils : 1 jour ±1 / 3 / 6 %, 1 semaine ±3 / 8 / 15 %, 1 mois ±5 / 12 / 25 %, 3 mois ±10 / 25 / 45 % (soleil voilé ou pluie, grand soleil, orage).</p>`;
+  }
+  async function add(q) {
+    q = (q || '').trim();
+    if (!q) return;
+    if (S.coins.length >= MAX) { W.err = `${MAX} coins au maximum`; renderSettings(); return; }
+    W.adding = true; W.err = ''; renderSettings();
+    try {
+      let c;
+      if (/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(q)) {
+        const x = await solFind(q);
+        if (!x) throw new Error('Adresse inconnue chez Jupiter');
+        c = { id: String(x.symbol || q.slice(0, 4)).toUpperCase(), src: 'sol', mint: x.id, name: x.name || '' };
+      } else {
+        const sym = q.toUpperCase().replace(/[^A-Z0-9]/g, '').replace(/USDT$/, '');
+        if (!sym) throw new Error('Symbole invalide');
+        if (await binanceOk(sym)) c = { id: sym, src: 'bin' };
+        else {
+          const x = await solFind(sym);
+          if (!x) throw new Error(`« ${sym} » introuvable sur Binance et parmi les jetons Solana`);
+          c = { id: String(x.symbol || sym).toUpperCase(), src: 'sol', mint: x.id, name: x.name || '' };
+        }
+      }
+      if (S.coins.some(o => key(o) === key(c))) throw new Error(`${c.id} est déjà dans la liste`);
+      S.coins.push(c); save();
+      W.adding = false; renderSettings();
+      h.toast && h.toast(`${c.id} ajouté à la météo`);
+      refresh();
+    } catch (e) { W.adding = false; W.err = (e && e.message) || 'Ajout impossible'; renderSettings(); }
+  }
+  function bindUI() {
+    const box = $('#wxSet'); if (!box) return;
+    box.addEventListener('click', e => {
+      const b = e.target.closest('button'); if (!b) return;
+      if (b.dataset.wx === 'add') { const el = $('#wxAdd'); add(el && el.value); }
+      else if (b.dataset.wxDel != null) { const c = S.coins.splice(+b.dataset.wxDel, 1)[0]; if (c) delete S.data[key(c)]; save(); W.ver++; renderSettings(); renderTile(true); }
+      else if (b.dataset.wxUp != null) { const i = +b.dataset.wxUp; if (i > 0) { const t = S.coins[i]; S.coins[i] = S.coins[i - 1]; S.coins[i - 1] = t; save(); W.ver++; renderSettings(); renderTile(true); } }
+    });
+    box.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target && e.target.id === 'wxAdd') { e.preventDefault(); add(e.target.value); } });
+  }
+  let started = false;
+  function start() {
+    if (started) return; started = true;
+    renderTile(true); refresh();
+    setInterval(() => { if (document.visibilityState === 'visible') refresh(); }, 5 * 60000);
+  }
+  return { start, refresh, renderTile, renderSettings, bindUI, S, _test: { wxSky, since, solFind, add } };
+}
+
 /* ================= FUTURES AUTO (Hyperliquid via Phantom) =================
    Suivi de tendance sur bougies 4 h, règles fixes (aucun réglage ajusté sur le passé) :
    - Entrée : clôture 4 h au-dessus du plus haut des 55 bougies précédentes (LONG) ou sous leur plus bas (SHORT).
@@ -9015,7 +9249,7 @@ if (typeof module !== 'undefined') module.exports = PerpsBot;
     if (t === 'scan') { renderScan(!!st.scanAt); if (!st.scanAt || Date.now() - st.scanAt > 30000) scan(); }
     if (t === 'stats') { renderCalib(); renderJournal(); renderFees(); }
     if (t === 'pos') { if (!pos) fillForm(null); renderPos(); }
-    if (t === 'set') { renderSettings(); renderDiag(); renderApp(); appDiag(); renderBan(); applyLook(); }
+    if (t === 'set') { renderSettings(); renderDiag(); renderApp(); appDiag(); renderBan(); applyLook(); if (wx) wx.renderSettings(); }
     window.scrollTo(0, 0);
   }
   // Navigation : l'accueil en tuiles ; chaque section s'ouvre par-dessus et le retour du téléphone ramène à l'accueil.
@@ -9043,6 +9277,7 @@ if (typeof module !== 'undefined') module.exports = PerpsBot;
     if (!b) return;
     e.preventDefault();
     if (b.hasAttribute('data-home')) goHome(); else go(b.dataset.go);
+    if (b.dataset.scroll) setTimeout(() => { const el = $('#' + b.dataset.scroll); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 80);
   });
 
   /* ---------- accueil : état de chaque instrument, en direct ---------- */
@@ -9075,6 +9310,7 @@ if (typeof module !== 'undefined') module.exports = PerpsBot;
       if (sub.innerHTML !== html) sub.innerHTML = html;
     }
     drawHorizon();
+    if (wx) wx.renderTile();
     // bot mèmes
     if (bot) {
       const today = new Date().toLocaleDateString('fr-CA'), dd = bot.S.day && bot.S.day.d === today ? bot.S.day : null;
@@ -9146,7 +9382,7 @@ if (typeof module !== 'undefined') module.exports = PerpsBot;
   }
 
   // radar mèmes + trading via wallet + bot autonome
-  let trader = null, bot = null, newCoins = null, live = null, lab = null, perps = null, copy = null, bag = null;
+  let trader = null, bot = null, newCoins = null, live = null, lab = null, perps = null, copy = null, bag = null, wx = null;
   const inFrame = (() => { try { return window.top !== window.self; } catch { return true; } })();
   const buzz = p => { if (set.vibrate && navigator.vibrate) try { navigator.vibrate(p); } catch {} };
   const jup = JupClient(() => (trader ? trader.jupKey() : ''));
@@ -9234,6 +9470,10 @@ if (typeof module !== 'undefined') module.exports = PerpsBot;
     notify: (msg, cls) => { toast(msg, cls); sysNotify(msg, cls); }
   });
   bag.bindUI();
+  // météo des cryptos : tuile de l'accueil, coins choisis dans Réglages
+  wx = CryptoWeather({ $, esc, store, toast, jup: (p, prio) => jup.get(p, prio) });
+  wx.bindUI();
+  setTimeout(() => { try { wx.start(); } catch (e) { log('Météo : ' + e.message); } }, 1500);
   setTimeout(() => { try { bag.start(); } catch (e) { log('Bag : ' + e.message); } }, 15000);
   let wTick = 0, pTick = 0, cTick = 0;
   setInterval(() => {
