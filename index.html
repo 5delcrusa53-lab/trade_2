@@ -615,6 +615,8 @@ a.btn{text-decoration:none;color:inherit;display:inline-block}
 .p-adv{display:grid;gap:2px;font-size:.86rem}
 .p-adv b{font-family:var(--f-display);font-size:1.02rem}
 .w-oth{margin-top:10px;font-size:.88rem}
+#aCfgTxt{display:block;width:100%;min-height:130px;margin:6px 0;background:var(--panel2);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-family:var(--f-mono);font-size:.78rem;resize:vertical}
+#aCfgMsg[data-l="bad"]{color:var(--short)} #aCfgMsg[data-l="ok"]{color:var(--long)}
 .w-oth summary{cursor:pointer;color:var(--muted);padding:6px 0}
 .t-box{margin-top:12px;padding:12px;border:1px solid var(--accent);border-radius:var(--r);background:var(--accent-soft)}
 .t-box > b{font-family:var(--f-display);font-size:1.05rem}
@@ -1040,7 +1042,7 @@ a.btn{text-decoration:none;color:inherit;display:inline-block}
     </div>
     <div class="m-list" id="newList"></div>
     <div class="card">
-      <h2>Réglages du mode auto</h2>
+      <h2>Réglages du mode auto <span class="sp" id="aSetMode"></span></h2>
       <div class="form">
         <div class="field"><label for="aScore">Score minimum pour entrer</label><input id="aScore" type="number" inputmode="numeric" step="5"></div>
         <div class="field"><label for="aMinAge">Âge minimum du coin (s)</label><input id="aMinAge" type="number" inputmode="numeric" step="10"><span class="hint">Laisse passer la vague des snipers</span></div>
@@ -1054,6 +1056,12 @@ a.btn{text-decoration:none;color:inherit;display:inline-block}
       <label class="toggle"><span>Entrer sur les nouveaux coins<small>Coins sortis il y a moins de 20 min (sans effet quand le laboratoire choisit)</small></span><input type="checkbox" id="aNew"></label>
       <label class="toggle"><span>Entrer aussi sur les « intéressants » du radar<small>Seulement s'ils respectent la fenêtre d'âge</small></span><input type="checkbox" id="aRadar"></label>
       <p class="note">Comment le score se calcule : part du créateur au lancement, lien X vérifié (et s'il parle du coin), Telegram et site, nombre de traders, achats contre ventes, acheteurs organiques, historique du créateur, concentration des portefeuilles. Un seul signal rouge (copie de lien X, créateur en série, mint ou freeze actif, coin signalé suspect) rejette le coin. Avant chaque achat, le bot refait ses propres contrôles : test de revente, coût d'un aller-retour, plafonds.</p>
+      <details class="w-oth" id="aCfgBox"><summary>Ma config : charger une autre config (JSON)</summary>
+        <p class="note">Colle une config au même format que celle du 17/10 (bot, auto, strategies.snipe, profiles, notes). Seule la stratégie sniper est prise en charge. Une valeur hors limites fait tout refuser : rien ne change. L'interrupteur du mode auto n'est jamais touché.</p>
+        <textarea id="aCfgTxt" rows="7" spellcheck="false" autocomplete="off" placeholder='{ "bot": { … }, "auto": { … }, "strategies": { "snipe": { … } } }'></textarea>
+        <div class="row-btns"><button class="btn sm pri" id="aCfgLoad" type="button">Charger cette config</button><button class="btn sm" id="aCfgReset" type="button">Revenir à la config du 17/10</button></div>
+        <p class="note" id="aCfgMsg" aria-live="polite"></p>
+      </details>
     </div>
   </section>
 
@@ -1211,7 +1219,7 @@ a.btn{text-decoration:none;color:inherit;display:inline-block}
       <h2>Diagnostic de connexion</h2>
       <div class="journal" id="diag"></div>
     </div>
-    <p class="foot"><strong>Version 2 · setups calibrés.</strong> Mise à jour du 17 octobre 2026 (fond « voilier sous la lune » de Futures auto). Vigie Scalp aide à décider, il ne décide pas à ta place. Ce n'est pas un conseil financier. Les signaux se trompent souvent : place toujours ton stop, et ne risque que ce que tu peux perdre.</p>
+    <p class="foot"><strong>Version 2 · setups calibrés.</strong> Mise à jour du 17 octobre 2026 (bouton « Ma config » à la place du labo, un seul trade par coin). Vigie Scalp aide à décider, il ne décide pas à ta place. Ce n'est pas un conseil financier. Les signaux se trompent souvent : place toujours ton stop, et ne risque que ce que tu peux perdre.</p>
   </section>
 </main>
 
@@ -4585,6 +4593,18 @@ function TradeBot(h, radar, jup, tr) {
     bindUI(); render();
     setTimeout(loop, 2000);
   }
+  // Bascule « laboratoire / ma config » : pose plusieurs réglages d'un coup et met à jour les champs affichés
+  function setCfg(vals, msg) {
+    for (const [k, v] of Object.entries(vals || {})) {
+      if (!(k in DEF) || k === 'active' || k === 'autoExits') continue;
+      if (typeof DEF[k] === 'boolean') S.cfg[k] = !!v; else if (fin(+v)) S.cfg[k] = k === 'maxPos' ? Math.round(+v) : +v;
+    }
+    save();
+    const ids = { size: 'bSize', maxPos: 'bMax', sl: 'bSl', tp1: 'bTp1', trail: 'bTrail', tp2: 'bTp2', drop: 'bDrop', slip: 'bSlip', maxHold: 'bHold', dayLoss: 'bDay', npMin: 'bNpMin', npNeed: 'bNpNeed' };
+    for (const [k, id] of Object.entries(ids)) { const el = document.getElementById(id); if (el) el.value = S.cfg[k]; }
+    if (msg) log(msg, 'warn');
+    render();
+  }
   async function autoJoin(mint, sol, why, opt = {}) {
     try { return await join(mint, sol, why, Object.assign({ auto: true }, opt)); }
     catch (e) { log(`Entrée auto refusée sur ${symOf(mint)} : ${e.message}`, 'warn'); throw e; }
@@ -4594,7 +4614,7 @@ function TradeBot(h, radar, jup, tr) {
     // Sortie demandée de l'extérieur (copie de wallets) : appliquée au prochain passage de la boucle, comme une sortie urgente
     manualSell,
     requestExit: (mint, why) => { const p = S.pos[mint]; if (!p || p.state === 'closed' || p.exitReq) return false; p.exitReq = why; save(); return true; }, lastClosed: () => S.hist[0] || null, cfg: () => S.cfg, hasWallet: () => !!S.pub,
-    traded: mint => !!(S.pos[mint] && S.pos[mint].state !== 'closed') || !!(S.ignored[mint] && Date.now() - S.ignored[mint] < 2 * 3600e3) || !!(S.done && S.done[mint] && Date.now() - S.done[mint] < DONE_MS), logMsg: (m, l) => log(m, l), applyExits, decideCore, NET_FEE, onLive, _test: { decide, curV, pushHist, b58enc, b58dec } };
+    traded: mint => !!(S.pos[mint] && S.pos[mint].state !== 'closed') || !!(S.ignored[mint] && Date.now() - S.ignored[mint] < 2 * 3600e3) || !!(S.done && S.done[mint] && Date.now() - S.done[mint] < DONE_MS), logMsg: (m, l) => log(m, l), applyExits, setCfg, decideCore, NET_FEE, onLive, _test: { decide, curV, pushHist, b58enc, b58dec } };
 }
 if (typeof module !== 'undefined') module.exports = TradeBot;
 
@@ -4685,9 +4705,98 @@ function NewCoins(h, radar, bot) {
   const ageTxt = ms => { const s = Math.max(0, Math.round(ms / 1000)); return s < 60 ? s + ' s' : s < 3600 ? Math.floor(s / 60) + ' min ' + String(s % 60).padStart(2, '0') : Math.floor(s / 3600) + ' h ' + String(Math.floor(s / 60) % 60).padStart(2, '0'); };
   const DEF = { on: false, useNew: true, useRadar: true, minScore: 65, requireX: true, maxAgeMin: 10, minAgeSec: 30, perHour: 4, cooldown: 3, needLab: true, migrOnly: false };
   const lab = () => (h.lab ? h.lab() : null);
+
+  /* ---------- « Ma config » : une configuration fixe qui remplace le laboratoire quand tu la choisis ----------
+     Deux jeux de réglages : celui du laboratoire et le tien. La bascule range les réglages du mode quitté et pose ceux de l'autre
+     (mise, positions, perte/gain, fenêtre d'âge, score…). L'interrupteur du mode auto n'est jamais touché : il reste à toi. */
+  const CFG_17OCT = {
+    bot: { size: 0.035, maxPos: 2, sl: 18, tp1: 15, tp1Part: 60, trail: 12, tp2: 40, beAt: 12, beFloor: 4, drop: 20, slip: 30, maxHold: 25, dayLoss: 0.15, active: true, devExit: true, flowExit: true, stallMin: 3, stallNeed: 4, npMin: 4, npNeed: 10, autoExits: true },
+    auto: { on: true, useNew: true, useRadar: false, minScore: 80, requireX: true, maxAgeMin: 2, minAgeSec: 25, perHour: 5, cooldown: 30, needLab: true, migrOnly: false, snipeOnly: true },
+    strategies: { snipe: { enabled: true, age: [25, 90], filters: { mcMin: 4000, mcMax: 25000, holdersMin: 25, holdersMax: 120, tx5Min: 40, tx5Max: 250, share5Min: 0.55, devBuyMax: 3, top10Max: 28, requirePriceNotDown1min: true } },
+      elan: { enabled: false }, coureur: { enabled: false }, migrf: { enabled: false }, migr: { enabled: false }, rebond: { enabled: false }, radar: { enabled: false }, copy: { enabled: false } },
+    profiles: { scalp_agressif: { sl: 18, tp1: 15, tp1Part: 60, trail: 12, tp2: 40, beAt: 12, beFloor: 4, drop: 20, stallMin: 3, stallNeed: 4, maxHold: 25, flowExit: true, devExit: true } },
+    notes: 'Config optimisée pour snipe only + exits agressifs. À tester en paper trading avant de monter la size.'
+  };
+  const RB = { size: [0.001, 50], maxPos: [1, 10], sl: [3, 90], tp1: [5, 1000], tp1Part: [10, 100], trail: [5, 90], tp2: [10, 10000], beAt: [1, 1000], beFloor: [0, 100], drop: [3, 80], slip: [1, 50], maxHold: [2, 1440], dayLoss: [0.001, 1000], stallMin: [0, 120], stallNeed: [0, 200], npMin: [0, 120], npNeed: [1, 200] };
+  const BB = ['devExit', 'flowExit'];
+  const RA = { minScore: [30, 100], maxAgeMin: [1, 120], minAgeSec: [0, 600], perHour: [1, 30], cooldown: [0, 120] };
+  const BA = ['useNew', 'useRadar', 'requireX', 'needLab', 'migrOnly'];
+  const RF = { mcMin: [0, 1e9], mcMax: [0, 1e9], holdersMin: [0, 1e6], holdersMax: [0, 1e6], tx5Min: [0, 1e5], tx5Max: [0, 1e5], share5Min: [0, 1], devBuyMax: [0, 100], top10Max: [0, 100] };
+  const BOT_KEYS = [...Object.keys(RB), ...BB], AUTO_KEYS = [...Object.keys(RA), ...BA];
+  const pickKeys = (o, ks) => Object.fromEntries(ks.filter(k => o && o[k] !== undefined).map(k => [k, o[k]]));
+  // Lit une config au format collé le 17/10 (bot / auto / strategies.snipe / profiles / notes). Refuse ce qui est hors limites.
+  function readCfg(J, base) {
+    if (!J || typeof J !== 'object' || Array.isArray(J)) throw new Error('ce n\'est pas une config (il faut un objet JSON)');
+    const B0 = base || { bot: {}, auto: {}, strat: { age: [25, 90], filters: {} } };
+    const out = { name: 'Ma config', notes: '', bot: Object.assign({}, B0.bot), auto: Object.assign({}, B0.auto), strat: { age: (B0.strat.age || [25, 90]).slice(), filters: Object.assign({}, B0.strat.filters) } }, warn = [];
+    const num = (sec, k, x, [a, b]) => { const n0 = +x; if (!fin(n0) || n0 < a || n0 > b) throw new Error(`${sec}.${k} = ${x} : hors limites (${a} à ${b})`); return n0; };
+    const bool = (sec, k, x) => { if (typeof x !== 'boolean') throw new Error(`${sec}.${k} doit valoir true ou false`); return x; };
+    const takeBot = (src, sec) => { for (const [k, x] of Object.entries(src || {})) { if (RB[k]) out.bot[k] = k === 'maxPos' ? Math.round(num(sec, k, x, RB[k])) : num(sec, k, x, RB[k]); else if (BB.includes(k)) out.bot[k] = bool(sec, k, x); else if (!['active', 'autoExits'].includes(k)) warn.push(`${sec}.${k} ignoré`); } };
+    takeBot(J.bot, 'bot');
+    const profs = J.profiles && typeof J.profiles === 'object' ? Object.entries(J.profiles) : [];
+    if (profs.length) { takeBot(profs[0][1], 'profiles.' + profs[0][0]); out.name = profs[0][0].replace(/[_-]+/g, ' ').replace(/^./, c => c.toUpperCase()); if (profs.length > 1) warn.push('seul le premier profil est utilisé'); }
+    for (const [k, x] of Object.entries(J.auto || {})) { if (RA[k]) out.auto[k] = Math.round(num('auto', k, x, RA[k])); else if (BA.includes(k)) out.auto[k] = bool('auto', k, x); else if (!['on', 'snipeOnly'].includes(k)) warn.push(`auto.${k} ignoré`); }
+    const S0 = J.strategies || {};
+    for (const [id, s] of Object.entries(S0)) if (id !== 'snipe' && s && s.enabled) warn.push(`stratégie « ${id} » ignorée : ta config ne fait que du sniper`);
+    const sn = S0.snipe;
+    if (sn) {
+      if (sn.enabled === false) throw new Error('strategies.snipe est désactivée : rien à trader');
+      if (sn.age !== undefined) { const ag = sn.age; if (!Array.isArray(ag) || ag.length !== 2 || !fin(+ag[0]) || !fin(+ag[1]) || +ag[0] < 0 || +ag[1] <= +ag[0] || +ag[1] > 86400) throw new Error('strategies.snipe.age doit être [minimum, maximum] en secondes'); out.strat.age = [+ag[0], +ag[1]]; }
+      for (const [k, x] of Object.entries(sn.filters || {})) { if (RF[k]) out.strat.filters[k] = num('filters', k, x, RF[k]); else if (k === 'requirePriceNotDown1min') out.strat.filters[k] = bool('filters', k, x); else warn.push(`filters.${k} ignoré`); }
+    }
+    const F = out.strat.filters;
+    for (const [a, b] of [['mcMin', 'mcMax'], ['holdersMin', 'holdersMax'], ['tx5Min', 'tx5Max']]) if (fin(F[a]) && fin(F[b]) && F[a] > F[b]) throw new Error(`filters.${a} est au-dessus de filters.${b}`);
+    if (fin(out.auto.minAgeSec) && fin(out.auto.maxAgeMin) && out.auto.minAgeSec >= out.auto.maxAgeMin * 60) throw new Error('auto.minAgeSec est au-dessus de auto.maxAgeMin');
+    if (typeof J.name === 'string' && J.name.trim()) out.name = J.name.trim().slice(0, 40);
+    if (typeof J.notes === 'string') out.notes = J.notes.slice(0, 300);
+    return { cfg: out, warn };
+  }
+  const MYCFG0 = readCfg(CFG_17OCT).cfg;
+
   let A = Object.assign({ cfg: {}, entries: [] }, h.store.get('auto', {}));
   A.cfg = Object.assign({}, DEF, A.cfg);
-  const save = () => h.store.set('auto', { cfg: A.cfg, entries: A.entries.slice(-50) });
+  if (!A.slots || typeof A.slots !== 'object') A.slots = {};
+  if (!A.slots.cfg || !A.slots.cfg.strat) A.slots.cfg = JSON.parse(JSON.stringify(MYCFG0));
+  A.mode = A.mode === 'cfg' ? 'cfg' : 'lab';
+  const save = () => h.store.set('auto', { cfg: A.cfg, entries: A.entries.slice(-50), mode: A.mode, slots: A.slots });
+  const snapshot = () => ({ bot: pickKeys(bot.cfg(), BOT_KEYS), auto: pickKeys(A.cfg, AUTO_KEYS) });
+  // Bascule : range les réglages du mode quitté, pose ceux de l'autre
+  function setMode(to) {
+    to = to === 'cfg' ? 'cfg' : 'lab';
+    if (to === A.mode) return false;
+    const cur = snapshot();
+    if (A.mode === 'cfg') { A.slots.cfg.bot = cur.bot; A.slots.cfg.auto = cur.auto; } else A.slots.lab = cur;
+    const next = to === 'cfg' ? A.slots.cfg : A.slots.lab;
+    A.mode = to;
+    if (next) { Object.assign(A.cfg, pickKeys(next.auto, AUTO_KEYS)); bot.setCfg(pickKeys(next.bot, BOT_KEYS)); }
+    save(); syncInputs(); N.list.forEach(evaluate);
+    bot.logMsg(to === 'cfg' ? `Mode auto : ta config « ${A.slots.cfg.name} » remplace le laboratoire` : 'Mode auto : retour au laboratoire (tes réglages du labo sont remis)', 'warn');
+    return true;
+  }
+  // Nouvelle config collée : remplace « Ma config » (et s'applique tout de suite si elle est en service)
+  function loadCfg(J) {
+    const r = readCfg(J, MYCFG0);
+    A.slots.cfg = r.cfg;
+    if (A.mode === 'cfg') { Object.assign(A.cfg, pickKeys(r.cfg.auto, AUTO_KEYS)); bot.setCfg(pickKeys(r.cfg.bot, BOT_KEYS)); syncInputs(); N.list.forEach(evaluate); }
+    save();
+    bot.logMsg(`Config « ${r.cfg.name} » chargée${A.mode === 'cfg' ? ' et appliquée' : ' (pas encore en service : le laboratoire choisit toujours)'}`, 'warn');
+    return r;
+  }
+  // Résumé lisible de « Ma config »
+  const fr = x => String(x).replace('.', ',');
+  const kUsd = x => (x >= 1000 ? fr(Math.round(x / 100) / 10) + ' k$' : Math.round(x) + ' $');
+  function cfgTxt(M) {
+    const F = M.strat.filters, b = M.bot, a = M.auto, secs = s => (s < 60 ? s + ' s' : fr(Math.round(s / 6) / 10) + ' min');
+    const ent = [`coins de ${secs(M.strat.age[0])} à ${secs(M.strat.age[1])}`,
+      fin(F.mcMin) || fin(F.mcMax) ? `cap ${kUsd(F.mcMin || 0)} à ${fin(F.mcMax) ? kUsd(F.mcMax) : '∞'}` : '',
+      fin(F.holdersMin) || fin(F.holdersMax) ? `${F.holdersMin || 0} à ${fin(F.holdersMax) ? F.holdersMax : '∞'} détenteurs` : '',
+      fin(F.tx5Min) || fin(F.tx5Max) ? `${F.tx5Min || 0} à ${fin(F.tx5Max) ? F.tx5Max : '∞'} transactions sur 5 min` : '',
+      fin(F.share5Min) ? `au moins ${Math.round(F.share5Min * 100)} % d'achats` : '', fin(F.devBuyMax) ? `créateur ≤ ${fr(F.devBuyMax)} % au lancement` : '',
+      fin(F.top10Max) ? `top 10 ≤ ${F.top10Max} %` : '', `score ≥ ${a.minScore}`, a.requireX ? 'lien X vérifié' : '', F.requirePriceNotDown1min ? 'prix pas en baisse sur 1 min' : ''].filter(Boolean).join(', ');
+    const out = `perte −${b.sl} %, gain +${b.tp1} %${b.tp1Part < 100 ? ` (vend ${b.tp1Part} %, suiveur −${b.trail} %)` : ''}, objectif +${b.tp2} %, protection dès +${b.beAt} % (sortie à +${b.beFloor} %), chute rapide −${b.drop} %${b.stallMin > 0 ? `, sans élan de +${b.stallNeed} % en ${fr(b.stallMin)} min` : ''}${b.npMin > 0 ? `, sans hausse de +${b.npNeed} % en ${fr(b.npMin)} min` : ''}${b.flowExit ? ', vendeurs dominants' : ''}${b.devExit ? ', créateur qui vend' : ''}, ${b.maxHold} min maximum`;
+    const risk = `mise ${fr(b.size)} SOL, ${b.maxPos} position${b.maxPos > 1 ? 's' : ''} à la fois, ${a.perHour} entrées par heure, pause de ${a.cooldown} min après une perte, arrêt à −${fr(b.dayLoss)} SOL dans la journée`;
+    return { ent, out, risk };
+  }
   const N = { list: [], filter: 'all', metaQ: [], xQ: [], links: new Map(), busy: false, status: 'En veille', confirm: false };
   const NEW_MAX_MIN = 20;
 
@@ -4937,8 +5046,30 @@ function NewCoins(h, radar, bot) {
       const lc = bot.lastClosed();
       if (lc && lc.net < 0 && now() - lc.t1 < c.cooldown * 60000) { N.status = `Pause de ${c.cooldown} min après une perte`; return; }
       if (bot.openCount() >= bot.cfg().maxPos) { N.status = 'Nombre maximum de positions atteint'; return; }
-      // Argent réel uniquement avec une stratégie rentable en simulation (laboratoire)
+      // « Ma config » à la place du laboratoire : seule ta stratégie, tes filtres et tes sorties.
+      // Avec « argent réel seulement avec une stratégie rentable », ta config doit d'abord gagner en simulation (même seuil que le labo).
       const L = lab();
+      if (A.mode === 'cfg') {
+        const M = A.slots.cfg, q = L ? L.cfgPick() : null;
+        N.pick = null; N.cfgPick = q;
+        if (!L) { N.status = 'Laboratoire indisponible : ta config ne peut pas être vérifiée, pas d\'entrée'; return; }
+        if (c.needLab && !q.ok) { N.status = q.reason; return; }
+        const list = L.candidates('mycfg').filter(t => ageOk(t) && !t.autoTried && !bot.traded(t.mint));
+        if (!list.length) { N.status = `Ta config « ${M.name} » en service${q.ok ? ` (${q.txt})` : ' sans validation du labo'} : en attente d'un coin qui passe tous tes filtres`; return; }
+        const t = list[0];
+        t.autoTried = true; if (t.nc) t.nc.autoTried = true;
+        N.busy = true; N.status = `Entrée en cours sur ${t.symbol || '?'}…`;
+        try {
+          await bot.autoJoin(t.mint, null, `Mode auto · ta config « ${M.name} »${q.ok ? ` (simulation : ${q.txt})` : ''}, sorti il y a ${ageTxt(now() - t.created)}`, { strat: 'mycfg', exits: q.exits, prof: 'cfg', profName: M.name });
+          A.entries.push(now()); save();
+          if (t.nc) t.nc.status = 'bought';
+        } catch (e) {
+          if (t.nc) { t.nc.fails = ['Entrée refusée : ' + e.message]; t.nc.status = 'reject'; }
+        } finally { N.busy = false; }
+        return;
+      }
+      N.cfgPick = null;
+      // Argent réel uniquement avec une stratégie rentable en simulation (laboratoire)
       if (c.needLab && L) {
         const pk = L.pick();
         N.pick = pk;
@@ -5069,25 +5200,36 @@ function NewCoins(h, radar, bot) {
     if (!box) return;
     const c = A.cfg, bc = bot.cfg();
     $('#autoState').innerHTML = c.on ? '<span class="chip long">actif</span>' : '<span class="chip">coupé</span>';
-    if (!bot.hasWallet()) { box.innerHTML = '<p class="note" style="margin:0">Crée d\'abord le wallet du bot dans l\'onglet Mèmes (carte « Bot autonome ») et alimente-le.</p>'; return; }
+    const sm = $('#aSetMode'); if (sm) sm.textContent = A.mode === 'cfg' ? `ta config « ${A.slots.cfg.name} »` : 'laboratoire';
+    const modeHtml = modeBlock();
+    if (!bot.hasWallet()) { box.innerHTML = modeHtml + '<p class="note" style="margin:0">Crée d\'abord le wallet du bot dans l\'onglet Mèmes (carte « Bot autonome ») et alimente-le.</p>'; return; }
     const inHour = A.entries.filter(x => now() - x < 3600e3).length;
     const logs = (bot.S.log || []).slice(0, 6).map(x => `<div class="b-log" data-l="${x.lvl}"><span class="mono">${new Date(x.t).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</span><span>${esc(x.msg)}</span></div>`).join('');
-    const L = lab(), pk = c.needLab && L ? L.pick() : null;
-    const realMoney = !c.needLab || (pk && pk.ok);
+    const L = lab(), cfgMode = A.mode === 'cfg', pk = c.needLab && L && !cfgMode ? L.pick() : null, cq = cfgMode && L ? L.cfgPick() : null;
+    const realMoney = !c.needLab || (cfgMode ? !!(cq && cq.ok) : !!(pk && pk.ok));
     const win = pk && pk.ok && !c.migrOnly && !overlap(pk.s) ? `<div class="advice" data-l="warn" style="margin:0 0 10px"><h3>Ta fenêtre d'âge bloque la stratégie rentable</h3><p>« ${esc(pk.s.name)} » entre sur des coins de ${secTxt(pk.s.age[0])} à ${secTxt(pk.s.age[1])}. Ta fenêtre (${windowTxt()}) ne croise pas la sienne : le bot n'entrera pas.</p><div class="row-btns"><button class="btn sm pri" data-a="adopt">Prendre sa fenêtre</button></div></div>` : '';
-    box.innerHTML = `${c.on ? `<div class="advice" data-l="${realMoney ? 'ok' : 'warn'}" style="margin:0 0 10px"><h3>${realMoney ? 'Le bot entre et sort seul' : 'Mode auto actif, sans argent engagé'}</h3><p>${esc(N.status)}</p></div>` : ''}${win}
+    box.innerHTML = `${modeHtml}${c.on ? `<div class="advice" data-l="${realMoney ? 'ok' : 'warn'}" style="margin:0 0 10px"><h3>${realMoney ? 'Le bot entre et sort seul' : 'Mode auto actif, sans argent engagé'}</h3><p>${esc(N.status)}</p></div>` : ''}${win}
       <div class="w-top">
         <div class="kv"><div class="k">Mise par trade</div><div class="v">${String(bc.size).replace('.', ',')} SOL</div></div>
-        <div class="kv"><div class="k">Perte / gain</div><div class="v">${bc.autoExits !== false ? (pk && pk.ok && pk.prof ? esc(pk.prof.name) + ' (labo)' : 'choisis par le labo') : `−${bc.sl} % / +${bc.tp1} %`}</div></div>
+        <div class="kv"><div class="k">Perte / gain</div><div class="v">${cfgMode ? `−${bc.sl} % / +${bc.tp1} % (ta config)` : bc.autoExits !== false ? (pk && pk.ok && pk.prof ? esc(pk.prof.name) + ' (labo)' : 'choisis par le labo') : `−${bc.sl} % / +${bc.tp1} %`}</div></div>
         <div class="kv"><div class="k">Entrées cette heure</div><div class="v">${inHour} / ${c.perHour}</div></div>
         <div class="kv"><div class="k">${c.migrOnly ? 'Entrées' : 'Âge du coin à l\'entrée'}</div><div class="v">${c.migrOnly ? 'juste après migration' : windowTxt()}</div></div>
       </div>
       <p class="note">Positions ${bot.openCount()} / ${bc.maxPos} · arrêt automatique après ${String(bc.dayLoss).replace('.', ',')} SOL de perte dans la journée. Mise, perte et gain se règlent dans la carte du bot (onglet Mèmes).${bot.unlocked() ? '' : ' <strong>Bot verrouillé : rien ne peut se passer.</strong>'}</p>
       <div class="row-btns">${c.on ? '<button class="btn danger" data-a="off">Couper le mode auto</button>' : '<button class="btn pri" data-a="arm">Activer le mode auto</button>'}<button class="btn" data-a="bot">Voir le bot</button></div>
-      ${N.confirm && !c.on ? `<div class="advice" data-l="warn" style="margin-top:10px"><h3>Le bot va décider seul</h3><p>Il achètera sans te demander les coins qui passent tous les contrôles (${c.migrOnly ? 'uniquement juste après leur migration' : `score ≥ ${c.minScore}${c.requireX ? ', lien X vérifié' : ''}, sortis il y a ${windowTxt()}`}), jusqu'à ${c.perHour} fois par heure, avec ${String(bc.size).replace('.', ',')} SOL par trade, et revendra seul. Les nouveaux coins sont les plus risqués : la plupart perdent tout en quelques minutes.</p>
-        ${c.needLab ? '<p>Il n\'engage de l\'argent qu\'avec une stratégie rentable dans le laboratoire (ci-dessous) ; sinon il attend.</p>' : ''}
+      ${N.confirm && !c.on ? `<div class="advice" data-l="warn" style="margin-top:10px"><h3>Le bot va décider seul</h3><p>Il achètera sans te demander les coins qui passent tous les contrôles (${cfgMode ? `tous les filtres de ta config « ${esc(A.slots.cfg.name)} »` : c.migrOnly ? 'uniquement juste après leur migration' : `score ≥ ${c.minScore}${c.requireX ? ', lien X vérifié' : ''}, sortis il y a ${windowTxt()}`}), jusqu'à ${c.perHour} fois par heure, avec ${String(bc.size).replace('.', ',')} SOL par trade, et revendra seul. Les nouveaux coins sont les plus risqués : la plupart perdent tout en quelques minutes.</p>
+        ${c.needLab ? (cfgMode ? '<p>Il n\'engage de l\'argent que quand ta config est rentable en simulation dans le laboratoire (ci-dessous) ; sinon il attend.</p>' : '<p>Il n\'engage de l\'argent qu\'avec une stratégie rentable dans le laboratoire (ci-dessous) ; sinon il attend.</p>') : ''}
         <div class="row-btns"><button class="btn pri" data-a="arm-yes">Oui, mode auto</button><button class="btn" data-a="arm-no">Annuler</button></div></div>` : ''}
       ${logs ? `<h3 class="w-h">Dernières actions du bot</h3><div class="b-logs">${logs}</div>` : ''}`;
+  }
+  // Bascule « laboratoire / ma config », en tête de la carte du mode auto
+  function modeBlock() {
+    const cfgMode = A.mode === 'cfg', M = A.slots.cfg, L = lab(), q = L && L.cfgPick ? L.cfgPick() : null;
+    const T = cfgTxt(M);
+    const test = q ? (q.ok ? `<b class="pos">Rentable en simulation</b> : ${esc(q.txt)}.` : q.st && q.st.n ? `En test dans le laboratoire : ${esc(q.txt)}${q.st.n < q.need ? ` (${q.st.n}/${q.need})` : ''}.` : 'En test dans le laboratoire : pas encore de trade simulé.') : '';
+    return `<div class="q-row" style="margin:0 0 8px"><span class="q-lab">Qui choisit les trades</span><div class="seg" role="group" aria-label="Qui choisit les trades"><button type="button" data-a="mode-lab" aria-pressed="${!cfgMode}">Laboratoire</button><button type="button" data-a="mode-cfg" aria-pressed="${cfgMode}">Ma config</button></div></div>
+      ${cfgMode ? `<div class="advice" data-l="info" style="margin:0 0 10px"><h3>Ta config « ${esc(M.name)} » remplace le laboratoire</h3><p><b>Entrées</b> : ${esc(T.ent)}.</p><p><b>Sorties</b> : ${esc(T.out)}.</p><p><b>Risque</b> : ${esc(T.risk)}.</p><p>${test}${A.cfg.needLab ? ' Pas d\'argent réel tant qu\'elle n\'est pas rentable en simulation.' : ' <b>Argent réel sans attendre la simulation</b> (réglage « argent réel seulement avec une stratégie rentable » coupé).'}</p>${M.notes ? `<p class="muted">Note : ${esc(M.notes)}</p>` : ''}</div>`
+        : `<p class="note" style="margin:0 0 10px">Le laboratoire choisit la stratégie et la perte/gain parmi celles qui gagnent en simulation. « Ma config » (${esc(M.name)}) : ${test || 'en test dans le laboratoire.'}</p>`}`;
   }
   function render() {
     if (!$('#newList')) return;
@@ -5113,9 +5255,18 @@ function NewCoins(h, radar, bot) {
       else if (a === 'arm-yes') { N.confirm = false; A.cfg.on = true; save(); bot.logMsg(`Mode auto activé (score ≥ ${A.cfg.minScore}, ${A.cfg.perHour} entrées/h max)`, 'warn'); renderAuto(); autoTick(); }
       else if (a === 'off') { A.cfg.on = false; save(); bot.logMsg('Mode auto coupé : les positions ouvertes restent gérées par le bot', 'warn'); renderAuto(); }
       else if (a === 'bot') h.showBot();
+      else if (a === 'mode-lab' || a === 'mode-cfg') { if (setMode(a === 'mode-cfg' ? 'cfg' : 'lab')) { h.toast(A.mode === 'cfg' ? `Ta config « ${A.slots.cfg.name} » est en service` : 'Le laboratoire choisit de nouveau', 'long'); render(); if (h.labRender) h.labRender(); } }
       else if (a === 'adopt' && N.pick && N.pick.ok) { const st = N.pick.s; A.cfg.minAgeSec = st.age[0]; A.cfg.maxAgeMin = Math.max(1, Math.ceil(st.age[1] / 60)); save(); const e1 = $('#aMinAge'), e2 = $('#aAge'); if (e1) e1.value = A.cfg.minAgeSec; if (e2) e2.value = A.cfg.maxAgeMin; bot.logMsg(`Fenêtre d'âge alignée sur « ${st.name} » : ${windowTxt()}`, 'warn'); renderAuto(); }
     });
     const F = [['#aScore', 'minScore', 30, 100], ['#aAge', 'maxAgeMin', 1, 120], ['#aMinAge', 'minAgeSec', 0, 600], ['#aHour', 'perHour', 1, 30], ['#aCool', 'cooldown', 0, 120]];
+    const ld = $('#aCfgLoad'), rs = $('#aCfgReset'), tx = $('#aCfgTxt'), msg = $('#aCfgMsg');
+    const say = (txt, l) => { if (msg) { msg.textContent = txt; msg.dataset.l = l || ''; } };
+    if (ld && tx) ld.addEventListener('click', () => {
+      let J; try { J = JSON.parse(tx.value); } catch (e) { say('JSON illisible : ' + e.message, 'bad'); return; }
+      try { const r = loadCfg(J); say(`Config « ${r.cfg.name} » chargée${A.mode === 'cfg' ? ' et appliquée' : ' : touche « Ma config » en haut de l\'écran pour l\'utiliser'}.${r.warn.length ? ' Ignoré : ' + r.warn.join(', ') + '.' : ''}`, 'ok'); render(); if (h.labRender) h.labRender(); }
+      catch (e) { say('Config refusée : ' + e.message + '. Rien n\'a changé.', 'bad'); }
+    });
+    if (rs) rs.addEventListener('click', () => { loadCfg(CFG_17OCT); say('Config du 17/10 remise.', 'ok'); render(); if (h.labRender) h.labRender(); });
     for (const [id, k, mn, mx] of F) {
       const el = $(id); if (!el) continue;
       el.value = A.cfg[k];
@@ -5127,6 +5278,11 @@ function NewCoins(h, radar, bot) {
       el.addEventListener('change', () => { A.cfg[k] = el.checked; save(); N.list.forEach(evaluate); render(); });
     }
   }
+  // Champs des réglages du mode auto remis à jour après une bascule
+  function syncInputs() {
+    for (const [id, k] of [['#aScore', 'minScore'], ['#aAge', 'maxAgeMin'], ['#aMinAge', 'minAgeSec'], ['#aHour', 'perHour'], ['#aCool', 'cooldown']]) { const el = $(id); if (el) el.value = A.cfg[k]; }
+    for (const [id, k] of [['#aReqX', 'requireX'], ['#aNew', 'useNew'], ['#aRadar', 'useRadar'], ['#aLab', 'needLab'], ['#aMigr', 'migrOnly']]) { const el = $(id); if (el) el.checked = !!A.cfg[k]; }
+  }
   function start() {
     bindUI();
     metaWorker(); xWorker();
@@ -5136,7 +5292,8 @@ function NewCoins(h, radar, bot) {
     setInterval(autoTick, 4000);
     setInterval(() => { if (curVisible()) render(); }, 1500);
   }
-  return { start, render, onNew, socialHtml, autoOn, cfg: () => A.cfg, requireX: () => !!A.cfg.requireX, xOk: t => { ensureSocial(t); return xVerified(t); }, _test: { xLink, mentions, evaluate, copyInfo, xVerified, ageOk, autoTick, N, A } };
+  return { start, render, onNew, socialHtml, autoOn, cfg: () => A.cfg, requireX: () => !!A.cfg.requireX, xOk: t => { ensureSocial(t); return xVerified(t); },
+    mode: () => A.mode, myCfg: () => A.slots.cfg, setMode, loadCfg, _test: { xLink, mentions, evaluate, copyInfo, xVerified, ageOk, autoTick, N, A, readCfg, CFG_17OCT } };
 }
 if (typeof module !== 'undefined') module.exports = { NewCoins, XCheck };
 
@@ -5440,7 +5597,7 @@ function TradeJournal(h, radar, live, bot, X) {
   function build() {
     return {
       app: 'Vigie Scalp', format: 'journal-2', exportedAt: new Date().toISOString(), since: new Date(J.since).toISOString(),
-      settings: { bot: bot.cfg(), auto: h.autoCfg ? h.autoCfg() : null },
+      settings: { bot: bot.cfg(), auto: h.autoCfg ? h.autoCfg() : null, mode: h.mode ? h.mode() : 'lab', myCfg: h.myCfg ? h.myCfg() : null },
       live: live ? live.status() : null, sources: radar.R && radar.R.src ? radar.R.src : null,
       strategies: X.describe ? X.describe() : null,
       stats: X.allStats ? X.allStats() : null,
@@ -5565,6 +5722,57 @@ function StrategyLab(h, radar, live, bot) {
       conds: [C('acheté par un wallet copié il y a moins de 90 s', t => !!(h.copy && h.copy() && h.copy().recentBuy(t.mint)), t => { const r = h.copy && h.copy() && h.copy().recentBuy(t.mint); return r ? Math.round((now() - r.t) / 1000) + ' s' : null; })],
       exits: { maxHold: 60 } }
   ];
+  // « Ma config » : ta config fixe (onglet Nouveaux, bouton « Ma config »). Simulée en permanence pour savoir si elle gagne ;
+  // en argent réel seulement quand tu la choisis à la place du laboratoire. Jamais choisie par le laboratoire lui-même.
+  const myCfg = () => (h.myCfg ? h.myCfg() : null);
+  const cfgMode = () => !!(h.mode && h.mode() === 'cfg');
+  const mcUsd = t => {
+    const su = h.solUsd && h.solUsd();
+    if (su && live && live.fresh(t, 15000) && fin(t.live.px) && t.live.px > 0) return t.live.px * 1e9 * su; // courbe pump.fun : 1 milliard de jetons
+    const j = t.nc && t.nc.j;
+    if (j && fin(j.mcap) && j.mcap > 0 && now() - (j.at || 0) < 120000) return j.mcap;
+    if (t.jup && fin(t.jup.mcap) && t.jup.mcap > 0 && now() - (t.jup.at || 0) < 120000) return t.jup.mcap;
+    const pm = t.pair ? +(t.pair.marketCap || t.pair.fdv) : NaN;
+    if (fin(pm) && pm > 0) return pm;
+    if (t.m && fin(t.m.mc) && t.m.mc > 0) return t.m.mc;
+    return fin(t.mcSol0) && su ? t.mcSol0 * su : null;
+  };
+  // Activité sur 5 min : flux du radar, sinon chiffres Jupiter (les tout jeunes coins n'ont souvent que ceux-là)
+  const act5 = (t, f) => {
+    if (fin(f.tx5) && f.tx5 > 0) return { tx: f.tx5, share: f.share };
+    const j = (t.nc && t.nc.j) || {}, b = +j.buys || 0, s = +j.sells || 0;
+    return b + s > 0 ? { tx: b + s, share: b / (b + s) } : { tx: null, share: null };
+  };
+  const holdersOf = (t, f) => (fin(f.holders) ? f.holders : t.nc && t.nc.j && fin(+t.nc.j.holders) ? +t.nc.j.holders : null);
+  const top10Of = (t, f) => (t.sec && fin(t.sec.top10) ? t.sec.top10 : fin(f.top) ? f.top : null);
+  const devOf = (t, f) => (fin(t.devBuyPct) ? t.devBuyPct : fin(f.dev) ? f.dev : null);
+  const kUsd = x => (x >= 1000 ? (Math.round(x / 100) / 10).toString().replace('.', ',') + ' k$' : Math.round(x) + ' $');
+  let myConds = null, myKey = '';
+  function cfgConds() {
+    const M = myCfg();
+    const key = M ? JSON.stringify([M.strat, M.auto && M.auto.minScore, M.auto && M.auto.requireX]) : '';
+    if (myConds && key === myKey) return myConds;
+    myKey = key;
+    if (!M) return (myConds = [C('ta config est chargée', () => false)]);
+    const F = M.strat.filters || {}, a = M.auto || {}, list = [
+      C('nouveau coin analysé, pas rejeté (onglet Nouveaux)', t => !!t.nc && t.nc.status !== 'reject' && t.nc.status !== 'old', t => (t.nc ? t.nc.status : null)),
+      C(`score Nouveaux d'au moins ${a.minScore}`, t => !!t.nc && (t.nc.score || 0) >= a.minScore, t => (t.nc ? t.nc.score : null))];
+    if (a.requireX) list.push(C('lien X vérifié', t => !!(h.xOk && h.xOk(t))));
+    if (fin(F.devBuyMax)) list.push(C(`créateur à ${String(F.devBuyMax).replace('.', ',')} % maximum au lancement`, (t, f) => { const d = devOf(t, f); return fin(d) && d <= F.devBuyMax; }, (t, f) => devOf(t, f)));
+    if (fin(F.mcMin) || fin(F.mcMax)) list.push(C(`cap de ${kUsd(F.mcMin || 0)} à ${fin(F.mcMax) ? kUsd(F.mcMax) : '∞'}`, t => { const m = mcUsd(t); return fin(m) && m >= (F.mcMin || 0) && (!fin(F.mcMax) || m <= F.mcMax); }, t => { const m = mcUsd(t); return fin(m) ? Math.round(m) : null; }));
+    if (fin(F.holdersMin) || fin(F.holdersMax)) list.push(C(`${F.holdersMin || 0} à ${fin(F.holdersMax) ? F.holdersMax : '∞'} détenteurs`, (t, f) => { const n0 = holdersOf(t, f); return fin(n0) && n0 >= (F.holdersMin || 0) && (!fin(F.holdersMax) || n0 <= F.holdersMax); }, (t, f) => holdersOf(t, f)));
+    if (fin(F.tx5Min) || fin(F.tx5Max)) list.push(C(`${F.tx5Min || 0} à ${fin(F.tx5Max) ? F.tx5Max : '∞'} transactions sur 5 min`, (t, f) => { const x = act5(t, f).tx; return fin(x) && x >= (F.tx5Min || 0) && (!fin(F.tx5Max) || x <= F.tx5Max); }, (t, f) => act5(t, f).tx));
+    if (fin(F.share5Min)) list.push(C(`au moins ${Math.round(F.share5Min * 100)} % d'achats sur 5 min`, (t, f) => { const x = act5(t, f).share; return fin(x) && x >= F.share5Min; }, (t, f) => act5(t, f).share));
+    if (fin(F.top10Max)) list.push(C(`top 10 à ${F.top10Max} % maximum`, (t, f) => { const x = top10Of(t, f); return fin(x) && x <= F.top10Max; }, (t, f) => top10Of(t, f)));
+    if (F.requirePriceNotDown1min) list.push(C('prix pas en baisse sur la dernière minute', (t, f) => (f.px60 != null ? f.px60 >= 0 : fin(f.ch5) ? f.ch5 >= 0 : false), (t, f) => (f.px60 != null ? Math.round(f.px60 * 1000) / 10 + ' % sur 1 min' : f.ch5)));
+    return (myConds = list);
+  }
+  STRATS.push({ id: 'mycfg', cfg: true,
+    get name() { const M = myCfg(); return 'Ma config' + (M && M.name ? ' · ' + M.name : ''); },
+    get age() { const M = myCfg(); return M && M.strat && Array.isArray(M.strat.age) ? M.strat.age : [25, 90]; },
+    get desc() { return 'Ta config fixe (bouton « Ma config » de l\'onglet Nouveaux) : sniper seul, avec tes filtres et tes sorties. Simulée en permanence ; en argent réel seulement quand tu la choisis à la place du laboratoire.'; },
+    get conds() { return cfgConds(); },
+    get exits() { const b = (myCfg() || {}).bot || {}; return { maxHold: b.maxHold, flowExit: !!b.flowExit, devExit: b.devExit !== false, stallMin: b.stallMin || 0, stallNeed: b.stallNeed || 0 }; } });
   const MIGR_IDS = ['migrf', 'migr'];
   const migrOnly = () => !!(h.autoCfg && h.autoCfg() && h.autoCfg().migrOnly);
   // Conditions communes à toutes les stratégies (sécurité)
@@ -5623,6 +5831,9 @@ function StrategyLab(h, radar, live, bot) {
     // Sur les mêmes entrées, protéger le gain dès +15 % (sortie si retombé à +5 %) : −7,0 % par trade au lieu de −8,5 %, 34 % de gagnants au lieu de 21 %.
     { id: 'protege', name: 'Protégé', auto: true, vals: { sl: 25, tp1: 30, tp1Part: 50, trail: 25, tp2: 150, beAt: 15, beFloor: 5, drop: 30 },
       desc: 'comme Équilibré, mais dès +15 % le gain est protégé : sortie s\'il retombe à +5 %' },
+    // sorties de ta config, testées seulement sur « Ma config », telles quelles (ta règle « pas de hausse » du labo ne s'applique pas)
+    { id: 'cfg', name: 'Ma config', only: 'mycfg', exact: true, get vals() { const b = (myCfg() || {}).bot; return b ? Object.fromEntries(['sl', 'tp1', 'tp1Part', 'trail', 'tp2', 'beAt', 'beFloor', 'drop', 'npMin', 'npNeed'].map(k => [k, b[k]])) : null; },
+      get desc() { return 'les sorties de ta config'; } },
     { id: 'patient10', name: 'Patient, 10 min sans hausse', test: true, vals: { sl: 35, tp1: 50, tp1Part: 50, trail: 30, tp2: 300, beAt: 1000, beFloor: 3, drop: 40, npMin: 10, npNeed: 10 },
       desc: 'comme Patient, mais attend 10 min (au lieu de ta règle) avant de sortir un coin qui n\'a pas monté' }
   ];
@@ -5632,7 +5843,7 @@ function StrategyLab(h, radar, live, bot) {
     const s = byId(stratId), pr = profById(profId), base = bot.cfg();
     const c = Object.assign({}, base, (s && s.exits) || {}, (pr && pr.vals) || {});
     // ta règle « pas de hausse » reste un maximum : un réglage choisi par le labo ne peut que sortir plus tôt (sauf le test 10 min)
-    if (pr && pr.vals && !pr.test) {
+    if (pr && pr.vals && !pr.test && !pr.exact) {
       const own = pr.vals.npMin, mine = base.npMin || 0;
       c.npMin = mine > 0 ? (own > 0 ? Math.min(own, mine) : mine) : (own || 0);
       c.npNeed = own > 0 && (!mine || own <= mine) ? pr.vals.npNeed : base.npNeed;
@@ -5641,7 +5852,9 @@ function StrategyLab(h, radar, live, bot) {
   }
   const exitsFor = (stratId, profId) => { const c = cfgFor(stratId, profId), s = byId(stratId); return Object.assign({}, (s && s.exits) || {}, Object.fromEntries(EXIT_KEYS.map(k => [k, c[k]]))); };
   const keyOf = c => EXIT_KEYS.map(k => (c[k] == null ? '-' : +c[k])).join('/');
-  const userKey = stratId => keyOf(cfgFor(stratId, 'toi'));
+  const profsFor = id => PROFILES.filter(pr => !pr.only || pr.only === id);
+  const mainProf = id => (id === 'mycfg' ? 'cfg' : 'toi');
+  const userKey = stratId => keyOf(cfgFor(stratId, mainProf(stratId)));
   const exitTxt = c => `perte −${c.sl} %, gain visé +${c.tp1} %${c.tp1Part < 100 ? ` (vend ${c.tp1Part} %, suiveur −${c.trail} %)` : ' (tout vendre)'}, chute rapide −${c.drop} % en 1 min${c.npMin > 0 ? `, sortie sans hausse de +${c.npNeed} % après ${c.npMin < 1 ? Math.round(c.npMin * 60) + ' s' : c.npMin + ' min'}` : ''}`;
 
   let L = Object.assign({ open: [], closed: [], resetAt: now(), seq: 0 }, h.store.get('lab', {}));
@@ -5675,7 +5888,7 @@ function StrategyLab(h, radar, live, bot) {
   // Toutes les conditions d'une stratégie, dans l'ordre : renvoie le rang de la première qui échoue (-1 si tout passe)
   function check(s, t, f) {
     const list = [...SAFE, BAN, ...(s.age ? [C('âge dans la fenêtre de la stratégie', (tt, ff) => ff.age != null && ff.age >= s.age[0] && ff.age <= s.age[1], (tt, ff) => (ff.age != null ? Math.round(ff.age) : null))] : []), ...s.conds, MOMO, HOLDDN, BOTS, FAKE];
-    if (xNeeded() && !s.manual) list.push(C('lien X vérifié (réglage du mode auto)', tt => !!(h.xOk && h.xOk(tt))));
+    if (xNeeded() && !s.manual && !s.cfg) list.push(C('lien X vérifié (réglage du mode auto)', tt => !!(h.xOk && h.xOk(tt))));
     for (let i = 0; i < list.length; i++) {
       let ok = false;
       try { ok = !!list[i].ok(t, f); } catch {}
@@ -5742,7 +5955,8 @@ function StrategyLab(h, radar, live, bot) {
     // copie : on retient quel wallet a déclenché le trade, pour classer les wallets ensuite
     const src = s.id === 'copy' && h.copy && h.copy() ? ((h.copy().recentBuy(t.mint) || {}).w || null) : null;
     let primary = null;
-    for (const pr of PROFILES) {
+    const profs = profsFor(s.id).sort((a, b) => (b.id === mainProf(s.id)) - (a.id === mainProf(s.id)));
+    for (const pr of profs) {
       const cfg = cfgFor(s.id, pr.id), key = keyOf(cfg);
       if (keys.has(key)) continue;
       keys.add(key);
@@ -5832,7 +6046,13 @@ function StrategyLab(h, radar, live, bot) {
   function scan() {
     const tn = now(), feats = new Map();
     const F = t => { let f = feats.get(t.mint); if (!f) { f = feat(t); feats.set(t.mint, f); } return f; };
-    for (const s of STRATS) {
+    // Un coin ne se trade qu'une fois, toutes stratégies confondues (avant : Sniper, Radar… le prenaient chacun de leur côté).
+    // Pas de reprise dans les 24 h, comme le bot. Priorité : ta config si elle est en service, sinon la stratégie en service.
+    const taken = new Set([...L.open.map(p => p.mint), ...L.closed.filter(x => tn - x.t0 < DONE_MS).map(x => x.mint)]);
+    let first = null;
+    if (cfgMode()) first = byId('mycfg'); else { try { const pk = pick(); if (pk.ok) first = pk.s; } catch {} }
+    const order = first ? [first, ...STRATS.filter(s => s !== first)] : STRATS;
+    for (const s of order) {
       const grps = arr => new Set(arr.map(x => x.grp || x.id)).size;
       const full = grps(L.open.filter(p => p.strat === s.id)) >= MAX_OPEN
         || grps(L.closed.filter(x => x.strat === s.id && tn - x.t0 < 3600e3)) + grps(L.open.filter(p => p.strat === s.id)) >= MAX_PER_HOUR;
@@ -5845,11 +6065,11 @@ function StrategyLab(h, radar, live, bot) {
         // entonnoir : à quelle condition ce coin s'arrête
         if (jr) { if (r.i >= 0) { let v; try { v = r.c.v ? r.c.v(t, f) : undefined; } catch {} jr.funnel(s.id, t.mint, r.i, r.c.l, v === undefined ? undefined : (typeof v === 'number' ? Math.round(v * 1000) / 1000 : v)); } else jr.funnel(s.id, t.mint, r.n, 'toutes les conditions remplies'); }
         // mêmes règles que l'argent réel : pas de reprise d'un coin déjà tradé (par cette stratégie ou par le bot) dans les 24 h
-        if (r.i >= 0 || full || done.has(t.mint) || bot.traded(t.mint)) continue;
+        if (r.i >= 0 || full || done.has(t.mint) || taken.has(t.mint) || bot.traded(t.mint)) continue;
         const sc = (t.nc && t.nc.score) || t.score || 0;
         if (sc > bs) { bs = sc; best = t; bf = f; }
       }
-      if (best) open(s, best, bf);
+      if (best) { open(s, best, bf); taken.add(best.mint); }
     }
     // flux temps réel sur les coins proches des conditions, pour juger le flux d'achats avant d'entrer
     if (live) {
@@ -5895,14 +6115,15 @@ function StrategyLab(h, radar, live, bot) {
   }
   // Couples testés pour l'argent réel : avec « perte et gain choisis par le labo », chaque stratégie avec chacun des réglages auto ; sinon tes réglages seulement
   function pairs(s) {
+    if (s.cfg) return [qualifies(s, 'cfg')];
     if (!autoMode()) return [qualifies(s, 'toi')];
     const seenK = new Set();
-    return PROFILES.filter(pr => pr.auto).map(pr => qualifies(s, pr.id)).filter(q => { const k = keyOf(cfgFor(s.id, q.prof.id)); if (seenK.has(k)) return false; seenK.add(k); return true; });
+    return profsFor(s.id).filter(pr => pr.auto).map(pr => qualifies(s, pr.id)).filter(q => { const k = keyOf(cfgFor(s.id, q.prof.id)); if (seenK.has(k)) return false; seenK.add(k); return true; });
   }
   const resTxt = st => `${st.n} trades simulés, moyenne ${fPct(st.avg)}`;
   // Pour chaque stratégie : résultats avec chacun des réglages de sortie testés
   function profStats(id) {
-    return PROFILES.map(pr => { const c = cfgFor(id, pr.id), key = keyOf(c); return { pr, cfg: c, key, st: stats(id, 0, key), mine: key === userKey(id) }; })
+    return profsFor(id).map(pr => { const c = cfgFor(id, pr.id), key = keyOf(c); return { pr, cfg: c, key, st: stats(id, 0, key), mine: key === userKey(id) }; })
       .filter((x, i, a) => a.findIndex(y => y.key === x.key) === i);
   }
   // lcb = moyenne moins une erreur-type : avec des gains très inégaux (quelques +150 % au milieu de petites pertes),
@@ -5912,7 +6133,7 @@ function StrategyLab(h, radar, live, bot) {
   function suggestion() {
     let best = null;
     for (const s of STRATS) for (const x of profStats(s.id)) {
-      if (s.manual || x.mine || x.st.n < 8) continue;
+      if (s.manual || s.cfg || x.mine || x.st.n < 8) continue;
       if (autoMode() && !x.pr.test) continue; // les réglages auto, le labo les choisit déjà seul
       const me = autoMode() ? STRATS.length && pairs(s).reduce((b, q) => (q.st.n && (!b || q.st.avg > b.avg) ? q.st : b), null) || stats(s.id) : stats(s.id);
       if (x.st.avg > Math.max(0.02, me.avg + 0.05) && x.st.pf >= 1.2 && (!best || x.st.lcb > best.st.lcb)) best = Object.assign({ s, me }, x);
@@ -5926,7 +6147,7 @@ function StrategyLab(h, radar, live, bot) {
     render();
   }
   function pick() {
-    const Q = STRATS.filter(s => !s.manual && (!migrOnly() || MIGR_IDS.includes(s.id))).flatMap(pairs);
+    const Q = STRATS.filter(s => !s.manual && !s.cfg && (!migrOnly() || MIGR_IDS.includes(s.id))).flatMap(pairs);
     const ok = Q.filter(x => x.ok).sort((a, b) => b.st.lcb - a.st.lcb);
     if (ok.length) { const w = ok[0], pid = autoMode() ? w.prof.id : 'toi'; return { ok: true, s: w.s, st: w.st, prof: w.prof, exits: autoMode() ? exitsFor(w.s.id, pid) : w.s.exits, txt: resTxt(w.st) + (autoMode() ? `, réglages « ${w.prof.name} »` : '') }; }
     const tried = Q.filter(x => x.st.n > 0).sort((a, b) => b.st.avg - a.st.avg);
@@ -5941,6 +6162,17 @@ function StrategyLab(h, radar, live, bot) {
     return { ok: false, reason, best: best && best.s };
   }
 
+  // « Ma config » : rentable en simulation ? (même seuil que pour le laboratoire : 12 trades, +3 % de moyenne, gains 1,3 fois les pertes, 8 derniers positifs)
+  function cfgPick() {
+    const s = byId('mycfg'), q = qualifies(s, 'cfg'), st = q.st, exits = exitsFor('mycfg', 'cfg');
+    const txt = st.n ? resTxt(st) : 'aucun trade simulé';
+    if (q.ok) return { ok: true, s, st, txt, need: q.need, exits };
+    const reason = q.hold ? `Pas d'argent engagé : les vrais trades de ta config sont repassés dans le rouge, retour en simulation (${st.n}/${q.need} nouveaux trades simulés, il faut qu'ils soient gagnants au total)`
+      : st.n < q.need ? `Ta config est en test dans le laboratoire : ${st.n}/${q.need} trades simulés${st.n ? `, moyenne ${fPct(st.avg)}` : ''}. Pas d'argent engagé tant qu'elle n'est pas rentable en simulation.`
+      : `Pas d'argent engagé : ta config ne gagne pas assez en simulation (${fPct(st.avg)} sur ${st.n} trades ; il faut +3 % de moyenne, des gains 1,3 fois plus gros que les pertes et les 8 derniers trades positifs).`;
+    return { ok: false, s, st, txt, need: q.need, reason, exits };
+  }
+
   /* ---------- affichage ---------- */
   function render() {
     const box = $('#labBody');
@@ -5948,27 +6180,30 @@ function StrategyLab(h, radar, live, bot) {
     const ls = live ? live.status() : null, size = bot.cfg().size;
     $('#labState').innerHTML = ls ? `<span class="chip ${ls.s === 'on' ? 'long' : ls.s === 'wait' ? 'warn' : ''}">${ls.s === 'on' ? 'temps réel' : ls.s === 'wait' ? 'connexion…' : ls.subs ? 'temps réel coupé' : 'prêt'}</span>`
       + (ls.wal && ls.wal.on ? ` <span class="chip long" title="Wallets acheteurs suivis en direct sur ${ls.wal.on} coin${ls.wal.on > 1 ? 's' : ''}">wallets en direct · ${ls.wal.on}</span>` : ls.wal && ls.wal.err && ls.s === 'on' ? ` <span class="chip warn" title="${esc(ls.wal.err)}">wallets : refusé par le RPC</span>` : '') : '';
-    const pk = pick();
+    const pk = pick(), cm = cfgMode(), cq = cfgPick();
     const opened0 = new Set([...box.querySelectorAll('details.l-row[open]')].map(d => d.dataset.id));
     const rows = STRATS.map(s => {
-      const P = pairs(s), q = P.find(x => x.ok) || P.slice().sort((a, b) => (b.st.n ? b.st.avg : -9) - (a.st.n ? a.st.avg : -9))[0], st = q.st, inUse = pk.ok && pk.s.id === s.id;
+      const P = pairs(s), q = P.find(x => x.ok) || P.slice().sort((a, b) => (b.st.n ? b.st.avg : -9) - (a.st.n ? a.st.avg : -9))[0], st = q.st, inUse = s.cfg ? cm && cq.ok : !cm && pk.ok && pk.s.id === s.id;
       const chip = inUse ? '<span class="chip long">EN SERVICE</span>' : q.ok ? '<span class="chip long">RENTABLE</span>' : q.hold ? '<span class="chip short">STOPPÉE</span>' : st.n < q.need ? `<span class="chip">ESSAI ${st.n}/${q.need}</span>` : '<span class="chip short">PERDANTE</span>';
       return `<details class="l-row" data-id="${s.id}"${inUse ? ' data-use="1"' : ''}${opened0.has(s.id) ? ' open' : ''}><summary><span class="l-name"><b>${esc(s.name)}</b><small>${autoMode() && q.prof && st.n ? `${esc(q.prof.name)} · ` : ''}${st.n ? `${st.n} trades · ${Math.round(st.wins / st.n * 100)} % gagnants · moyenne <span class="${st.avg > 0 ? 'pos' : st.avg < 0 ? 'neg' : ''}">${fPct(st.avg)}</span> · ${fSol(st.sum)}` : 'aucun trade terminé'}${st.open ? ` · ${st.open} en cours` : ''}</small></span>${chip}</summary>
         <p class="note">${esc(s.desc)}</p>
         ${blockHtml(s)}
-        <p class="note">${s.age ? `Âge d'entrée : ${ageTxt(s.age[0])} à ${ageTxt(s.age[1])}. ` : ''}${migrOnly() && !s.manual && !MIGR_IDS.includes(s.id) ? '<b>Option « uniquement après migration » : simulée, mais jamais en argent réel.</b> ' : ''}${s.manual ? '<b>Jamais choisie par le mode auto : l\'argent réel se règle dans l\'onglet Copie.</b> ' : ''}Avec tes réglages : ${exitTxt(cfgFor(s.id, 'toi'))}${s.exits.stallMin ? `, sortie si moins de +${s.exits.stallNeed} % après ${s.exits.stallMin} min` : ''}${s.exits.flowExit ? ', sortie si les vendeurs dominent' : ''}, sortie immédiate si le créateur vend, ${s.exits.maxHold} min maximum.</p>
+        <p class="note">${s.age ? `Âge d'entrée : ${ageTxt(s.age[0])} à ${ageTxt(s.age[1])}. ` : ''}${s.cfg ? `<b>${cm ? 'En service à la place du laboratoire' + (cq.ok ? '' : ' (argent réel quand elle sera rentable ici)') : 'Pas en service : touche « Ma config » en haut de l\'onglet pour l\'utiliser'}.</b> Filtres : ${esc(s.conds.map(c => c.l).join(', '))}. ` : ''}${migrOnly() && !s.manual && !s.cfg && !MIGR_IDS.includes(s.id) ? '<b>Option « uniquement après migration » : simulée, mais jamais en argent réel.</b> ' : ''}${s.manual ? '<b>Jamais choisie par le mode auto : l\'argent réel se règle dans l\'onglet Copie.</b> ' : ''}${s.cfg ? 'Sorties de ta config' : 'Avec tes réglages'} : ${exitTxt(cfgFor(s.id, mainProf(s.id)))}${s.exits.stallMin ? `, sortie si moins de +${s.exits.stallNeed} % après ${s.exits.stallMin} min` : ''}${s.exits.flowExit ? ', sortie si les vendeurs dominent' : ''}, sortie immédiate si le créateur vend, ${s.exits.maxHold} min maximum.</p>
         <p class="note"><b>Mêmes entrées, autres sorties :</b> ${profStats(s.id).filter(x => !x.mine || autoMode()).map(x => `${esc(x.pr.name)} ${x.st.n ? `${fPct(x.st.avg)} sur ${x.st.n} trades` : 'pas encore de trade'}`).join(' · ')}</p></details>`;
     }).join('');
-    const opened = L.open.filter(p => p.state !== 'pending' && (p.prof || 'toi') === 'toi').slice(0, 6).map(p => `<div class="j-row"><span class="chip">${esc((byId(p.strat) || {}).name || p.strat)}</span><div class="j-mid"><div>${esc(p.sym)} · en cours</div><div class="mono">depuis ${ago(now() - p.t0)} · ${esc(holdTxt(p.mint))}</div>${simCloseHtml(p)}</div><span class="j-r ${p.pnl > 0 ? 'pos' : p.pnl < 0 ? 'neg' : ''}">${fPct(p.pnl)}</span></div>`).join('');
+    const opened = L.open.filter(p => p.state !== 'pending' && (p.prof || 'toi') === mainProf(p.strat)).slice(0, 6).map(p => `<div class="j-row"><span class="chip">${esc((byId(p.strat) || {}).name || p.strat)}</span><div class="j-mid"><div>${esc(p.sym)} · en cours</div><div class="mono">depuis ${ago(now() - p.t0)} · ${esc(holdTxt(p.mint))}</div>${simCloseHtml(p)}</div><span class="j-r ${p.pnl > 0 ? 'pos' : p.pnl < 0 ? 'neg' : ''}">${fPct(p.pnl)}</span></div>`).join('');
     const diagOf = x => { const e = jr && x.jid ? jr.byId(x.jid) : null; return e && e.diag ? e.diag.filter(d => d.lvl !== 'ok' || d.c === 'sortie_justifiee').slice(0, 3) : []; };
-    const last = L.closed.filter(x => (x.prof || 'toi') === 'toi').slice(0, 8).map(x => { const dg = diagOf(x); return `<div class="j-row"><span class="chip ${x.gap ? '' : x.net >= 0 ? 'long' : 'short'}">${x.gap ? 'sans prix' : fPct(x.pnl)}</span><div class="j-mid"><div>${esc(x.sym)} · ${esc((byId(x.strat) || {}).name || x.strat)}</div><div class="mono">${ago(now() - x.t1)} · ${esc(x.why)}</div>${dg.length ? `<ul class="l-diag">${dg.map(d => `<li data-l="${d.lvl}">${esc(d.txt)}</li>`).join('')}</ul>` : ''}</div><span class="j-r ${x.net >= 0 ? 'pos' : 'neg'}">${x.gap ? '—' : fSol(x.net)}</span></div>`; }).join('');
+    const last = L.closed.filter(x => (x.prof || 'toi') === mainProf(x.strat)).slice(0, 8).map(x => { const dg = diagOf(x); return `<div class="j-row"><span class="chip ${x.gap ? '' : x.net >= 0 ? 'long' : 'short'}">${x.gap ? 'sans prix' : fPct(x.pnl)}</span><div class="j-mid"><div>${esc(x.sym)} · ${esc((byId(x.strat) || {}).name || x.strat)}</div><div class="mono">${ago(now() - x.t1)} · ${esc(x.why)}</div>${dg.length ? `<ul class="l-diag">${dg.map(d => `<li data-l="${d.lvl}">${esc(d.txt)}</li>`).join('')}</ul>` : ''}</div><span class="j-r ${x.net >= 0 ? 'pos' : 'neg'}">${x.gap ? '—' : fSol(x.net)}</span></div>`; }).join('');
     const sg = suggestion();
     const sgHtml = !sg ? '' : sg.pr.test && autoMode()
       ? `<div class="advice" data-l="info" style="margin:0 0 10px"><h3>Ta règle « pas de hausse » coupe des gagnants</h3><p>Sur « ${esc(sg.s.name)} », attendre 10 min au lieu de ${bot.cfg().npMin} min fait ${fPct(sg.st.avg)} en moyenne sur ${sg.st.n} trades simulés, contre ${fPct(sg.me.avg)}. C'est toi qui décides.</p><div class="row-btns"><button class="btn sm pri" data-lnp="10">Passer à 10 min</button></div></div>`
       : `<div class="advice" data-l="info" style="margin:0 0 10px"><h3>D'autres réglages de sortie feraient mieux</h3><p>Sur « ${esc(sg.s.name)} », les réglages « ${esc(sg.pr.name)} » (${esc(sg.pr.desc)}) font ${fPct(sg.st.avg)} en moyenne sur ${sg.st.n} trades simulés, contre ${fPct(sg.me.avg)} avec les tiens. C'est toi qui décides.</p><div class="row-btns"><button class="btn sm pri" data-lprof="${sg.pr.id}">Appliquer ces réglages au bot</button></div></div>`;
     const walMsg = ls && ls.wal && ls.wal.off && !ls.wal.on ? `<div class="advice" data-l="warn" style="margin:0 0 10px"><h3>Suivi des wallets en direct bloqué</h3><p>Le serveur Solana ${esc(ls.wal.host || '')} refuse ce suivi (« ${esc(ls.wal.err)} »). La règle « cap qui bondit avec 1 ou 2 wallets » ne peut pas s'appliquer ; les autres contrôles anti-bots continuent. Si ce message reste affiché, demande à Claude de retirer le flux des wallets en direct.</p></div>` : '';
-    box.innerHTML = `${walMsg}${sgHtml}<div class="advice" data-l="${pk.ok ? 'ok' : 'warn'}" style="margin:0 0 10px"><h3>${pk.ok ? `Argent réel : « ${esc(pk.s.name)} »${pk.prof && autoMode() ? ` en « ${esc(pk.prof.name)} »` : ''}` : 'Simulation seulement'}</h3><p>${pk.ok ? `${esc(pk.txt)}, ${Math.round(pk.st.wins / pk.st.n * 100)} % gagnants. Le mode auto n'entre qu'avec cette stratégie, tant qu'elle reste rentable.` : esc(pk.reason)}</p></div>
-      <p class="note">Mise simulée : ${fSol(size)} par trade, comme le bot. Frais, glissement et 3 à 5 s de délai inclus. Résultats des 24 dernières heures.${autoMode() ? ' Perte et gain : le labo choisit, pour chaque stratégie, entre Rapide, Équilibré et Patient. Ta règle « pas de hausse » reste un maximum.' : ''}</p>
+    const head = cm
+      ? `<div class="advice" data-l="${cq.ok ? 'ok' : 'warn'}" style="margin:0 0 10px"><h3>${cq.ok ? `Argent réel : ta config « ${esc((myCfg() || {}).name || '')} »` : `Ta config « ${esc((myCfg() || {}).name || '')} » remplace le laboratoire`}</h3><p>${cq.ok ? `${esc(cq.txt)}, ${Math.round(cq.st.wins / cq.st.n * 100)} % gagnants. Le mode auto n'entre qu'avec ta config, tant qu'elle reste rentable.` : esc(cq.reason)} Les autres stratégies continuent en simulation, pour comparer.</p></div>`
+      : `<div class="advice" data-l="${pk.ok ? 'ok' : 'warn'}" style="margin:0 0 10px"><h3>${pk.ok ? `Argent réel : « ${esc(pk.s.name)} »${pk.prof && autoMode() ? ` en « ${esc(pk.prof.name)} »` : ''}` : 'Simulation seulement'}</h3><p>${pk.ok ? `${esc(pk.txt)}, ${Math.round(pk.st.wins / pk.st.n * 100)} % gagnants. Le mode auto n'entre qu'avec cette stratégie, tant qu'elle reste rentable.` : esc(pk.reason)}</p></div>`;
+    box.innerHTML = `${walMsg}${sgHtml}${head}
+      <p class="note">Mise simulée : ${fSol(size)} par trade, comme le bot. Frais, glissement et 3 à 5 s de délai inclus. Résultats des 24 dernières heures. Un coin n'est pris qu'une fois, par une seule stratégie (${cm ? 'ta config passe en premier' : 'la stratégie en service passe en premier'}) : pas de double trade.${autoMode() ? ' Perte et gain : le labo choisit, pour chaque stratégie, entre Rapide, Équilibré et Patient. Ta règle « pas de hausse » reste un maximum.' : ''}</p>
       <div class="l-list">${rows}</div>
       ${opened ? `<h3 class="w-h">Trades simulés en cours</h3><div class="journal">${opened}</div>` : ''}
       ${last ? `<h3 class="w-h">Derniers trades simulés</h3><div class="journal">${last}</div>` : ''}
@@ -6027,7 +6262,7 @@ function StrategyLab(h, radar, live, bot) {
     for (const e of M.values()) e.avg = e.n ? e.sum / e.n : 0;
     return M;
   }
-  return { start, render, pick, candidates, stats, STRATS, byId, L, journal: () => jr, PROFILES, profStats, suggestion, pairs, cfgFor, MIGR_IDS, manualClose, copyRank, NETF,
+  return { start, render, pick, cfgPick, candidates, stats, STRATS, byId, L, journal: () => jr, PROFILES, profStats, suggestion, pairs, cfgFor, MIGR_IDS, manualClose, copyRank, NETF,
     copyCheck: t => { const s0 = byId('copy'), f = feat(t), r = check(s0, t, f); if (r.i < 0) return null; let v = null; try { v = r.c.v ? r.c.v(t, f) : null; } catch {} return { why: r.c.l, v }; }, _test: { feat, safe, passes, check, step, open, scan, value, buyQty, qualifies, finish, pxSol, tick } };
 }
 if (typeof module !== 'undefined') module.exports = StrategyLab;
@@ -9525,10 +9760,11 @@ if (typeof module !== 'undefined') module.exports = PerpsBot;
     visible: tab => curTab === tab && document.visibilityState === 'visible',
     notify: (msg, cls) => { toast(msg, cls); sysNotify(msg, cls); beep(cls === 'short' ? -1 : 1); buzz(cls === 'short' ? [300, 80, 300] : [120, 60, 120]); },
     showBot: () => { go('meme'); setTimeout(() => { const el = $('#botCard'); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 60); },
-    lab: () => lab
+    lab: () => lab,
+    labRender: () => { if (lab) lab.render(); }
   }, radar, bot);
   lab = StrategyLab({
-    $, esc, store, toast, fmt: trader.fmt, autoCfg: () => newCoins.cfg(),
+    $, esc, store, toast, fmt: trader.fmt, autoCfg: () => newCoins.cfg(), mode: () => newCoins.mode(), myCfg: () => newCoins.myCfg(),
     solUsd: () => trader.solUsd(),
     requireX: () => newCoins.requireX(),
     xOk: t => newCoins.xOk(t),
