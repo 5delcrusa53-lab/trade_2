@@ -615,6 +615,12 @@ a.btn{text-decoration:none;color:inherit;display:inline-block}
 .p-adv{display:grid;gap:2px;font-size:.86rem}
 .p-adv b{font-family:var(--f-display);font-size:1.02rem}
 .w-oth{margin-top:10px;font-size:.88rem}
+#liveBody .j-row{align-items:center}
+#liveBody .lv-ask{margin:2px 0 10px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--panel2)}
+#liveBody .lv-ask .kvs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px 12px;margin:6px 0 8px;font-size:.86rem}
+#liveBody .lv-ask .kvs b{font-family:var(--f-mono);font-weight:600}
+#liveBody .lv-ask input{width:7em;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:6px 8px;font-family:var(--f-mono);color:var(--fg)}
+#liveBody .j-r small{display:block;font-size:.72rem;opacity:.8}
 #aCfgTxt{display:block;width:100%;min-height:130px;margin:6px 0;background:var(--panel2);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-family:var(--f-mono);font-size:.78rem;resize:vertical}
 #aCfgMsg[data-l="bad"]{color:var(--short)} #aCfgMsg[data-l="ok"]{color:var(--long)}
 .w-oth summary{cursor:pointer;color:var(--muted);padding:6px 0}
@@ -871,6 +877,10 @@ a.btn{text-decoration:none;color:inherit;display:inline-block}
 
   <!-- ===== SIGNAL ===== -->
   <section class="tab" id="tab-signal">
+    <div class="card" id="liveCard">
+      <h2>Signaux en direct <span class="sp" id="liveState"></span></h2>
+      <div id="liveBody"><p class="note" style="margin:0">Analyse de ta liste…</p></div>
+    </div>
     <div class="card verdict" id="verdict" data-v="LOAD">
       <div class="v-eyebrow" id="vEyebrow">Analyse en cours</div>
       <div class="v-word" id="vWord">CHARGEMENT</div>
@@ -1219,7 +1229,7 @@ a.btn{text-decoration:none;color:inherit;display:inline-block}
       <h2>Diagnostic de connexion</h2>
       <div class="journal" id="diag"></div>
     </div>
-    <p class="foot"><strong>Version 2 · setups calibrés.</strong> Mise à jour du 17 octobre 2026 (bouton « Ma config » à la place du labo, un seul trade par coin). Vigie Scalp aide à décider, il ne décide pas à ta place. Ce n'est pas un conseil financier. Les signaux se trompent souvent : place toujours ton stop, et ne risque que ce que tu peux perdre.</p>
+    <p class="foot"><strong>Version 2 · setups calibrés.</strong> Mise à jour du 17 octobre 2026 (signaux en direct dans l'écran Signal : prendre et clôturer une position Hyperliquid, stop posé tout seul). Vigie Scalp aide à décider, il ne décide pas à ta place. Ce n'est pas un conseil financier. Les signaux se trompent souvent : place toujours ton stop, et ne risque que ce que tu peux perdre.</p>
   </section>
 </main>
 
@@ -7606,6 +7616,7 @@ function PerpsBot(h) {
   let S = Object.assign({}, BLANK, h.store.get('perps', {}));
   if (S.v !== 2) S = Object.assign({}, BLANK, { acct: S.acct || '', agent: S.agent || null, log: S.log || [], peak: S.peak || 0 }); // ancienne version : on repart propre (compte et clé gardés)
   S.cfg = Object.assign({}, DEF, S.cfg);
+  if (!S.manual || typeof S.manual !== 'object') S.manual = { pos: {}, hist: [] };
   const save = () => h.store.set('perps', S);
   const P = { meta: null, metaAt: 0, candles: {}, ws: null, wsOk: false, q: [], qBusy: false, wallet: null, acctState: null, acctAt: 0, orders: [], agents: null, spotUsdc: null, guardQ: null, refill: {}, ui: {}, testing: {}, started: false };
 
@@ -8036,7 +8047,7 @@ function PerpsBot(h) {
   async function enter(sg) {
     await refreshAcct();
     const g = riskGate(); if (g) throw new Error(g);
-    if (positions().some(p => p.coin === sg.coin) || S.real.pos[sg.coin]) throw new Error('déjà une position sur ' + sg.coin);
+    if (positions().some(p => p.coin === sg.coin) || S.real.pos[sg.coin] || S.manual.pos[sg.coin]) throw new Error('déjà une position sur ' + sg.coin);
     if (!P.meta || now() - P.metaAt > 120000) await loadMeta();
     const a = P.meta[sg.coin];
     if (!a) throw new Error('marché inconnu');
@@ -8168,6 +8179,163 @@ function PerpsBot(h) {
     return true;
   }
 
+  /* ---------- positions prises à la main (écran Signal) ----------
+     Argent réel, une par une, après ta confirmation : entrée au marché (ordre IOC), stop posé chez Hyperliquid dans le même envoi.
+     Le stop reste en place même appli fermée. Pas d'objectif posé : tu clôtures quand tu veux.
+     Le bot futures ne les gère pas (pas de stop suiveur, pas de sortie) et n'ouvre rien sur une crypto déjà en position. */
+  const hlCoin = sym => { let c = String(sym || '').toUpperCase().replace(/(USDT|USDC|USD)$/, ''); if (/^1000/.test(c)) c = 'k' + c.slice(4); return c; };
+  function manualReady() {
+    if (h.inFrame) return 'les ordres réels ne partent pas depuis l\'aperçu Claude : utilise la version hébergée de l\'appli';
+    if (!S.acct) return 'relie d\'abord ton compte Phantom Perps (onglet Futures auto)';
+    if (!S.agent) return 'crée d\'abord la clé de trading (onglet Futures auto)';
+    if (!S.agent.approved) return 'autorise d\'abord la clé de trading dans Phantom (onglet Futures auto)';
+    if (!P.wallet) return 'locked';
+    return null;
+  }
+  async function manualQuote(o) {
+    if (!P.meta || now() - P.metaAt > 30000) await loadMeta();
+    const coin = hlCoin(o.sym), a = P.meta[coin];
+    if (!a) throw new Error(`${coin} ne se trade pas sur Hyperliquid`);
+    if (S.acct && (!P.acctState || now() - P.acctAt > 15000)) await refreshAcct();
+    const dir = o.dir > 0 ? 1 : -1, mid = a.mid || a.mark, sf = +o.stopFrac;
+    if (!fin(mid) || mid <= 0) throw new Error('pas de prix Hyperliquid pour ' + coin);
+    if (!(sf > 0)) throw new Error('le prix a déjà dépassé le stop du signal : trop tard');
+    if (sf < 0.0015) throw new Error('stop à moins de 0,15 % du prix : les frais mangeraient le trade');
+    if (sf > 0.25) throw new Error('stop à plus de 25 % du prix');
+    const stop = HL.roundPx(mid * (1 - dir * sf), a.szDec);
+    const dist = Math.abs(mid - stop), f = fees(coin);
+    const perUnit = dist + mid * f.taker + stop * f.taker;
+    let qty = (+o.riskUsd > 0 ? +o.riskUsd : 0) / perUnit;
+    const mm = 1 / (2 * a.maxLev), stopFrac = dist / mid;
+    const levSafe = Math.max(1, Math.floor(1 / (2 * stopFrac + 0.003 + mm))); // liquidation au moins 2 fois plus loin que le stop
+    const lev = Math.max(1, Math.min(Math.round(+o.lev || 5), a.maxLev, levSafe));
+    const avail = available();
+    let capped = false;
+    if (fin(avail) && qty * mid / lev > avail * 0.9) { qty = avail * 0.9 * lev / mid; capped = true; } // marge : 90 % du disponible au plus
+    qty = HL.roundSz(qty, a.szDec);
+    const ntl = qty * mid, liqFrac = 1 / lev - mm;
+    const busy = positions().some(p => p.coin === coin) || S.real.pos[coin] || S.manual.pos[coin];
+    const why = busy ? `déjà une position sur ${coin} (bot futures ou à la main)` : !(qty > 0) || ntl < MIN_NTL ? `position de ${usd(ntl)} : sous le minimum Hyperliquid de 10 $ (risque trop petit pour ce stop, ou solde insuffisant)` : liqFrac < 2 * stopFrac ? 'liquidation trop proche du stop' : '';
+    return { coin, dir, mid, stop, stopFrac, qty, ntl, lev, levAsked: Math.round(+o.lev || 5), margin: ntl / lev, risk: qty * perUnit, liqFrac, funding: a.funding, avail, capped, ok: !why, why, at: now() };
+  }
+  const manualOpen = o => serial(async () => {
+    const g = manualReady(); if (g) throw new Error(g === 'locked' ? 'bot futures verrouillé : entre ton code' : g);
+    await refreshAcct();
+    const q = await manualQuote(o); // recalculé au prix du moment
+    if (!q.ok) throw new Error(q.why);
+    const a = P.meta[q.coin], isBuy = q.dir > 0;
+    await HL.exchange(P.wallet, { type: 'updateLeverage', asset: a.idx, isCross: false, leverage: q.lev });
+    const px = HL.roundPx(q.mid * (isBuy ? 1.005 : 0.995), a.szDec);
+    const orders = [HL.limitWire(a.idx, isBuy, px, q.qty, false, 'Ioc'), HL.triggerWire(a.idx, !isBuy, q.stop, q.qty, 'sl')];
+    // noté AVANT l'envoi : si la réponse se perd, la surveillance retrouvera la position
+    const rec = { coin: q.coin, sym: o.sym, dir: q.dir, t0: now(), entry: q.mid, stop: q.stop, stopFrac: q.stopFrac, qty: q.qty, lev: q.lev, riskUsd: q.risk, setup: o.setup || null, tf: o.tf || null, pending: true };
+    S.manual.pos[q.coin] = rec; save();
+    let resp;
+    try { resp = await HL.exchange(P.wallet, { type: 'order', orders, grouping: 'normalTpsl' }); }
+    catch (e) { if (!/délai|injoignable/.test(e.message)) { delete S.manual.pos[q.coin]; save(); } throw e; }
+    const st = HL.statuses(resp), e0 = st[0] || {}, e1 = st[1] || {};
+    if (e0.error) { delete S.manual.pos[q.coin]; save(); throw new Error('ordre refusé : ' + e0.error); }
+    if (!e0.filled) { delete S.manual.pos[q.coin]; save(); throw new Error('ordre non exécuté (pas assez de contrepartie au prix)'); }
+    Object.assign(rec, { pending: false, entry: +e0.filled.avgPx, qty: +e0.filled.totalSz });
+    save();
+    log(`Position à la main ${q.dir > 0 ? 'LONG' : 'SHORT'} ${q.coin} : ${HL.wire(rec.qty)} à ${pxf(rec.entry)}, levier ${q.lev}x isolé, stop ${pxf(q.stop)} ${e1.error ? 'refusé (' + e1.error + '), remis par la surveillance' : 'posé chez Hyperliquid'}, risque ${usd(q.risk)}`, 'buy');
+    setTimeout(() => manualGuard().catch(() => {}), 3000);
+    return rec;
+  });
+  const manualClose = coin => serial(async () => {
+    if (!P.wallet) throw new Error('bot futures verrouillé : entre ton code');
+    await refreshAcct();
+    if (!P.meta || now() - P.metaAt > 30000) await loadMeta();
+    const a = P.meta[coin], r = S.manual.pos[coin], p = positions().find(x => x.coin === coin);
+    if (!a) throw new Error('marché inconnu');
+    if (p) {
+      const sz = Math.abs(+p.szi), isBuy = +p.szi < 0, mid = a.mid || a.mark;
+      const resp = await HL.exchange(P.wallet, { type: 'order', orders: [HL.limitWire(a.idx, isBuy, HL.roundPx(mid * (isBuy ? 1.01 : 0.99), a.szDec), sz, true, 'Ioc')], grouping: 'na' });
+      const e0 = HL.statuses(resp)[0] || {};
+      if (e0.error) throw new Error(e0.error);
+      if (!e0.filled) throw new Error('clôture non exécutée (pas assez de contrepartie), réessaie');
+    }
+    for (const o of P.orders.filter(o => o.coin === coin)) await cancel(a, o.oid);
+    if (r) { r.closeWhy = 'clôturé à la main'; save(); }
+    log(`${coin} (position à la main) fermé au marché`, 'sell');
+    setTimeout(() => manualGuard().catch(() => {}), 2500);
+  });
+  // Surveillance des positions à la main : stop toujours présent chez Hyperliquid, résultat noté à la fermeture
+  let mgQ = null;
+  const manualGuard = () => { if (mgQ) return mgQ; mgQ = serial(manualGuardIn).finally(() => { mgQ = null; }); return mgQ; };
+  async function manualGuardIn() {
+    if (!S.acct || !Object.keys(S.manual.pos).length) return;
+    if (!P.meta || now() - P.metaAt > 15000) await loadMeta().catch(() => {});
+    await refreshAcct();
+    const byCoin = Object.fromEntries(positions().map(p => [p.coin, p]));
+    for (const [coin, r] of Object.entries(S.manual.pos)) {
+      const p = byCoin[coin], a = P.meta && P.meta[coin];
+      if (!a) continue;
+      if (r.pending) {
+        if (p) { r.pending = false; r.entry = +p.entryPx; r.qty = Math.abs(+p.szi); r.t0 = now(); save(); log(`Ordre ${coin} (à la main) exécuté à ${pxf(r.entry)}`, 'buy'); }
+        else if (now() - r.t0 > 90000) { if (P.wallet) for (const o of P.orders.filter(o => o.coin === coin)) await cancel(a, o.oid); delete S.manual.pos[coin]; save(); log(`Ordre ${coin} (à la main) non exécuté : abandonné`); }
+        continue;
+      }
+      if (!p) { await settleManual(coin, r); continue; }
+      if (!P.wallet) continue;
+      const sls = P.orders.filter(o => o.coin === coin && o.isTrigger && o.reduceOnly && isSl(o));
+      if (sls.length) continue;
+      const sz = Math.abs(+p.szi), isBuy = +p.szi < 0, mid = a.mid || a.mark;
+      if ((r.stop - mid) * r.dir >= 0) { log(`${coin} : le prix a dépassé le stop et aucun stop n'est en place, fermeture`, 'warn'); try { await manualCloseIn(coin, a, p, r); } catch (e) { log(`${coin} : fermeture impossible (${e.message})`, 'bad'); } continue; }
+      try {
+        const resp = await HL.exchange(P.wallet, { type: 'order', orders: [HL.triggerWire(a.idx, isBuy, HL.roundPx(r.stop, a.szDec), sz, 'sl')], grouping: 'positionTpsl' });
+        const err = HL.statuses(resp).find(x => x && x.error);
+        if (err) throw new Error(err.error);
+        log(`${coin} : stop absent chez Hyperliquid, remis à ${pxf(r.stop)}`, 'warn');
+      } catch (e) { log(`${coin} : stop impossible à poser (${e.message}), fermeture`, 'bad'); try { await manualCloseIn(coin, a, p, r); } catch {} }
+    }
+    save();
+  }
+  async function manualCloseIn(coin, a, p, r) {
+    const sz = Math.abs(+p.szi), isBuy = +p.szi < 0, mid = a.mid || a.mark;
+    const resp = await HL.exchange(P.wallet, { type: 'order', orders: [HL.limitWire(a.idx, isBuy, HL.roundPx(mid * (isBuy ? 1.01 : 0.99), a.szDec), sz, true, 'Ioc')], grouping: 'na' });
+    const e0 = HL.statuses(resp)[0] || {};
+    if (e0.error) throw new Error(e0.error);
+    r.closeWhy = 'protection : stop impossible'; save();
+  }
+  async function settleManual(coin, r) {
+    let pnl = null, closing = [], fund = 0;
+    try {
+      const [fills, fu] = await Promise.all([
+        HL.info({ type: 'userFillsByTime', user: S.acct, startTime: r.t0 - 60000 }),
+        HL.info({ type: 'userFunding', user: S.acct, startTime: r.t0 - 60000 }).catch(() => [])
+      ]);
+      const F = (Array.isArray(fills) ? fills : []).filter(f => f.coin === coin);
+      closing = F.filter(f => /close|>/i.test(f.dir || '') || +f.closedPnl !== 0);
+      fund = (Array.isArray(fu) ? fu : []).filter(x => x.delta && x.delta.coin === coin).reduce((s, x) => s + (+x.delta.usdc || 0), 0);
+      pnl = F.reduce((s, f) => s + (+f.closedPnl || 0) - (+f.fee || 0), 0) + fund;
+    } catch {}
+    if (!closing.length && (r.tries = (r.tries || 0) + 1) < 6) { save(); return false; }
+    if (!closing.length) pnl = null;
+    const exitPx = closing.length ? closing.reduce((s, f) => s + +f.px * +f.sz, 0) / closing.reduce((s, f) => s + +f.sz, 0) : null;
+    const why = r.closeWhy || 'stop touché';
+    const R = fin(pnl) && r.riskUsd ? pnl / r.riskUsd : null;
+    S.manual.hist.unshift({ coin, sym: r.sym, dir: r.dir, t0: r.t0, t1: now(), entry: r.entry, exitPx, stop: r.stop, qty: r.qty, lev: r.lev, pnl, fund, R, riskUsd: r.riskUsd, why, setup: r.setup });
+    S.manual.hist = S.manual.hist.slice(0, 200);
+    delete S.manual.pos[coin];
+    save();
+    log(`${coin} (à la main) clôturé (${why}) : ${fin(pnl) ? (pnl >= 0 ? 'gain' : 'perte') + ' de ' + usd(Math.abs(pnl)) + (fin(R) ? ' (' + Rf(R) + ')' : '') : 'résultat illisible, vérifie dans Phantom'}`, fin(pnl) && pnl >= 0 ? 'sell' : 'bad');
+    h.notify && h.notify(`${coin} clôturé ${fin(pnl) ? usd(pnl) : ''}`, fin(pnl) && pnl >= 0 ? 'long' : 'short');
+    return true;
+  }
+  function manualList() {
+    const pos = positions();
+    return Object.values(S.manual.pos).map(r => {
+      const p = pos.find(x => x.coin === r.coin), a = P.meta && P.meta[r.coin], mid = a ? a.mid || a.mark : NaN;
+      const upnl = p ? +p.unrealizedPnl : NaN;
+      const hasSl = P.orders.some(o => o.coin === r.coin && o.isTrigger && o.reduceOnly && isSl(o));
+      return Object.assign({}, r, { mid, upnl, live: !!p, hasSl, R: fin(upnl) && r.riskUsd ? upnl / r.riskUsd : NaN });
+    });
+  }
+  const manual = { ready: manualReady, quote: manualQuote, open: manualOpen, close: manualClose, list: manualList, guard: () => manualGuard(), hlCoin,
+    hist: () => S.manual.hist.slice(0, 20), acctAt: () => P.acctAt,
+    unlock: async pin => { await unlock(pin); await checkAgent(); guard().catch(() => {}); manualGuard().catch(() => {}); } };
+
   /* ---------- boucles ---------- */
   async function boot() {
     try { await loadMeta(); } catch (e) { log('Hyperliquid injoignable : ' + e.message, 'bad'); setTimeout(boot, 30000); return; }
@@ -8188,6 +8356,8 @@ function PerpsBot(h) {
     if (hash.startsWith('#perps-revoke')) { P.ui.revoke = true; render(); return; }
     boot();
     setInterval(() => { loadMeta().catch(() => {}); for (const coin of universe()) catchUp(coin).catch(() => {}); }, 60000);
+    setInterval(() => { if (Object.keys(S.manual.pos).length) manualGuard().catch(() => {}); }, 15000);
+    if (Object.keys(S.manual.pos).length) setTimeout(() => manualGuard().catch(() => {}), 4000);
     document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { for (const coin of universe()) catchUp(coin).catch(() => {}); if (S.acct) guard().catch(() => {}); } });
     setInterval(() => { if (S.acct) guard().catch(e => log('Surveillance : ' + e.message, 'warn')); }, 10000);
     setInterval(() => { for (const coin of universe()) { const t = S.bt[coin]; if (P.candles[coin] && (!t || now() - t.at > RETEST)) enqueue(async () => { await history(coin); retest(coin); onBar(coin); }); } }, 15 * 60000);
@@ -8335,7 +8505,7 @@ function PerpsBot(h) {
         <p class="p-life">Prix ${pxf(mid)} · risque de départ ${usd(r.riskUsd)} · depuis ${ago(now() - r.t0)}${r.trailed ? ` · stop suiveur (${lockR >= 0 ? 'gain de ' + Rf(lockR) + ' assuré' : 'perte réduite à ' + Rf(lockR)})` : ''}</p>
         <div class="row-btns" style="margin:0"><button class="btn sm danger" data-pclose="${esc(r.coin)}">Fermer maintenant</button></div></div>`;
     }).join('');
-    const other = pos.filter(p => !S.real.pos[p.coin]).map(p => `<div class="j-row"><span class="chip">${esc(p.coin)}</span><div class="j-mid"><div>Position ouverte hors bot : ${+p.szi > 0 ? 'LONG' : 'SHORT'} ${esc(p.szi)}</div><div class="mono">entrée ${pxf(+p.entryPx)} · ${usd(+p.unrealizedPnl)}</div></div><span></span></div>`).join('');
+    const other = pos.filter(p => !S.real.pos[p.coin]).map(p => `<div class="j-row"><span class="chip">${esc(p.coin)}</span><div class="j-mid"><div>${S.manual.pos[p.coin] ? 'Position prise à la main (écran Signal)' : 'Position ouverte hors bot'} : ${+p.szi > 0 ? 'LONG' : 'SHORT'} ${esc(p.szi)}</div><div class="mono">entrée ${pxf(+p.entryPx)} · ${usd(+p.unrealizedPnl)}</div></div><span></span></div>`).join('');
     const done = [...S.real.hist.slice(0, 8).map(x => ({ real: true, ...x })), ...S.paper.closed.slice(0, 8)].sort((a, b) => b.t1 - a.t1).slice(0, 10).map(x => `<div class="j-row"><span class="chip ${x.R > 0 ? 'long' : 'short'}">${Rf(x.R)}</span><div class="j-mid"><div>${esc(x.coin)} ${x.dir > 0 ? 'LONG' : 'SHORT'} · ${x.real ? '<b>réel</b>' : 'simulation'}${x.real && fin(x.pnl) ? ' · ' + usd(x.pnl) : ''}</div><div class="mono">il y a ${ago(now() - x.t1)}${x.why ? ' · ' + esc(x.why) : ''}</div></div><span></span></div>`).join('');
     const logs = S.log.slice(0, 10).map(x => `<div class="b-log" data-l="${x.lvl}"><span class="mono">${new Date(x.t).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</span><span>${esc(x.msg)}</span></div>`).join('');
     const nReal = universe().filter(eligible);
@@ -8415,7 +8585,7 @@ function PerpsBot(h) {
     box.addEventListener('input', e => { if (e.target && e.target.id === 'ppQ') P.ui.qd = e.target.value; });
   }
 
-  return { start, render, bindUI, S, P, build, _test: { build, catchUp, revokeWithPhantom, forgetKey, equity, available, unified, acctHelp, sizeFor, riskGate, backtest, retest, btOk, eligible, sigAt, step, onBar, stateOf, history, loadMeta, tryReal, guard, settle, closeNow, refreshAcct, createAgent, unlock, approveWithPhantom, checkAgent, universe, fees, closed, P, RULE } };
+  return { start, render, bindUI, S, P, build, manual, _test: { hlCoin, manualQuote, manualGuard, build, catchUp, revokeWithPhantom, forgetKey, equity, available, unified, acctHelp, sizeFor, riskGate, backtest, retest, btOk, eligible, sigAt, step, onBar, stateOf, history, loadMeta, tryReal, guard, settle, closeNow, refreshAcct, createAgent, unlock, approveWithPhantom, checkAgent, universe, fees, closed, P, RULE } };
 }
 if (typeof module !== 'undefined') module.exports = PerpsBot;
 
@@ -9323,7 +9493,8 @@ if (typeof module !== 'undefined') module.exports = PerpsBot;
           const cal = cals[`${feed.id}|${sym}|${tf}`];
           const r = Engine.evaluate({ c: b, S, i: ci, htf: j >= 0 ? { S: HS, j, label: htf } : null, book: null, funding: null, cfg: cal ? cal.cfg : Engine.defaultCfg(), fees: fees() });
           const tk = st.tickers && st.tickers.get(sym);
-          return { sym, px: b[b.length - 1].c, chg: tk ? tk.chg : null, score: r.score, verdict: r.verdict, dir: r.dir, setup: r.plan ? r.plan.key : null, cal: !!cal };
+          return { sym, px: b[b.length - 1].c, chg: tk ? tk.chg : null, score: r.score, verdict: r.verdict, dir: r.dir, setup: r.plan ? r.plan.key : null, cal: !!cal,
+            plan: r.plan ? { dir: r.plan.dir, entry: r.plan.entry, stop: r.plan.stop, tp: r.plan.tp, entryType: r.plan.entryType } : null, t: b[ci].t, tf };
         } catch { return { sym, err: true }; }
       }));
       if (gen !== st.gen) { scanning = false; $('#scanNow').disabled = false; return; }
@@ -9335,6 +9506,102 @@ if (typeof module !== 'undefined') module.exports = PerpsBot;
     st.scanAt = Date.now();
     scanning = false; $('#scanNow').disabled = false;
     renderScan(true);
+    renderLive();
+  }
+
+  /* ---------- signaux en direct : position réelle d'un bouton (Hyperliquid, avec la clé du bot futures) ----------
+     Les cryptos de ta liste (ou du top volume) en LONG ou SHORT à la dernière analyse. « Prendre » montre la taille, le levier,
+     le stop et le risque ; rien ne part sans « Confirmer ». Le stop du signal (prix Binance) est reporté en % sur le prix
+     Hyperliquid et posé chez Hyperliquid avec l'entrée. Clôture d'un appui, au marché. */
+  const LV = { ask: null, quote: null, qErr: '', qBusy: false, busy: false, closing: {}, risk: null, bound: false };
+  const liveRisk = () => (fin(LV.risk) && LV.risk > 0 ? LV.risk : Math.round(set.capital * set.risk) / 100);
+  const liveSigs = () => scanRes.filter(r => !r.err && (r.verdict === 'LONG' || r.verdict === 'SHORT') && r.plan && fin(r.plan.stop));
+  const usdS = x => (!fin(x) ? '—' : (x > 0 ? '+' : x < 0 ? '−' : '') + Math.abs(x).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' $');
+  async function liveQuote() {
+    const r = liveSigs().find(x => x.sym === LV.ask);
+    if (!r || !perps || !perps.manual) return;
+    LV.qBusy = true; LV.qErr = ''; renderLive();
+    try {
+      try { await refreshTickers(); } catch {}
+      const tk = st.tickers && st.tickers.get(r.sym), last = tk && fin(tk.last) && tk.last > 0 ? tk.last : r.px;
+      const sf = (last - r.plan.stop) / last * r.plan.dir;
+      LV.quote = await perps.manual.quote({ sym: r.sym, dir: r.plan.dir, stopFrac: sf, riskUsd: liveRisk(), lev: set.leverage });
+      LV.quote.sym = r.sym; LV.quote.last = last; LV.quote.tpFrac = fin(r.plan.tp) ? (r.plan.tp - last) / last * r.plan.dir : null;
+    } catch (e) { LV.quote = null; LV.qErr = e.message; }
+    LV.qBusy = false; renderLive();
+  }
+  function liveAskHtml(r) {
+    const M = perps.manual, g = M.ready(), q = LV.quote && LV.quote.sym === r.sym ? LV.quote : null, d = r.plan.dir;
+    const side = d > 0 ? 'LONG' : 'SHORT';
+    if (g && g !== 'locked') return `<div class="lv-ask"><p class="note" style="margin:0 0 8px">Pour trader en direct, ${esc(g)}.</p><div class="row-btns" style="margin:0"><button class="btn sm pri" data-lv="perps">Ouvrir Futures auto</button><button class="btn sm" data-lv="cancel">Annuler</button></div></div>`;
+    const lock = g === 'locked' ? `<p class="note" style="margin:0 0 6px">Bot futures verrouillé : entre ton code pour signer l'ordre.</p><div class="add" style="margin:0 0 8px"><input id="lvPin" type="password" placeholder="Code du bot futures" autocomplete="current-password"><button class="btn sm pri" data-lv="unlock">Déverrouiller</button></div>` : '';
+    const body = LV.qBusy && !q ? '<p class="note" style="margin:0">Calcul de la position…</p>'
+      : LV.qErr ? `<p class="note" style="margin:0;color:var(--short)">${esc(LV.qErr)}</p>`
+      : q ? `<div class="kvs"><span>Entrée au marché</span><b>${fp(q.mid)}</b><span>Stop posé à</span><b>${fp(q.stop)} (${fpct(-q.stopFrac, 2, false)})</b>
+          <span>Taille</span><b>${String(+q.qty.toPrecision(6)).replace('.', ',')} ${esc(q.coin)} · ${usdS(q.ntl).replace('+', '')}</b><span>Levier</span><b>${q.lev}x isolé${q.lev < q.levAsked ? ` (au lieu de ${q.levAsked}x)` : ''}</b>
+          <span>Marge bloquée</span><b>${usdS(q.margin).replace('+', '')}</b><span>Perte si stop touché</span><b class="neg">−${usdS(q.risk).replace('+', '')}</b>
+          <span>Liquidation</span><b>à ${fpct(-q.liqFrac * d, 1)}</b><span>Objectif du signal</span><b>${fin(q.tpFrac) ? fpct(q.tpFrac * d, 2) + ' (non posé)' : '—'}</b></div>
+          ${q.capped ? '<p class="note" style="margin:0 0 6px">Taille réduite : la marge est limitée à 90 % de ton disponible.</p>' : ''}
+          ${!q.ok ? `<p class="note" style="margin:0 0 6px;color:var(--short)">${esc(q.why)}</p>` : ''}` : '';
+    return `<div class="lv-ask"><div><b>${side} ${esc(q ? q.coin : perps.manual.hlCoin(r.sym))} sur Hyperliquid</b> · argent réel</div>${lock}${body}
+      <div class="add" style="margin:0 0 8px"><label for="lvRisk" class="muted" style="align-self:center">Risque ($)</label><input id="lvRisk" type="number" inputmode="decimal" step="0.5" min="1" value="${liveRisk()}"></div>
+      <div class="row-btns" style="margin:0"><button class="btn sm ${d > 0 ? 'pri' : 'danger'}" data-lv="confirm"${!q || !q.ok || g || LV.busy ? ' disabled' : ''}>${LV.busy ? 'Envoi…' : `Confirmer le ${side}`}</button><button class="btn sm" data-lv="cancel">Annuler</button></div></div>`;
+  }
+  function renderLive() {
+    const box = $('#liveBody');
+    if (!box) return;
+    const ae = document.activeElement;
+    if (ae && box.contains(ae) && ae.tagName === 'INPUT') return;
+    if (!perps || !perps.manual) { box.innerHTML = '<p class="note" style="margin:0">Démarrage…</p>'; return; }
+    const M = perps.manual, sigs = liveSigs(), mine = M.list(), held = new Set(mine.map(x => x.coin)), demo = st.feed === Demo;
+    if (demo && LV.ask) { LV.ask = null; LV.quote = null; }
+    if (LV.ask && !sigs.some(r => r.sym === LV.ask)) { LV.ask = null; LV.quote = null; }
+    $('#liveState').innerHTML = mine.length ? `<span class="chip long">${mine.length} en cours</span>` : sigs.length ? `<span class="chip">${sigs.length} signal${sigs.length > 1 ? 's' : ''}</span>` : '';
+    const rowsS = sigs.map(r => {
+      const d = r.plan.dir, sf = (r.px - r.plan.stop) / r.px * d, tpf = fin(r.plan.tp) ? (r.plan.tp - r.px) / r.px * d : NaN, hc = M.hlCoin(r.sym), on = held.has(hc) || demo;
+      return `<div class="j-row"><span class="chip ${d > 0 ? 'long' : 'short'}">${d > 0 ? 'LONG' : 'SHORT'}</span><div class="j-mid"><div><b>${esc(coin(r.sym))}</b>${r.setup && Engine.SETUPS[r.setup] ? ' · ' + esc(Engine.SETUPS[r.setup].short) : ''}</div><div class="mono">stop ${fin(sf) ? fpct(-sf, 2, false) : '—'} · objectif ${fin(tpf) ? fpct(tpf, 2) : '—'} · ${esc(r.tf || set.tf)} ${fin(r.t) ? 'clôture ' + hhmm(r.t + (TF_MS[r.tf || set.tf] || 0)) : ''}</div></div>${on ? `<span class="chip">${demo ? 'démo' : 'en position'}</span>` : `<button class="btn sm ${d > 0 ? 'pri' : 'danger'}" data-lv="ask" data-sym="${esc(r.sym)}">${LV.ask === r.sym ? 'Fermer' : 'Prendre'}</button>`}</div>${LV.ask === r.sym ? liveAskHtml(r) : ''}`;
+    }).join('');
+    const rowsP = mine.map(x => `<div class="j-row"><span class="chip ${x.dir > 0 ? 'long' : 'short'}">${x.dir > 0 ? 'LONG' : 'SHORT'}</span><div class="j-mid"><div><b>${esc(x.coin)}</b> · ${x.pending ? 'ordre en cours…' : `entrée ${fp(x.entry)} · levier ${x.lev}x`}</div><div class="mono">stop ${fp(x.stop)}${x.live && !x.hasSl ? ' (en cours de pose…)' : ''} · prix ${fp(x.mid)}</div>
+      <div class="row-btns" style="margin:4px 0 0"><button class="btn sm danger" data-lv="close" data-coin="${esc(x.coin)}"${LV.closing[x.coin] ? ' disabled' : ''}>${LV.closing[x.coin] ? 'Clôture…' : 'Clôturer'}</button></div></div>
+      <span class="j-r ${x.upnl > 0 ? 'pos' : x.upnl < 0 ? 'neg' : ''}">${usdS(x.upnl)}${fin(x.R) ? `<small>${(x.R > 0 ? '+' : x.R < 0 ? '−' : '') + Math.abs(x.R).toFixed(2).replace('.', ',')} R</small>` : ''}</span></div>`).join('');
+    const last = M.hist().slice(0, 3).map(x => `<div class="j-row"><span class="chip ${fin(x.pnl) ? (x.pnl >= 0 ? 'long' : 'short') : ''}">${x.dir > 0 ? 'LONG' : 'SHORT'}</span><div class="j-mid"><div>${esc(x.coin)} · ${esc(x.why)}</div><div class="mono">${hhmm(x.t1)}${fin(x.exitPx) ? ' · sortie ' + fp(x.exitPx) : ''}</div></div><span class="j-r ${x.pnl >= 0 ? 'pos' : 'neg'}">${usdS(x.pnl)}</span></div>`).join('');
+    const src = set.scanMode === 'top' ? 'du top volume' : 'de ta liste';
+    const empty = !st.scanAt ? `<p class="note" style="margin:0">Analyse des cryptos ${src}…</p>`
+      : `<p class="note" style="margin:0">Aucune crypto ${src} en LONG ou SHORT à la dernière analyse (${hhmm(st.scanAt)}, unité ${esc(set.tf)}). Nouvelle analyse chaque minute tant que l'écran est ouvert.</p>`;
+    box.innerHTML = `${demo ? '<p class="note" style="margin:0 0 8px;color:var(--warn)">Flux de démonstration : ces signaux sont simulés, aucune position réelle ne peut être prise dessus. Ça revient dès que les prix réels repassent.</p>' : ''}${rowsP ? `<h3 class="w-h" style="margin-top:0">Mes positions en direct</h3><div class="journal">${rowsP}</div>` : ''}
+      ${sigs.length ? `${rowsP ? '<h3 class="w-h">Signaux du moment</h3>' : ''}<div class="journal">${rowsS}</div>` : empty}
+      ${last ? `<h3 class="w-h">Dernières positions à la main</h3><div class="journal">${last}</div>` : ''}
+      <p class="note">Exécution sur Hyperliquid (ton compte Phantom Perps, clé du bot futures). Le signal vient des prix ${esc(set.ex === 'bybit' ? 'Bybit' : 'Binance')} : son stop est reporté en % sur le prix Hyperliquid et posé chez Hyperliquid avec l'entrée, il reste en place même appli fermée. L'objectif n'est pas posé : tu clôtures quand tu veux. Risque par trade : ${usdS(liveRisk()).replace('+', '')} (capital × risque de tes réglages, modifiable avant de confirmer).</p>`;
+    if (!LV.bound) {
+      LV.bound = true;
+      box.addEventListener('click', async e => {
+        const b = e.target.closest('[data-lv]'); if (!b || b.disabled) return;
+        const a = b.dataset.lv;
+        if (a === 'ask') { const s = b.dataset.sym; if (LV.ask === s) { LV.ask = null; LV.quote = null; renderLive(); return; } LV.ask = s; LV.quote = null; LV.qErr = ''; liveQuote(); return; }
+        if (a === 'cancel') { LV.ask = null; LV.quote = null; renderLive(); return; }
+        if (a === 'perps') { go('perps'); return; }
+        if (a === 'unlock') { const el = $('#lvPin'); b.disabled = true; try { await perps.manual.unlock(el ? el.value : ''); toast('Bot futures déverrouillé', 'long'); liveQuote(); } catch (err) { toast(err.message, 'short'); } finally { b.disabled = false; renderLive(); } return; }
+        if (a === 'confirm') {
+          const r = liveSigs().find(x => x.sym === LV.ask), q = LV.quote;
+          if (!r || !q || st.feed === Demo) return;
+          if (Date.now() - q.at > 20000) { toast('Prix mis à jour : vérifie la position puis confirme', 'warn'); liveQuote(); return; }
+          LV.busy = true; renderLive();
+          try {
+            const rec = await perps.manual.open({ sym: r.sym, dir: r.plan.dir, stopFrac: q.stopFrac, riskUsd: liveRisk(), lev: set.leverage, setup: r.setup, tf: r.tf });
+            toast(`${rec.dir > 0 ? 'LONG' : 'SHORT'} ${rec.coin} ouvert, stop posé à ${fp(rec.stop)}`, 'long'); beep(1); buzz([120, 60, 120]);
+            LV.ask = null; LV.quote = null;
+          } catch (err) { toast('Position non ouverte : ' + err.message, 'short'); LV.qErr = err.message; }
+          finally { LV.busy = false; renderLive(); }
+          return;
+        }
+        if (a === 'close') {
+          const c = b.dataset.coin; LV.closing[c] = true; renderLive();
+          try { await perps.manual.close(c); toast(`${c} clôturé au marché`, 'long'); } catch (err) { toast('Clôture impossible : ' + err.message, 'short'); }
+          finally { delete LV.closing[c]; renderLive(); }
+        }
+      });
+      box.addEventListener('change', e => { if (e.target && e.target.id === 'lvRisk') { const x = parseFloat(String(e.target.value).replace(',', '.')); if (fin(x) && x > 0 && x <= 100000) { LV.risk = x; e.target.blur(); liveQuote(); } else { e.target.value = liveRisk(); toast('Risque invalide'); } } });
+    }
   }
   function renderScan(done) {
     $('#scanInfo').textContent = done ? `${set.tf} · ${hhmm(st.scanAt)}` : 'analyse…';
@@ -9577,7 +9844,7 @@ if (typeof module !== 'undefined') module.exports = PerpsBot;
     if (t === 'new') setTimeout(() => newCoins && newCoins.render(), 0);
     $$('.tab').forEach(s => { s.hidden = s.id !== 'tab-' + t; });
     if (t === 'meme') setTimeout(() => { radar.render(); trader.render(); bot.render(); }, 0);
-    if (t === 'signal') requestAnimationFrame(drawChart);
+    if (t === 'signal') { requestAnimationFrame(drawChart); renderLive(); if (st.feed && (!st.scanAt || Date.now() - st.scanAt > 60000)) setTimeout(() => scan(), 300); if (perps && perps.manual) perps.manual.guard(); }
     if (t === 'scan') { renderScan(!!st.scanAt); if (!st.scanAt || Date.now() - st.scanAt > 30000) scan(); }
     if (t === 'stats') { renderCalib(); renderJournal(); renderFees(); }
     if (t === 'pos') { if (!pos) fillForm(null); renderPos(); }
@@ -9915,7 +10182,8 @@ if (typeof module !== 'undefined') module.exports = PerpsBot;
   setInterval(() => {
     if (st.feed && st.feed !== Demo && st.status === 'live' && Date.now() - st.lastMsg > 20000) { log('Plus de données depuis 20 s : reconnexion'); start(); }
     if (st.feed && Date.now() - (st.tickersAt || 0) > 60000) refreshTickers();
-    if (curTab === 'scan' && st.scanAt && Date.now() - st.scanAt > 60000) scan();
+    if ((curTab === 'scan' || curTab === 'signal') && document.visibilityState === 'visible' && st.scanAt && Date.now() - st.scanAt > 60000) scan();
+    if (curTab === 'signal' && document.visibilityState === 'visible') renderLive();
   }, 5000);
   setInterval(() => tick(false), 250);
 
