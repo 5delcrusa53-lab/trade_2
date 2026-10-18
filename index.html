@@ -1239,7 +1239,7 @@ a.btn{text-decoration:none;color:inherit;display:inline-block}
       <h2>Diagnostic de connexion</h2>
       <div class="journal" id="diag"></div>
     </div>
-    <p class="foot"><strong>Version 2 · setups calibrés.</strong> Mise à jour du 17 octobre 2026 (Futures : « Cassures en vue » sur toutes les cryptos Hyperliquid, position d'un bouton avec stop et stop suiveur). Vigie Scalp aide à décider, il ne décide pas à ta place. Ce n'est pas un conseil financier. Les signaux se trompent souvent : place toujours ton stop, et ne risque que ce que tu peux perdre.</p>
+    <p class="foot"><strong>Version 2 · setups calibrés.</strong> Mise à jour du 18 octobre 2026 (Signal : clôture automatique à l'objectif ou manuelle, position Hyperliquid tracée sur le graphique). Vigie Scalp aide à décider, il ne décide pas à ta place. Ce n'est pas un conseil financier. Les signaux se trompent souvent : place toujours ton stop, et ne risque que ce que tu peux perdre.</p>
   </section>
 </main>
 
@@ -8052,6 +8052,7 @@ function PerpsBot(h) {
   let lock = Promise.resolve();
   const serial = fn => { const r = lock.then(fn, fn); lock = r.catch(() => {}); return r; };
   const isSl = o => /stop/i.test(o.orderType || '') || o.tpsl === 'sl';
+  const isTp = o => /take profit/i.test(o.orderType || '') || o.tpsl === 'tp';
   const cancel = async (a, oid) => { try { await HL.exchange(P.wallet, { type: 'cancel', cancels: [{ a: a.idx, o: oid }] }); return true; } catch { return false; } };
   const tryReal = sg => serial(() => enter(sg));
   async function enter(sg) {
@@ -8224,9 +8225,12 @@ function PerpsBot(h) {
     if (fin(avail) && qty * mid / lev > avail * 0.9) { qty = avail * 0.9 * lev / mid; capped = true; } // marge : 90 % du disponible au plus
     qty = HL.roundSz(qty, a.szDec);
     const ntl = qty * mid, liqFrac = 1 / lev - mm;
+    // objectif : reporté en % sur le prix Hyperliquid (posé chez Hyperliquid seulement en clôture automatique)
+    const tf = +o.tpFrac, tp = fin(tf) && tf >= 0.0015 ? HL.roundPx(mid * (1 + dir * tf), a.szDec) : null;
     const busy = positions().some(p => p.coin === coin) || S.real.pos[coin] || S.manual.pos[coin];
     const why = busy ? `déjà une position sur ${coin} (bot futures ou à la main)` : !(qty > 0) || ntl < MIN_NTL ? `position de ${usd(ntl)} : sous le minimum Hyperliquid de 10 $ (risque trop petit pour ce stop, ou solde insuffisant)` : liqFrac < 2 * stopFrac ? 'liquidation trop proche du stop' : '';
-    return { coin, dir, mid, stop, stopFrac, qty, ntl, lev, levAsked: Math.round(+o.lev || 5), margin: ntl / lev, risk: qty * perUnit, liqFrac, funding: a.funding, avail, capped, ok: !why, why, at: now() };
+    const tpGain = tp ? qty * Math.abs(tp - mid) - qty * (mid + tp) * f.taker : null;
+    return { coin, dir, mid, stop, stopFrac, qty, ntl, lev, levAsked: Math.round(+o.lev || 5), margin: ntl / lev, risk: qty * perUnit, liqFrac, funding: a.funding, avail, capped, tp, tpFrac: tp ? Math.abs(tp - mid) / mid : null, tpGain, ok: !why, why, at: now() };
   }
   const manualOpen = o => serial(async () => {
     const g = manualReady(); if (g) throw new Error(g === 'locked' ? 'bot futures verrouillé : entre ton code' : g);
@@ -8236,20 +8240,22 @@ function PerpsBot(h) {
     const a = P.meta[q.coin], isBuy = q.dir > 0;
     await HL.exchange(P.wallet, { type: 'updateLeverage', asset: a.idx, isCross: false, leverage: q.lev });
     const px = HL.roundPx(q.mid * (isBuy ? 1.005 : 0.995), a.szDec);
-    const orders = [HL.limitWire(a.idx, isBuy, px, q.qty, false, 'Ioc'), HL.triggerWire(a.idx, !isBuy, q.stop, q.qty, 'sl')];
+    const tpAuto = o.tpMode === 'auto' && !!q.tp;
+    // entrée, puis objectif (si clôture automatique), puis stop : un seul envoi
+    const orders = [HL.limitWire(a.idx, isBuy, px, q.qty, false, 'Ioc'), ...(tpAuto ? [HL.triggerWire(a.idx, !isBuy, q.tp, q.qty, 'tp')] : []), HL.triggerWire(a.idx, !isBuy, q.stop, q.qty, 'sl')];
     // noté AVANT l'envoi : si la réponse se perd, la surveillance retrouvera la position
-    const rec = Object.assign({ coin: q.coin, sym: o.sym || q.coin, dir: q.dir, t0: now(), entry: q.mid, stop: q.stop, stopFrac: q.stopFrac, qty: q.qty, lev: q.lev, riskUsd: q.risk, setup: o.setup || null, tf: o.tf || null, pending: true }, o.extra || {});
+    const rec = Object.assign({ coin: q.coin, sym: o.sym || q.coin, dir: q.dir, t0: now(), entry: q.mid, stop: q.stop, stopFrac: q.stopFrac, qty: q.qty, lev: q.lev, riskUsd: q.risk, setup: o.setup || null, tf: o.tf || null, tp: q.tp || null, tpMode: tpAuto ? 'auto' : 'manual', pending: true }, o.extra || {});
     S.manual.pos[q.coin] = rec; save();
     let resp;
     try { resp = await HL.exchange(P.wallet, { type: 'order', orders, grouping: 'normalTpsl' }); }
     catch (e) { if (!/délai|injoignable/.test(e.message)) { delete S.manual.pos[q.coin]; save(); } throw e; }
-    const st = HL.statuses(resp), e0 = st[0] || {}, e1 = st[1] || {};
+    const st = HL.statuses(resp), e0 = st[0] || {}, e1 = st.slice(1).find(x => x && x.error) || {};
     if (e0.error) { delete S.manual.pos[q.coin]; save(); throw new Error('ordre refusé : ' + e0.error); }
     if (!e0.filled) { delete S.manual.pos[q.coin]; save(); throw new Error('ordre non exécuté (pas assez de contrepartie au prix)'); }
     Object.assign(rec, { pending: false, entry: +e0.filled.avgPx, qty: +e0.filled.totalSz });
     if (rec.trail) rec.best = rec.entry;
     save();
-    log(`Position à la main ${q.dir > 0 ? 'LONG' : 'SHORT'} ${q.coin} : ${HL.wire(rec.qty)} à ${pxf(rec.entry)}, levier ${q.lev}x isolé, stop ${pxf(q.stop)} ${e1.error ? 'refusé (' + e1.error + '), remis par la surveillance' : 'posé chez Hyperliquid'}, risque ${usd(q.risk)}`, 'buy');
+    log(`Position à la main ${q.dir > 0 ? 'LONG' : 'SHORT'} ${q.coin} : ${HL.wire(rec.qty)} à ${pxf(rec.entry)}, levier ${q.lev}x isolé, stop ${pxf(q.stop)}${tpAuto ? `, objectif ${pxf(q.tp)}` : ''} ${e1.error ? '(un ordre refusé : ' + e1.error + ', remis par la surveillance)' : 'posés chez Hyperliquid'}, risque ${usd(q.risk)}${tpAuto ? '' : ', clôture manuelle'}`, 'buy');
     setTimeout(() => manualGuard().catch(() => {}), 3000);
     return rec;
   });
@@ -8289,6 +8295,17 @@ function PerpsBot(h) {
       }
       if (!p) { await settleManual(coin, r); continue; }
       if (!P.wallet) continue;
+      if (r.tpMode === 'auto' && fin(r.tp)) {
+        const tps = P.orders.filter(o => o.coin === coin && o.isTrigger && o.reduceOnly && isTp(o)), midN = a.mid || a.mark;
+        if ((midN - r.tp) * r.dir >= 0) { if (!tps.length) { try { await manualCloseIn(coin, a, p, r); r.closeWhy = 'objectif atteint'; save(); log(`${coin} : objectif atteint, fermeture`, 'ok'); } catch (e) { log(`${coin} : fermeture à l'objectif impossible (${e.message})`, 'bad'); } continue; } }
+        else if (!tps.length) {
+          try {
+            const resp = await HL.exchange(P.wallet, { type: 'order', orders: [HL.triggerWire(a.idx, +p.szi < 0, HL.roundPx(r.tp, a.szDec), Math.abs(+p.szi), 'tp')], grouping: 'positionTpsl' });
+            const err = HL.statuses(resp).find(x => x && x.error); if (err) throw new Error(err.error);
+            log(`${coin} : objectif absent chez Hyperliquid, remis à ${pxf(r.tp)}`, 'warn');
+          } catch (e) { log(`${coin} : objectif impossible à poser (${e.message})`, 'warn'); }
+        }
+      }
       const sls = P.orders.filter(o => o.coin === coin && o.isTrigger && o.reduceOnly && isSl(o));
       if (r.trail && sls.length) { try { await trailManual(coin, a, p, r, sls); } catch (e) { log(`${coin} : stop suiveur non mis à jour (${e.message})`, 'warn'); } continue; }
       if (sls.length) continue;
@@ -8332,6 +8349,30 @@ function PerpsBot(h) {
     r.stop = nx; r.trailed = true; save();
     log(`${coin} : stop suiveur remonté à ${pxf(nx)} (position à la main)`, 'ok');
   }
+  // mode « auto » : objectif posé chez Hyperliquid (rMul : objectif à n fois le risque, pour une position ouverte sans objectif)
+  const manualSetTp = (coin, mode, rMul) => serial(async () => {
+    if (!P.wallet) throw new Error('bot futures verrouillé : entre ton code');
+    const r = S.manual.pos[coin];
+    if (!r || r.pending) throw new Error('position introuvable');
+    if (fin(+rMul) && +rMul > 0 && P.meta && P.meta[coin]) r.tp = HL.roundPx(r.entry + r.dir * +rMul * Math.abs(r.entry - r.stop), P.meta[coin].szDec);
+    if (!fin(r.tp)) throw new Error('pas d\'objectif connu pour cette position');
+    await refreshAcct();
+    const a = P.meta && P.meta[coin], p = positions().find(x => x.coin === coin);
+    if (!a || !p) throw new Error('position fermée');
+    const tps = P.orders.filter(o => o.coin === coin && o.isTrigger && o.reduceOnly && isTp(o));
+    if (mode === 'auto') {
+      const mid = a.mid || a.mark;
+      if ((mid - r.tp) * r.dir >= 0) throw new Error('le prix a déjà dépassé l\'objectif : clôture-la directement');
+      if (!tps.length) {
+        const resp = await HL.exchange(P.wallet, { type: 'order', orders: [HL.triggerWire(a.idx, +p.szi < 0, HL.roundPx(r.tp, a.szDec), Math.abs(+p.szi), 'tp')], grouping: 'positionTpsl' });
+        const err = HL.statuses(resp).find(x => x && x.error); if (err) throw new Error(err.error);
+      }
+      r.tpMode = 'auto'; save(); log(`${coin} : clôture automatique, objectif posé à ${pxf(r.tp)}`, 'ok');
+    } else {
+      for (const o of tps) await cancel(a, o.oid);
+      r.tpMode = 'manual'; save(); log(`${coin} : clôture manuelle, objectif retiré (le stop reste)`, 'warn');
+    }
+  });
   async function manualCloseIn(coin, a, p, r) {
     const sz = Math.abs(+p.szi), isBuy = +p.szi < 0, mid = a.mid || a.mark;
     const resp = await HL.exchange(P.wallet, { type: 'order', orders: [HL.limitWire(a.idx, isBuy, HL.roundPx(mid * (isBuy ? 1.01 : 0.99), a.szDec), sz, true, 'Ioc')], grouping: 'na' });
@@ -8354,7 +8395,8 @@ function PerpsBot(h) {
     if (!closing.length && (r.tries = (r.tries || 0) + 1) < 6) { save(); return false; }
     if (!closing.length) pnl = null;
     const exitPx = closing.length ? closing.reduce((s, f) => s + +f.px * +f.sz, 0) / closing.reduce((s, f) => s + +f.sz, 0) : null;
-    const why = r.closeWhy || (r.trailed ? 'stop suiveur touché' : 'stop touché');
+    const atTp = fin(r.tp) && fin(exitPx) && (exitPx - r.tp) * r.dir >= -Math.abs(r.tp) * 0.003;
+    const why = r.closeWhy || (atTp ? 'objectif atteint' : r.trailed ? 'stop suiveur touché' : 'stop touché');
     const R = fin(pnl) && r.riskUsd ? pnl / r.riskUsd : null;
     S.manual.hist.unshift({ coin, sym: r.sym, dir: r.dir, t0: r.t0, t1: now(), entry: r.entry, exitPx, stop: r.stop, qty: r.qty, lev: r.lev, pnl, fund, R, riskUsd: r.riskUsd, why, setup: r.setup });
     S.manual.hist = S.manual.hist.slice(0, 200);
@@ -8370,7 +8412,8 @@ function PerpsBot(h) {
       const p = pos.find(x => x.coin === r.coin), a = P.meta && P.meta[r.coin], mid = a ? a.mid || a.mark : NaN;
       const upnl = p ? +p.unrealizedPnl : NaN;
       const hasSl = P.orders.some(o => o.coin === r.coin && o.isTrigger && o.reduceOnly && isSl(o));
-      return Object.assign({}, r, { mid, upnl, live: !!p, hasSl, R: fin(upnl) && r.riskUsd ? upnl / r.riskUsd : NaN });
+      const hasTp = P.orders.some(o => o.coin === r.coin && o.isTrigger && o.reduceOnly && isTp(o));
+      return Object.assign({}, r, { mid, upnl, live: !!p, hasSl, hasTp, R: fin(upnl) && r.riskUsd ? upnl / r.riskUsd : NaN });
     });
   }
   /* ---------- radar des cassures : toutes les cryptos liquides d'Hyperliquid ----------
@@ -8538,7 +8581,7 @@ function PerpsBot(h) {
       });
     }
   }
-  const manual = { ready: manualReady, quote: manualQuote, open: manualOpen, close: manualClose, list: manualList, guard: () => manualGuard(), hlCoin,
+  const manual = { ready: manualReady, quote: manualQuote, open: manualOpen, close: manualClose, setTp: manualSetTp, list: manualList, guard: () => manualGuard(), hlCoin,
     hist: () => S.manual.hist.slice(0, 20), acctAt: () => P.acctAt,
     unlock: async pin => { await unlock(pin); await checkAgent(); guard().catch(() => {}); manualGuard().catch(() => {}); } };
 
@@ -9473,6 +9516,18 @@ if (typeof module !== 'undefined') module.exports = PerpsBot;
       L.push({ p: pos.entry, color: C.accent, label: 'Ma position' });
       if (fin(pos.stop)) L.push({ p: pos.stop, color: C.short, label: 'Mon stop', dash: [8, 3] });
     }
+    // position prise en direct (Hyperliquid) sur cette crypto : niveaux ramenés au prix du graphique (écart entre plateformes corrigé)
+    try {
+      if (perps && perps.manual) {
+        const hc = perps.manual.hlCoin(set.sym), x = perps.manual.list().find(m => m.coin === hc);
+        if (x && !x.pending) {
+          const lp = lastPx(), k = fin(lp) && fin(x.mid) && x.mid > 0 && Math.abs(lp / x.mid - 1) < 0.05 ? lp / x.mid : 1;
+          L.push({ p: x.entry * k, color: C.accent, label: `${x.dir > 0 ? 'LONG' : 'SHORT'} Hyperliquid`, force: true });
+          if (fin(x.stop)) L.push({ p: x.stop * k, color: C.short, label: x.trail ? 'Stop suiveur' : 'Stop', dash: [8, 3], force: true });
+          if (fin(x.tp)) L.push({ p: x.tp * k, color: C.long, label: x.tpMode === 'auto' ? 'Objectif (auto)' : 'Objectif (manuel)', dash: x.tpMode === 'auto' ? [8, 3] : [2, 4], force: true });
+        }
+      }
+    } catch {}
     return L;
   }
   function tag(g, x0, yy, text, color, ink) {
@@ -9503,7 +9558,7 @@ if (typeof module !== 'undefined') module.exports = PerpsBot;
     const levels = chartLevels();
     const span = hi - lo;
     for (const Lv of levels) {
-      if (Lv.p > lo - span * 1.2 && Lv.p < hi + span * 1.2) { hi = Math.max(hi, Lv.p); lo = Math.min(lo, Lv.p); } else Lv.off = true;
+      if (Lv.force || (Lv.p > lo - span * 1.2 && Lv.p < hi + span * 1.2)) { hi = Math.max(hi, Lv.p); lo = Math.min(lo, Lv.p); } else Lv.off = true;
     }
     const padP = (hi - lo) * 0.06 || hi * 0.001;
     hi += padP; lo -= padP;
@@ -9721,7 +9776,7 @@ if (typeof module !== 'undefined') module.exports = PerpsBot;
      Les cryptos de ta liste (ou du top volume) en LONG ou SHORT à la dernière analyse. « Prendre » montre la taille, le levier,
      le stop et le risque ; rien ne part sans « Confirmer ». Le stop du signal (prix Binance) est reporté en % sur le prix
      Hyperliquid et posé chez Hyperliquid avec l'entrée. Clôture d'un appui, au marché. */
-  const LV = { ask: null, quote: null, qErr: '', qBusy: false, busy: false, closing: {}, risk: null, bound: false };
+  const LV = { ask: null, quote: null, qErr: '', qBusy: false, busy: false, closing: {}, risk: null, bound: false, tpMode: store.get('liveTp', 'auto') === 'manual' ? 'manual' : 'auto', tpBusy: {} };
   const liveRisk = () => (fin(LV.risk) && LV.risk > 0 ? LV.risk : Math.round(set.capital * set.risk) / 100);
   const liveSigs = () => scanRes.filter(r => !r.err && (r.verdict === 'LONG' || r.verdict === 'SHORT') && r.plan && fin(r.plan.stop));
   const usdS = x => (!fin(x) ? '—' : (x > 0 ? '+' : x < 0 ? '−' : '') + Math.abs(x).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' $');
@@ -9733,8 +9788,9 @@ if (typeof module !== 'undefined') module.exports = PerpsBot;
       try { await refreshTickers(); } catch {}
       const tk = st.tickers && st.tickers.get(r.sym), last = tk && fin(tk.last) && tk.last > 0 ? tk.last : r.px;
       const sf = (last - r.plan.stop) / last * r.plan.dir;
-      LV.quote = await perps.manual.quote({ sym: r.sym, dir: r.plan.dir, stopFrac: sf, riskUsd: liveRisk(), lev: set.leverage });
-      LV.quote.sym = r.sym; LV.quote.last = last; LV.quote.tpFrac = fin(r.plan.tp) ? (r.plan.tp - last) / last * r.plan.dir : null;
+      const tpf = fin(r.plan.tp) ? (r.plan.tp - last) / last * r.plan.dir : null;
+      LV.quote = await perps.manual.quote({ sym: r.sym, dir: r.plan.dir, stopFrac: sf, riskUsd: liveRisk(), lev: set.leverage, tpFrac: tpf });
+      LV.quote.sym = r.sym; LV.quote.last = last; LV.quote.sigTpFrac = tpf;
     } catch (e) { LV.quote = null; LV.qErr = e.message; }
     LV.qBusy = false; renderLive();
   }
@@ -9748,7 +9804,10 @@ if (typeof module !== 'undefined') module.exports = PerpsBot;
       : q ? `<div class="kvs"><span>Entrée au marché</span><b>${fp(q.mid)}</b><span>Stop posé à</span><b>${fp(q.stop)} (${fpct(-q.stopFrac, 2, false)})</b>
           <span>Taille</span><b>${String(+q.qty.toPrecision(6)).replace('.', ',')} ${esc(q.coin)} · ${usdS(q.ntl).replace('+', '')}</b><span>Levier</span><b>${q.lev}x isolé${q.lev < q.levAsked ? ` (au lieu de ${q.levAsked}x)` : ''}</b>
           <span>Marge bloquée</span><b>${usdS(q.margin).replace('+', '')}</b><span>Perte si stop touché</span><b class="neg">−${usdS(q.risk).replace('+', '')}</b>
-          <span>Liquidation</span><b>à ${fpct(-q.liqFrac * d, 1)}</b><span>Objectif du signal</span><b>${fin(q.tpFrac) ? fpct(q.tpFrac * d, 2) + ' (non posé)' : '—'}</b></div>
+          <span>Liquidation</span><b>à ${fpct(-q.liqFrac * d, 1)}</b><span>Objectif du signal</span><b>${q.tp ? `${fp(q.tp)} (+${fpct(q.tpFrac, 2, false)})` : '—'}</b>
+          ${q.tp ? `<span>Gain si objectif</span><b class="pos">+${usdS(q.tpGain).replace('+', '')}</b>` : ''}</div>
+          <div class="q-row" style="margin:0 0 6px"><span class="q-lab">Clôture</span><div class="seg" role="group" aria-label="Clôture"><button type="button" data-lv="tpm" data-mode="auto" aria-pressed="${LV.tpMode === 'auto' && !!q.tp}"${q.tp ? '' : ' disabled'}>Auto à l'objectif</button><button type="button" data-lv="tpm" data-mode="manual" aria-pressed="${LV.tpMode === 'manual' || !q.tp}">Manuelle</button></div></div>
+          <p class="note" style="margin:0 0 6px">${!q.tp ? 'Objectif du signal déjà atteint ou trop proche : clôture manuelle seulement (le stop est posé).' : LV.tpMode === 'auto' ? `L'objectif est posé chez Hyperliquid avec le stop : la position se ferme seule à ${fp(q.tp)} ou au stop, même appli fermée. Tu peux toujours clôturer avant.` : 'Seul le stop est posé : tu clôtures quand tu veux. Tu pourras passer en automatique plus tard.'}</p>
           ${q.capped ? '<p class="note" style="margin:0 0 6px">Taille réduite : la marge est limitée à 90 % de ton disponible.</p>' : ''}
           ${!q.ok ? `<p class="note" style="margin:0 0 6px;color:var(--short)">${esc(q.why)}</p>` : ''}` : '';
     return `<div class="lv-ask"><div><b>${side} ${esc(q ? q.coin : perps.manual.hlCoin(r.sym))} sur Hyperliquid</b> · argent réel</div>${lock}${body}
@@ -9770,7 +9829,8 @@ if (typeof module !== 'undefined') module.exports = PerpsBot;
       return `<div class="j-row"><span class="chip ${d > 0 ? 'long' : 'short'}">${d > 0 ? 'LONG' : 'SHORT'}</span><div class="j-mid"><div><b>${esc(coin(r.sym))}</b>${r.setup && Engine.SETUPS[r.setup] ? ' · ' + esc(Engine.SETUPS[r.setup].short) : ''}</div><div class="mono">stop ${fin(sf) ? fpct(-sf, 2, false) : '—'} · objectif ${fin(tpf) ? fpct(tpf, 2) : '—'} · ${esc(r.tf || set.tf)} ${fin(r.t) ? 'clôture ' + hhmm(r.t + (TF_MS[r.tf || set.tf] || 0)) : ''}</div></div>${on ? `<span class="chip">${demo ? 'démo' : 'en position'}</span>` : `<button class="btn sm ${d > 0 ? 'pri' : 'danger'}" data-lv="ask" data-sym="${esc(r.sym)}">${LV.ask === r.sym ? 'Fermer' : 'Prendre'}</button>`}</div>${LV.ask === r.sym ? liveAskHtml(r) : ''}`;
     }).join('');
     const rowsP = mine.map(x => `<div class="j-row"><span class="chip ${x.dir > 0 ? 'long' : 'short'}">${x.dir > 0 ? 'LONG' : 'SHORT'}</span><div class="j-mid"><div><b>${esc(x.coin)}</b> · ${x.pending ? 'ordre en cours…' : `entrée ${fp(x.entry)} · levier ${x.lev}x`}</div><div class="mono">stop ${fp(x.stop)}${x.live && !x.hasSl ? ' (en cours de pose…)' : ''} · prix ${fp(x.mid)}</div>
-      <div class="row-btns" style="margin:4px 0 0"><button class="btn sm danger" data-lv="close" data-coin="${esc(x.coin)}"${LV.closing[x.coin] ? ' disabled' : ''}>${LV.closing[x.coin] ? 'Clôture…' : 'Clôturer'}</button></div></div>
+      ${fin(x.tp) ? `<div class="mono">objectif ${fp(x.tp)} · ${x.tpMode === 'auto' ? (x.hasTp || !x.live ? '<b class="pos">clôture auto</b>' : 'clôture auto (pose en cours…)') : 'clôture manuelle'}</div>` : x.trail ? '<div class="mono">pas d\'objectif : stop suiveur de la règle</div>' : !x.pending ? `<div class="mono">pas d'objectif : clôture manuelle</div><div class="row-btns" style="margin:4px 0 0">${[1.5, 2, 3].map(k => `<button class="btn sm" data-lv="tpset" data-coin="${esc(x.coin)}" data-mode="auto" data-r="${k}"${LV.tpBusy[x.coin] ? ' disabled' : ''}>Objectif ${String(k).replace('.', ',')} R (${fp(x.entry + x.dir * k * Math.abs(x.entry - x.stop))})</button>`).join('')}</div>` : ''}
+      <div class="row-btns" style="margin:4px 0 0"><button class="btn sm danger" data-lv="close" data-coin="${esc(x.coin)}"${LV.closing[x.coin] ? ' disabled' : ''}>${LV.closing[x.coin] ? 'Clôture…' : 'Clôturer'}</button>${fin(x.tp) && !x.pending ? `<button class="btn sm" data-lv="tpset" data-coin="${esc(x.coin)}" data-mode="${x.tpMode === 'auto' ? 'manual' : 'auto'}"${LV.tpBusy[x.coin] ? ' disabled' : ''}>${LV.tpBusy[x.coin] ? '…' : x.tpMode === 'auto' ? 'Passer en manuel' : 'Clôture auto à l\'objectif'}</button>` : ''}</div></div>
       <span class="j-r ${x.upnl > 0 ? 'pos' : x.upnl < 0 ? 'neg' : ''}">${usdS(x.upnl)}${fin(x.R) ? `<small>${(x.R > 0 ? '+' : x.R < 0 ? '−' : '') + Math.abs(x.R).toFixed(2).replace('.', ',')} R</small>` : ''}</span></div>`).join('');
     const last = M.hist().slice(0, 3).map(x => `<div class="j-row"><span class="chip ${fin(x.pnl) ? (x.pnl >= 0 ? 'long' : 'short') : ''}">${x.dir > 0 ? 'LONG' : 'SHORT'}</span><div class="j-mid"><div>${esc(x.coin)} · ${esc(x.why)}</div><div class="mono">${hhmm(x.t1)}${fin(x.exitPx) ? ' · sortie ' + fp(x.exitPx) : ''}</div></div><span class="j-r ${x.pnl >= 0 ? 'pos' : 'neg'}">${usdS(x.pnl)}</span></div>`).join('');
     const src = set.scanMode === 'top' ? 'du top volume' : 'de ta liste';
@@ -9779,7 +9839,7 @@ if (typeof module !== 'undefined') module.exports = PerpsBot;
     box.innerHTML = `${demo ? '<p class="note" style="margin:0 0 8px;color:var(--warn)">Flux de démonstration : ces signaux sont simulés, aucune position réelle ne peut être prise dessus. Ça revient dès que les prix réels repassent.</p>' : ''}${rowsP ? `<h3 class="w-h" style="margin-top:0">Mes positions en direct</h3><div class="journal">${rowsP}</div>` : ''}
       ${sigs.length ? `${rowsP ? '<h3 class="w-h">Signaux du moment</h3>' : ''}<div class="journal">${rowsS}</div>` : empty}
       ${last ? `<h3 class="w-h">Dernières positions à la main</h3><div class="journal">${last}</div>` : ''}
-      <p class="note">Exécution sur Hyperliquid (ton compte Phantom Perps, clé du bot futures). Le signal vient des prix ${esc(set.ex === 'bybit' ? 'Bybit' : 'Binance')} : son stop est reporté en % sur le prix Hyperliquid et posé chez Hyperliquid avec l'entrée, il reste en place même appli fermée. L'objectif n'est pas posé : tu clôtures quand tu veux. Risque par trade : ${usdS(liveRisk()).replace('+', '')} (capital × risque de tes réglages, modifiable avant de confirmer).</p>`;
+      <p class="note">Exécution sur Hyperliquid (ton compte Phantom Perps, clé du bot futures). Le signal vient des prix ${esc(set.ex === 'bybit' ? 'Bybit' : 'Binance')} : son stop est reporté en % sur le prix Hyperliquid et posé chez Hyperliquid avec l'entrée, il reste en place même appli fermée. Clôture au choix : automatique à l'objectif du signal (posé chez Hyperliquid) ou manuelle. Risque par trade : ${usdS(liveRisk()).replace('+', '')} (capital × risque de tes réglages, modifiable avant de confirmer).</p>`;
     if (!LV.bound) {
       LV.bound = true;
       box.addEventListener('click', async e => {
@@ -9795,11 +9855,19 @@ if (typeof module !== 'undefined') module.exports = PerpsBot;
           if (Date.now() - q.at > 20000) { toast('Prix mis à jour : vérifie la position puis confirme', 'warn'); liveQuote(); return; }
           LV.busy = true; renderLive();
           try {
-            const rec = await perps.manual.open({ sym: r.sym, dir: r.plan.dir, stopFrac: q.stopFrac, riskUsd: liveRisk(), lev: set.leverage, setup: r.setup, tf: r.tf });
-            toast(`${rec.dir > 0 ? 'LONG' : 'SHORT'} ${rec.coin} ouvert, stop posé à ${fp(rec.stop)}`, 'long'); beep(1); buzz([120, 60, 120]);
+            const rec = await perps.manual.open({ sym: r.sym, dir: r.plan.dir, stopFrac: q.stopFrac, riskUsd: liveRisk(), lev: set.leverage, setup: r.setup, tf: r.tf, tpFrac: q.sigTpFrac, tpMode: LV.tpMode });
+            toast(`${rec.dir > 0 ? 'LONG' : 'SHORT'} ${rec.coin} ouvert, stop ${fp(rec.stop)}${rec.tpMode === 'auto' ? `, objectif ${fp(rec.tp)}` : ', clôture manuelle'}`, 'long'); beep(1); buzz([120, 60, 120]);
+            requestAnimationFrame(drawChart);
             LV.ask = null; LV.quote = null;
           } catch (err) { toast('Position non ouverte : ' + err.message, 'short'); LV.qErr = err.message; }
           finally { LV.busy = false; renderLive(); }
+          return;
+        }
+        if (a === 'tpm') { LV.tpMode = b.dataset.mode === 'manual' ? 'manual' : 'auto'; store.set('liveTp', LV.tpMode); renderLive(); return; }
+        if (a === 'tpset') {
+          const c = b.dataset.coin, m = b.dataset.mode; LV.tpBusy[c] = true; renderLive();
+          try { await perps.manual.setTp(c, m, b.dataset.r ? +b.dataset.r : undefined); toast(m === 'auto' ? `${c} : clôture automatique, objectif posé` : `${c} : clôture manuelle, objectif retiré`, 'long'); } catch (err) { toast(err.message, 'short'); }
+          finally { delete LV.tpBusy[c]; renderLive(); requestAnimationFrame(drawChart); }
           return;
         }
         if (a === 'close') {
