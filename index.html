@@ -1385,7 +1385,7 @@ a.btn{text-decoration:none;color:inherit;display:inline-block}
       <h2>Diagnostic de connexion</h2>
       <div class="journal" id="diag"></div>
     </div>
-    <p class="foot"><strong>Version 2 · setups calibrés.</strong> Mise à jour du 18 octobre 2026 (nouvelles tuiles : Garde-fou, Humeur du marché, Sessions ; Signal : clôture automatique à l'objectif ou manuelle ; fond des Réglages). Vigie Scalp aide à décider, il ne décide pas à ta place. Ce n'est pas un conseil financier. Les signaux se trompent souvent : place toujours ton stop, et ne risque que ce que tu peux perdre.</p>
+    <p class="foot"><strong>Version 2 · setups calibrés.</strong> Mise à jour du 18 octobre 2026 (labo : tes clôtures à la main ne faussent plus ses choix, prix plus frais sur les coins migrés, argent réel seulement si la stratégie gagne sans coup de chance, nouvelle piste « Migré, cap basse » ; tuiles Garde-fou, Humeur du marché, Sessions). Vigie Scalp aide à décider, il ne décide pas à ta place. Ce n'est pas un conseil financier. Les signaux se trompent souvent : place toujours ton stop, et ne risque que ce que tu peux perdre.</p>
   </section>
 </main>
 
@@ -5867,6 +5867,17 @@ function StrategyLab(h, radar, live, bot) {
         C('au moins 200 détenteurs', (t, f) => f.holders >= 200, (t, f) => f.holders),
         C('prix de 0 à +80 % sur 5 min', (t, f) => f.ch5 >= 0 && f.ch5 <= 80, (t, f) => f.ch5)],
       exits: { stallMin: 15, stallNeed: 5, flowExit: true, maxHold: 60 } },
+    // Journal du 18/10 (429 coins suivis 10 à 15 min après la photo d'entrée) : le seul groupe positif sur les deux moitiés
+    // de la période, ce sont les coins déjà migrés, âgés de 20 min à 6 h, revenus à une cap de 15 à 60 k$ : +24 % en moyenne
+    // sur 15 coins avec une sortie large (−50 % / +50 %), contre −1 % pour l'ensemble des 80 coins migrés suivis.
+    // Petit échantillon, trouvé en cherchant parmi beaucoup de filtres : c'est une piste à confirmer ici, pas une certitude.
+    { id: 'migbas', name: 'Migré, cap basse', age: [1200, 6 * 3600],
+      desc: 'Coins déjà migrés (vrai pool), âgés de 20 min à 6 h, dont la cap est entre 15 et 60 k$. Piste tirée du journal du 18/10 (15 coins seulement) : à confirmer en simulation avant tout argent réel.',
+      conds: [
+        C('déjà migré', t => !!t.migrated, t => !!t.migrated),
+        C('cap de 15 à 60 k$', t => { const m = mcUsd(t); return fin(m) && m >= 15000 && m <= 60000; }, t => { const m = mcUsd(t); return fin(m) ? Math.round(m) : null; }),
+        C('au moins 150 détenteurs (si connu)', (t, f) => f.holders == null || f.holders >= 150, (t, f) => f.holders)],
+      exits: { flowExit: false, maxHold: 15 } },
     { id: 'rebond', name: 'Rebond après une chute', age: [300, 3600],
       desc: 'Coins de 5 à 60 min retombés de 35 à 75 % sous leur plus haut, mais dont les détenteurs tiennent et où les acheteurs reviennent.',
       conds: [
@@ -6074,8 +6085,26 @@ function StrategyLab(h, radar, live, bot) {
   }
 
   /* ---------- prix et valeur en simulation ---------- */
+  // Prix rapides (Jupiter) pour les trades simulés sans temps réel, surtout les coins migrés.
+  // Journal du 18/10 (223 trades) : avec DexScreener seul, 47 % des relevés de prix étaient figés (prix inchangé d'un relevé
+  // à l'autre), contre 24 % en temps réel. Les stops partaient en retard et les gains se mesuraient sur un vieux prix.
+  // Relevé toutes les 10 s (5 s avec ta clé Jupiter), en priorité basse pour ne pas gêner le reste de l'appli.
+  const JPX = new Map();
+  let jpxBusy = false, jpxAt = 0;
+  async function pollPx() {
+    if (jpxBusy || !h.jup || now() - jpxAt < (h.jupFast && h.jupFast() ? 5000 : 10000)) return;
+    const mints = [...new Set(L.open.map(p => p.mint))].filter(m => { const t = radar.get(m); return t && !(live && live.fresh(t, 10000)); }).slice(0, 40);
+    if (!mints.length) return;
+    jpxBusy = true; jpxAt = now();
+    try {
+      const r = await h.jup('/price/v3?ids=' + mints.join(','), 'low');
+      for (const m of mints) { const x = r && r[m], v0 = x && +x.usdPrice; if (v0 > 0) JPX.set(m, { px: v0, at: now() }); }
+    } catch {} finally { jpxBusy = false; }
+    for (const m of [...JPX.keys()]) if (!L.open.some(p => p.mint === m)) JPX.delete(m);
+  }
   function pxSol(t) {
     if (live && live.fresh(t, 10000)) return { px: t.live.px, src: 'live' };
+    { const su = h.solUsd && h.solUsd(), q = JPX.get(t.mint); if (su && q && now() - q.at < 15000) return { px: q.px / su, src: 'jup' }; }
     const p = t.pair;
     if (p && now() - (t.mktAt || 0) < 45000) {
       if (p.quoteToken && p.quoteToken.address === WSOL && +p.priceNative > 0) return { px: +p.priceNative, src: 'dex' };
@@ -6145,9 +6174,9 @@ function StrategyLab(h, radar, live, bot) {
     const net = p.realized - p.cost;
     // pause de l'appli (écran éteint) : même si le prix a ensuite manqué, c'est la pause qui a coupé le suivi
     if (p.paused) { gap = 'pause'; if (!/^interrompu/.test(why)) why = 'interrompu : appli en pause pendant le trade (pas compté) · ' + why; }
-    L.closed.unshift({ id: p.id, grp: p.grp, jid: p.jid || null, strat: p.strat, src: p.src || null, rt: fin(p.rt0) ? Math.round(p.rt0 * 1e4) / 1e4 : null, prof: p.prof || 'toi', key: p.key || null, mint: p.mint, sym: p.sym, t0: p.t0, t1: now(), cost: p.cost, net, pnl: net / p.cost, why, gap: !!gap, peak: p.peakTot ? p.peakTot / p.cost - 1 : null });
+    L.closed.unshift({ id: p.id, grp: p.grp, jid: p.jid || null, strat: p.strat, src: p.src || null, rt: fin(p.rt0) ? Math.round(p.rt0 * 1e4) / 1e4 : null, prof: p.prof || 'toi', key: p.key || null, mint: p.mint, sym: p.sym, t0: p.t0, t1: now(), cost: p.cost, net, pnl: net / p.cost, why, gap: !!gap, peak: p.peakTot ? p.peakTot / p.cost - 1 : null, manual: !!p.manual, shadow: !!p.shadow, twinOf: p.twinOf || null });
     if (jr && p.jid) jr.close(jr.byId(p.jid), why, gap ? NaN : net / p.cost, gap ? NaN : net, gap ? { gap: gap === 'pause' ? 'pause' : true } : null);
-    if (jr && p.jparent) jr.alt(jr.byId(p.jparent), { prof: p.prof, key: p.key, pnl: gap ? null : Math.round(net / p.cost * 1e4) / 1e4, why, holdS: p.tOpen ? Math.round((now() - p.tOpen) / 1000) : null, peak: p.peakTot ? Math.round((p.peakTot / p.cost - 1) * 1e4) / 1e4 : null });
+    if (jr && p.jparent) jr.alt(jr.byId(p.jparent), { prof: p.shadow ? (p.prof || 'toi') + ':auto' : p.prof, key: p.key, pnl: gap ? null : Math.round(net / p.cost * 1e4) / 1e4, why, holdS: p.tOpen ? Math.round((now() - p.tOpen) / 1000) : null, peak: p.peakTot ? Math.round((p.peakTot / p.cost - 1) * 1e4) / 1e4 : null });
     if (L.closed.length > 400) L.closed.length = 400;
     L.open = L.open.filter(x => x !== p);
     if (!L.open.some(x => x.mint === p.mint)) { radar.unpin(p.mint, 'lab'); if (live) live.unwatch(p.mint, 'lab'); }
@@ -6183,18 +6212,26 @@ function StrategyLab(h, radar, live, bot) {
       else { p.state = 'open'; dirty = true; }
     }
   }
-  // Clôture à la main d'un trade simulé : toutes ses variantes (autres réglages de sortie testés) sortent au même moment,
-  // comme une vente d'urgence ; le journal note « Clôturé à la main ». Aucun wallet n'est utilisé.
+  // Clôture à la main d'un trade simulé (aucun wallet n'est utilisé). Journal du 18/10 : 60 trades sur 223 clôturés à la main,
+  // à +8,5 % en moyenne, contre +3,7 % pour la règle automatique sur les mêmes trades. Ces clics gonflaient les résultats
+  // que le labo utilise pour choisir l'argent réel, alors que le bot ne peut pas les reproduire.
+  // Désormais : ton trade se ferme tout de suite (résultat affiché, noté « Clôturé à la main »), mais un jumeau invisible
+  // continue avec la règle automatique et c'est lui qui compte. Les autres réglages de sortie testés continuent aussi.
   let askClose = null;
   function manualClose(id) {
     const p0 = L.open.find(x => x.id === id);
     if (!p0) return false;
     const g = p0.grp || p0.id;
-    for (const q of L.open.filter(x => (x.grp || x.id) === g)) {
-      if (q.state === 'pending') { q.realized = q.cost; finish(q, 'annulé à la main avant l\'achat'); continue; }
-      if (q.state === 'open') { const d = { pct: 100, urgent: true, why: 'Clôturé à la main' }; q.state = 'exiting'; q.exitAt = now(); q.exitD = d; if (jr && q.jid) jr.exitDecision(jr.byId(q.jid), d, q.pnl); }
+    if (p0.state === 'pending') {
+      for (const q of L.open.filter(x => (x.grp || x.id) === g)) { q.realized = q.cost; finish(q, 'annulé à la main avant l\'achat'); }
+    } else if (p0.state === 'open') {
+      L.open.push(Object.assign({}, p0, { id: ++L.seq, shadow: true, twinOf: p0.id, jid: null, jparent: p0.jid || p0.jparent || null, hist: p0.hist.slice() }));
+      p0.manual = true;
+      const d = { pct: 100, urgent: true, why: 'Clôturé à la main' };
+      p0.state = 'exiting'; p0.exitAt = now(); p0.exitD = d;
+      if (jr && p0.jid) jr.exitDecision(jr.byId(p0.jid), d, p0.pnl);
+      try { step(p0); } catch {}
     }
-    for (const q of L.open.slice()) if ((q.grp || q.id) === g && q.state === 'exiting') { try { step(q); } catch {} }
     askClose = null; dirty = true; save();
     return true;
   }
@@ -6253,11 +6290,18 @@ function StrategyLab(h, radar, live, bot) {
   }
 
   /* ---------- résultats ---------- */
+  // Tes clôtures à la main comparées à leur jumeau automatique (mêmes entrées, mêmes réglages de sortie)
+  function manualVsAuto() {
+    const tw = new Map(L.closed.filter(x => x.shadow && x.twinOf && !x.gap && !/^interrompu|^données manquantes/.test(x.why)).map(x => [x.twinOf, x]));
+    const P = L.closed.filter(x => x.manual && !x.gap && tw.has(x.id)).map(x => [x.pnl, tw.get(x.id).pnl]);
+    if (!P.length) return null;
+    return { n: P.length, man: P.reduce((a, b) => a + b[0], 0) / P.length, auto: P.reduce((a, b) => a + b[1], 0) / P.length };
+  }
   function stats(id, since, key) {
     const lim = Math.max(now() - DAY, since || 0, L.resetAt || 0);
     const k = key === undefined ? userKey(id) : key;
     // anciens trades sans réglage enregistré : comptés avec tes réglages
-    const T = L.closed.filter(x => x.strat === id && x.t1 >= lim && !x.gap && !/^annulé|^données manquantes|^interrompu/.test(x.why) && (k === null || (x.key ? x.key === k : (x.prof || 'toi') === 'toi' && k === userKey(id))));
+    const T = L.closed.filter(x => x.strat === id && x.t1 >= lim && !x.gap && !x.manual && !/^annulé|^données manquantes|^interrompu|^Clôturé à la main/.test(x.why) && (k === null || (x.key ? x.key === k : (x.prof || 'toi') === 'toi' && k === userKey(id))));
     const n = T.length, P = T.map(x => x.pnl);
     const wins = P.filter(x => x > 0).length;
     const g = P.filter(x => x > 0).reduce((a, b) => a + b, 0), l = -P.filter(x => x < 0).reduce((a, b) => a + b, 0);
@@ -6277,7 +6321,9 @@ function StrategyLab(h, radar, live, bot) {
     const hold = realHold(s.id);
     const st = stats(s.id, hold ? hold + 1 : 0, pid === 'toi' ? undefined : keyOf(cfgFor(s.id, pid)));
     const need = hold ? 8 : MIN_N;
-    const ok = st.n >= need && (hold ? st.sum > 0 : st.avg >= MIN_AVG && st.pf >= MIN_PF && st.last8 > 0);
+    // Journal du 18/10 : sur « Migration fraîche », un seul trade à +171 % faisait la moyenne (médiane négative).
+    // Il faut donc aussi que la moyenne reste positive une fois retirée la part de chance (moyenne moins une erreur-type).
+    const ok = st.n >= need && (hold ? st.sum > 0 : st.avg >= MIN_AVG && st.pf >= MIN_PF && st.last8 > 0 && st.lcb > 0);
     return { s, st, ok, hold, need, prof: profById(pid) };
   }
   // Couples testés pour l'argent réel : avec « perte et gain choisis par le labo », chaque stratégie avec chacun des réglages auto ; sinon tes réglages seulement
@@ -6336,7 +6382,7 @@ function StrategyLab(h, radar, live, bot) {
     if (q.ok) return { ok: true, s, st, txt, need: q.need, exits };
     const reason = q.hold ? `Pas d'argent engagé : les vrais trades de ta config sont repassés dans le rouge, retour en simulation (${st.n}/${q.need} nouveaux trades simulés, il faut qu'ils soient gagnants au total)`
       : st.n < q.need ? `Ta config est en test dans le laboratoire : ${st.n}/${q.need} trades simulés${st.n ? `, moyenne ${fPct(st.avg)}` : ''}. Pas d'argent engagé tant qu'elle n'est pas rentable en simulation.`
-      : `Pas d'argent engagé : ta config ne gagne pas assez en simulation (${fPct(st.avg)} sur ${st.n} trades ; il faut +3 % de moyenne, des gains 1,3 fois plus gros que les pertes et les 8 derniers trades positifs).`;
+      : `Pas d'argent engagé : ta config ne gagne pas assez en simulation (${fPct(st.avg)} sur ${st.n} trades ; il faut +3 % de moyenne, des gains 1,3 fois plus gros que les pertes, les 8 derniers trades positifs, et une moyenne qui reste positive sans les coups de chance).`;
     return { ok: false, s, st, txt, need: q.need, reason, exits };
   }
 
@@ -6358,9 +6404,11 @@ function StrategyLab(h, radar, live, bot) {
         <p class="note">${s.age ? `Âge d'entrée : ${ageTxt(s.age[0])} à ${ageTxt(s.age[1])}. ` : ''}${s.cfg ? `<b>${cm ? 'En service à la place du laboratoire' + (cq.ok ? '' : ' (argent réel quand elle sera rentable ici)') : 'Pas en service : touche « Ma config » en haut de l\'onglet pour l\'utiliser'}.</b> Filtres : ${esc(s.conds.map(c => c.l).join(', '))}. ` : ''}${migrOnly() && !s.manual && !s.cfg && !MIGR_IDS.includes(s.id) ? '<b>Option « uniquement après migration » : simulée, mais jamais en argent réel.</b> ' : ''}${s.manual ? '<b>Jamais choisie par le mode auto : l\'argent réel se règle dans l\'onglet Copie.</b> ' : ''}${s.cfg ? 'Sorties de ta config' : 'Avec tes réglages'} : ${exitTxt(cfgFor(s.id, mainProf(s.id)))}${s.exits.stallMin ? `, sortie si moins de +${s.exits.stallNeed} % après ${s.exits.stallMin} min` : ''}${s.exits.flowExit ? ', sortie si les vendeurs dominent' : ''}, sortie immédiate si le créateur vend, ${s.exits.maxHold} min maximum.</p>
         <p class="note"><b>Mêmes entrées, autres sorties :</b> ${profStats(s.id).filter(x => !x.mine || autoMode()).map(x => `${esc(x.pr.name)} ${x.st.n ? `${fPct(x.st.avg)} sur ${x.st.n} trades` : 'pas encore de trade'}`).join(' · ')}</p></details>`;
     }).join('');
-    const opened = L.open.filter(p => p.state !== 'pending' && (p.prof || 'toi') === mainProf(p.strat)).slice(0, 6).map(p => `<div class="j-row"><span class="chip">${esc((byId(p.strat) || {}).name || p.strat)}</span><div class="j-mid"><div>${esc(p.sym)} · en cours</div><div class="mono">depuis ${ago(now() - p.t0)} · ${esc(holdTxt(p.mint))}</div>${simCloseHtml(p)}</div><span class="j-r ${p.pnl > 0 ? 'pos' : p.pnl < 0 ? 'neg' : ''}">${fPct(p.pnl)}</span></div>`).join('');
+    const opened = L.open.filter(p => p.state !== 'pending' && !p.shadow && (p.prof || 'toi') === mainProf(p.strat)).slice(0, 6).map(p => `<div class="j-row"><span class="chip">${esc((byId(p.strat) || {}).name || p.strat)}</span><div class="j-mid"><div>${esc(p.sym)} · en cours</div><div class="mono">depuis ${ago(now() - p.t0)} · ${esc(holdTxt(p.mint))}</div>${simCloseHtml(p)}</div><span class="j-r ${p.pnl > 0 ? 'pos' : p.pnl < 0 ? 'neg' : ''}">${fPct(p.pnl)}</span></div>`).join('');
     const diagOf = x => { const e = jr && x.jid ? jr.byId(x.jid) : null; return e && e.diag ? e.diag.filter(d => d.lvl !== 'ok' || d.c === 'sortie_justifiee').slice(0, 3) : []; };
-    const last = L.closed.filter(x => (x.prof || 'toi') === mainProf(x.strat)).slice(0, 8).map(x => { const dg = diagOf(x); return `<div class="j-row"><span class="chip ${x.gap ? '' : x.net >= 0 ? 'long' : 'short'}">${x.gap ? 'sans prix' : fPct(x.pnl)}</span><div class="j-mid"><div>${esc(x.sym)} · ${esc((byId(x.strat) || {}).name || x.strat)}</div><div class="mono">${ago(now() - x.t1)} · ${esc(x.why)}</div>${dg.length ? `<ul class="l-diag">${dg.map(d => `<li data-l="${d.lvl}">${esc(d.txt)}</li>`).join('')}</ul>` : ''}</div><span class="j-r ${x.net >= 0 ? 'pos' : 'neg'}">${x.gap ? '—' : fSol(x.net)}</span></div>`; }).join('');
+    const last = L.closed.filter(x => !x.shadow && (x.prof || 'toi') === mainProf(x.strat)).slice(0, 8).map(x => { const dg = diagOf(x); return `<div class="j-row"><span class="chip ${x.gap ? '' : x.net >= 0 ? 'long' : 'short'}">${x.gap ? 'sans prix' : fPct(x.pnl)}</span><div class="j-mid"><div>${esc(x.sym)} · ${esc((byId(x.strat) || {}).name || x.strat)}</div><div class="mono">${ago(now() - x.t1)} · ${esc(x.why)}</div>${dg.length ? `<ul class="l-diag">${dg.map(d => `<li data-l="${d.lvl}">${esc(d.txt)}</li>`).join('')}</ul>` : ''}</div><span class="j-r ${x.net >= 0 ? 'pos' : 'neg'}">${x.gap ? '—' : fSol(x.net)}</span></div>`; }).join('');
+    const mv = manualVsAuto();
+    const mvHtml = mv ? `<p class="note"><b>Tes clôtures à la main</b> (${mv.n} trade${mv.n > 1 ? 's' : ''}) : <span class="${mv.man > 0 ? 'pos' : mv.man < 0 ? 'neg' : ''}">${fPct(mv.man)}</span> en moyenne. La règle automatique, sur les mêmes trades : <span class="${mv.auto > 0 ? 'pos' : mv.auto < 0 ? 'neg' : ''}">${fPct(mv.auto)}</span>. Le labo ne compte que la règle automatique pour choisir l'argent réel.</p>` : '';
     const sg = suggestion();
     const sgHtml = !sg ? '' : sg.pr.test && autoMode()
       ? `<div class="advice" data-l="info" style="margin:0 0 10px"><h3>Ta règle « pas de hausse » coupe des gagnants</h3><p>Sur « ${esc(sg.s.name)} », attendre 10 min au lieu de ${bot.cfg().npMin} min fait ${fPct(sg.st.avg)} en moyenne sur ${sg.st.n} trades simulés, contre ${fPct(sg.me.avg)}. C'est toi qui décides.</p><div class="row-btns"><button class="btn sm pri" data-lnp="10">Passer à 10 min</button></div></div>`
@@ -6372,6 +6420,7 @@ function StrategyLab(h, radar, live, bot) {
     box.innerHTML = `${walMsg}${sgHtml}${head}
       <p class="note">Mise simulée : ${fSol(size)} par trade, comme le bot. Frais, glissement et 3 à 5 s de délai inclus. Résultats des 24 dernières heures. Un coin n'est pris qu'une fois, par une seule stratégie (${cm ? 'ta config passe en premier' : 'la stratégie en service passe en premier'}) : pas de double trade.${autoMode() ? ' Perte et gain : le labo choisit, pour chaque stratégie, entre Rapide, Équilibré et Patient. Ta règle « pas de hausse » reste un maximum.' : ''}</p>
       <div class="l-list">${rows}</div>
+      ${mvHtml}
       ${opened ? `<h3 class="w-h">Trades simulés en cours</h3><div class="journal">${opened}</div>` : ''}
       ${last ? `<h3 class="w-h">Derniers trades simulés</h3><div class="journal">${last}</div>` : ''}
       <h3 class="w-h">Journal d'analyse</h3>
@@ -6405,6 +6454,7 @@ function StrategyLab(h, radar, live, bot) {
     if (now() - lastTick > 20000) { for (const p of L.open) p.paused = true; if (jr) jr.pause(lastTick, now()); }
     lastTick = now();
     for (const p of L.open.slice()) { try { step(p); } catch {} }
+    pollPx();
     if (dirty) { dirty = false; save(); }
     if (jr) jr.tick();
   }
@@ -6420,7 +6470,7 @@ function StrategyLab(h, radar, live, bot) {
   function copyRank() {
     const lim = Math.max(now() - DAY, L.resetAt || 0), k = userKey('copy'), M = new Map();
     for (const x of L.closed) {
-      if (x.strat !== 'copy' || !x.src || x.t1 < lim || x.gap || /^annulé|^données manquantes|^interrompu/.test(x.why)) continue;
+      if (x.strat !== 'copy' || !x.src || x.t1 < lim || x.gap || x.manual || /^annulé|^données manquantes|^interrompu|^Clôturé à la main/.test(x.why)) continue;
       if (!(x.key ? x.key === k : (x.prof || 'toi') === 'toi')) continue;
       const e = M.get(x.src) || { n: 0, wins: 0, sum: 0, net: 0, open: 0 };
       e.n++; if (x.pnl > 0) e.wins++; e.sum += x.pnl; e.net += x.net; M.set(x.src, e);
@@ -6742,8 +6792,8 @@ function CopyTrade(h, radar, bot, rpc) {
     const feed = S.ev.slice(0, 12).map(evHtml).join('');
     let body;
     if (S.view !== 'real') {
-      const op = L ? L.L.open.filter(p => p.strat === 'copy' && (p.prof || 'toi') === 'toi' && p.state !== 'pending') : [];
-      const cl = L ? L.L.closed.filter(x => x.strat === 'copy' && (x.prof || 'toi') === 'toi').slice(0, 8) : [];
+      const op = L ? L.L.open.filter(p => p.strat === 'copy' && !p.shadow && (p.prof || 'toi') === 'toi' && p.state !== 'pending') : [];
+      const cl = L ? L.L.closed.filter(x => x.strat === 'copy' && !x.shadow && (x.prof || 'toi') === 'toi').slice(0, 8) : [];
       body = `<p class="note" style="margin:0 0 8px">Chaque achat du wallet copié ouvre un trade simulé, sans argent : mise de ${fSol(bot.cfg().size)}, mêmes contrôles et mêmes sorties que le bot, plus une sortie quand le wallet revend. Résultats des 24 dernières heures.</p>
         ${statsHtml(st)}
         ${op.length ? `<h3 class="w-h">Copies simulées en cours</h3><div class="journal">${op.map(p => `<div class="j-row"><span class="chip">en cours</span><div class="j-mid"><div>${esc(p.sym)}</div><div class="mono">depuis ${ago(now() - p.t0)}</div>${p.state === 'exiting' ? '<div class="mono">sortie en cours…</div>' : C.ask === 's:' + p.id ? `<div class="confirm" style="margin:4px 0 0"><span>Clôturer cette copie simulée ?</span><button class="btn sm danger" data-cask-yes="s:${p.id}">Clôturer</button><button class="btn sm" data-cask-no="1">Annuler</button></div>` : `<div class="row-btns" style="margin:4px 0 0"><button class="btn sm" data-cask="s:${p.id}">Clôturer à la main</button></div>`}</div><span class="j-r ${p.pnl > 0 ? 'pos' : p.pnl < 0 ? 'neg' : ''}">${fPct(p.pnl)}</span></div>`).join('')}</div>` : ''}
@@ -10843,7 +10893,7 @@ if (typeof module !== 'undefined') module.exports = PerpsBot;
     const pc = x => (x * 100).toFixed(1).replace('.', ',') + ' %';
     const netR = 2 * (bot.NET_FEE || 0.0001), netS = 2.5 * (lab.NETF || 0.0002);
     const real = feeGroup(((bot.S && bot.S.hist) || []).slice(0, 30), netR);
-    const sim = feeGroup(lab.L.closed.filter(x => (x.prof || 'toi') === 'toi' && !x.gap && !/^annulé|^données manquantes|^interrompu/.test(x.why)).slice(0, 60), netS);
+    const sim = feeGroup(lab.L.closed.filter(x => (x.prof || 'toi') === 'toi' && !x.gap && !x.shadow && !/^annulé|^données manquantes|^interrompu/.test(x.why)).slice(0, 60), netS);
     const grp = (title, g) => !g ? '' : `<h3 class="w-h">${title} · ${g.n} trade${g.n > 1 ? 's' : ''}</h3>
       <div class="w-top">
         <div class="kv"><div class="k">Frais payés</div><div class="v">${n4(g.fees)}</div></div>
@@ -11079,7 +11129,9 @@ if (typeof module !== 'undefined') module.exports = PerpsBot;
     xOk: t => newCoins.xOk(t),
     copy: () => copy,
     banned: isBanned,
-    tradeTaken: tradePop
+    tradeTaken: tradePop,
+    jup: (p, prio) => jup.get(p, prio),
+    jupFast: () => !!(trader && trader.jupKey && trader.jupKey())
   }, radar, live, bot);
   newCoins.start();
   if (!inFrame) lab.start();
